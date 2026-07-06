@@ -11,8 +11,11 @@ export interface StoreRow {
   fantasy_name: string | null;
   cnpj: string | null;
   ie: string | null;
+  address_line: string | null;
   city: string | null;
   state: string | null;
+  zip: string | null;
+  phone: string | null;
   tax_regime: string;
 }
 
@@ -22,13 +25,19 @@ export function useStores() {
     queryFn: async (): Promise<StoreRow[]> => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id,name,fantasy_name,cnpj,ie,city,state,tax_regime")
+        .select("id,name,fantasy_name,cnpj,ie,address_line,city,state,zip,phone,tax_regime")
         .order("name");
       if (error) throw error;
       return (data ?? []) as StoreRow[];
     },
     refetchOnWindowFocus: true,
   });
+}
+
+export function resetCurrentStoreSelection() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(KEY);
+  window.dispatchEvent(new Event("bastion:store-changed"));
 }
 
 export function useMyProfile() {
@@ -60,9 +69,14 @@ export function useSetDefaultStore() {
         .eq("id", u.user.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, storeId) => {
       toast.success("Loja padrão definida");
+      if (typeof window !== "undefined") {
+        localStorage.setItem(KEY, storeId);
+        window.dispatchEvent(new Event("bastion:store-changed"));
+      }
       qc.invalidateQueries({ queryKey: ["my-profile"] });
+      qc.invalidateQueries({ queryKey: ["stores"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -70,8 +84,8 @@ export function useSetDefaultStore() {
 
 export function useCurrentStoreId() {
   const [storeId, setStoreId] = useState<string | null>(null);
-  const { data: stores } = useStores();
-  const { data: profile } = useMyProfile();
+  const { data: stores, isLoading: storesLoading, isError: storesError, error: storesErrorValue } = useStores();
+  const { data: profile, isLoading: profileLoading } = useMyProfile();
 
   useEffect(() => {
     if (!stores) return;
@@ -79,8 +93,8 @@ export function useCurrentStoreId() {
     const preferred = profile?.default_store_id;
 
     let next: string | null = null;
-    if (preferred && stores.some((s) => s.id === preferred)) next = preferred;
-    else if (saved && stores.some((s) => s.id === saved)) next = saved;
+    if (saved && stores.some((s) => s.id === saved)) next = saved;
+    else if (preferred && stores.some((s) => s.id === preferred)) next = preferred;
     else if (stores.length > 0) next = stores[0].id;
 
     setStoreId(next);
@@ -96,17 +110,25 @@ export function useCurrentStoreId() {
   useEffect(() => {
     const h = () => {
       const s = localStorage.getItem(KEY);
-      if (s) setStoreId(s);
+      setStoreId(s || null);
     };
     window.addEventListener("bastion:store-changed", h);
     return () => window.removeEventListener("bastion:store-changed", h);
   }, []);
 
-  return { storeId, setStoreId: change, stores: stores ?? [] };
+  return {
+    storeId,
+    setStoreId: change,
+    stores: stores ?? [],
+    isLoading: storesLoading || profileLoading,
+    isError: storesError,
+    error: storesErrorValue,
+    hasStores: Boolean(stores && stores.length > 0),
+  };
 }
 
 export function useCurrentStore() {
-  const { storeId, stores, setStoreId } = useCurrentStoreId();
+  const { storeId, stores, setStoreId, isLoading, isError, error, hasStores } = useCurrentStoreId();
   const current = stores.find((s) => s.id === storeId) ?? null;
-  return { store: current, storeId, stores, setStoreId };
+  return { store: current, storeId, stores, setStoreId, isLoading, isError, error, hasStores };
 }

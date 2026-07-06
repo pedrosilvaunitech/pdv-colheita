@@ -1,25 +1,43 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useStores } from "@/lib/current-store";
+import { linkUserToStore } from "@/lib/users.functions";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Loader2, UserPlus } from "lucide-react";
+import { toast } from "sonner";
+import { z } from "zod";
+import type { Database } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
   component: UsuariosPage,
 });
 
+type AppRole = Database["public"]["Enums"]["app_role"];
+
+const linkSchema = z.object({
+  storeId: z.string().uuid("Selecione uma loja"),
+  email: z.string().trim().email("Email inválido"),
+  role: z.enum(["admin", "gerente", "caixa", "estoquista"]),
+});
+
 function UsuariosPage() {
-  const { data: stores = [] } = useStores();
+  const qc = useQueryClient();
+  const { data: stores = [], isLoading: storesLoading } = useStores();
   const [storeFilter, setStoreFilter] = useState<string>("__all__");
+  const [linkOpen, setLinkOpen] = useState(false);
 
   const storeIds = useMemo(() => stores.map((s) => s.id), [stores]);
 
-  const { data: roles = [] } = useQuery({
+  const { data: roles = [], isLoading: rolesLoading } = useQuery({
     queryKey: ["roles-all", storeIds],
     enabled: storeIds.length > 0,
     queryFn: async () => {
@@ -34,13 +52,13 @@ function UsuariosPage() {
 
   const userIds = useMemo(() => Array.from(new Set(roles.map((r) => r.user_id))), [roles]);
 
-  const { data: profiles = [] } = useQuery({
+  const { data: profiles = [], isLoading: profilesLoading } = useQuery({
     queryKey: ["profiles-of-roles", userIds],
     enabled: userIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name")
+        .select("id, full_name, email, default_store_id")
         .in("id", userIds);
       if (error) throw error;
       return data ?? [];
@@ -51,16 +69,43 @@ function UsuariosPage() {
   const storeMap = useMemo(() => Object.fromEntries(stores.map((s) => [s.id, s])), [stores]);
 
   const filtered = storeFilter === "__all__" ? roles : roles.filter((r) => r.store_id === storeFilter);
+  const loading = storesLoading || rolesLoading || profilesLoading;
+
+  const linkUser = useMutation({
+    mutationFn: async (payload: z.infer<typeof linkSchema>) => linkUserToStore({ data: payload }),
+    onSuccess: async () => {
+      toast.success("Usuário vinculado à loja");
+      setLinkOpen(false);
+      await qc.invalidateQueries({ queryKey: ["roles-all"] });
+      await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] });
+      await qc.invalidateQueries({ queryKey: ["stores"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   return (
     <div>
       <PageHeader
         title="Usuários & papéis"
         description="Todos os usuários e papéis de todas as lojas às quais você tem acesso."
+        actions={
+          <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-2" disabled={stores.length === 0}>
+                <UserPlus className="size-4" /> Vincular usuário
+              </Button>
+            </DialogTrigger>
+            <LinkUserDialog
+              stores={stores}
+              loading={linkUser.isPending}
+              onSubmit={(payload) => linkUser.mutate(payload)}
+            />
+          </Dialog>
+        }
       />
       <div className="p-6 space-y-4">
         <div className="border border-border rounded-md bg-card p-4 text-xs text-muted-foreground">
-          Para adicionar um novo usuário: peça para ele criar conta em <b>Entrar → Criar conta</b>, depois um admin da loja concede o papel.
+          Para adicionar um usuário: ele cria a conta em <b>Entrar → Criar conta</b>, depois um admin/gerente vincula o e-mail a uma loja.
         </div>
 
         <div className="flex items-end gap-3">
@@ -92,7 +137,7 @@ function UsuariosPage() {
             <TableBody>
               {filtered.length === 0 && (
                 <TableRow><TableCell colSpan={4} className="text-center py-10 text-sm text-muted-foreground">
-                  {stores.length === 0 ? "Cadastre uma loja primeiro." : "Sem papéis registrados."}
+                  {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : "Sem usuários vinculados para este filtro."}
                 </TableCell></TableRow>
               )}
               {filtered.map((r) => {
@@ -102,7 +147,7 @@ function UsuariosPage() {
                   <TableRow key={r.id}>
                     <TableCell>
                       <div className="text-sm">{p?.full_name || <span className="text-muted-foreground">sem nome</span>}</div>
-                      <div className="font-mono text-[10px] text-muted-foreground">{r.user_id}</div>
+                      <div className="font-mono text-[10px] text-muted-foreground">{p?.email || r.user_id}</div>
                     </TableCell>
                     <TableCell className="text-sm">{s?.fantasy_name || s?.name || <span className="text-muted-foreground font-mono text-[10px]">{r.store_id}</span>}</TableCell>
                     <TableCell><RoleBadge role={r.role} /></TableCell>
@@ -115,6 +160,79 @@ function UsuariosPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function LinkUserDialog({
+  stores,
+  loading,
+  onSubmit,
+}: {
+  stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
+  loading: boolean;
+  onSubmit: (payload: z.infer<typeof linkSchema>) => void;
+}) {
+  const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<AppRole>("caixa");
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const parsed = linkSchema.safeParse({ storeId, email, role });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0].message);
+      return;
+    }
+    onSubmit(parsed.data);
+  };
+
+  return (
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Vincular usuário à loja</DialogTitle></DialogHeader>
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="user-email">Email do usuário</Label>
+          <Input
+            id="user-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="usuario@empresa.com"
+            autoComplete="email"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Loja</Label>
+          <Select value={storeId} onValueChange={setStoreId}>
+            <SelectTrigger><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
+            <SelectContent>
+              {stores.map((store) => (
+                <SelectItem key={store.id} value={store.id}>{store.fantasy_name || store.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Papel</Label>
+          <Select value={role} onValueChange={(value) => setRole(value as AppRole)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="gerente">Gerente</SelectItem>
+              <SelectItem value="caixa">Caixa</SelectItem>
+              <SelectItem value="estoquista">Estoquista</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button type="submit" disabled={loading || stores.length === 0}>
+            {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Vincular
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
   );
 }
 

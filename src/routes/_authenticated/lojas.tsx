@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Plus, Store as StoreIcon, Star, StarOff } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useMyProfile, useSetDefaultStore, useCurrentStore } from "@/lib/current-store";
+import { useMyProfile, useSetDefaultStore, useCurrentStore, useStores } from "@/lib/current-store";
 
 export const Route = createFileRoute("/_authenticated/lojas")({
   component: LojasPage,
@@ -34,14 +34,7 @@ function LojasPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
 
-  const { data: stores } = useQuery({
-    queryKey: ["stores"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("stores").select("*").order("name");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const { data: stores = [], isLoading: storesLoading } = useStores();
 
   const create = useMutation({
     mutationFn: async (payload: z.infer<typeof storeSchema>) => {
@@ -64,7 +57,9 @@ function LojasPage() {
       const { error } = await supabase.from("stores").insert(clean);
       if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ""}${error.hint ? ` (${error.hint})` : ""}`);
     },
-    onSuccess: () => { toast.success("Loja cadastrada. Você é admin dela."); qc.invalidateQueries({ queryKey: ["stores"] }); qc.invalidateQueries({ queryKey: ["my-profile"] }); setOpen(false); },
+    onSuccess: () => { toast.success("Loja cadastrada. Você é admin dela."); qc.invalidateQueries({ queryKey: ["stores"] }); qc.invalidateQueries({ queryKey: ["my-profile"] });
+      qc.invalidateQueries({ queryKey: ["stores"] });
+      qc.invalidateQueries({ queryKey: ["roles-all"] }); setOpen(false); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -86,14 +81,19 @@ function LojasPage() {
         }
       />
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-        {stores?.length === 0 && (
+        {storesLoading && (
+          <div className="col-span-full border border-border rounded-md p-10 text-center bg-card/40 text-sm text-muted-foreground">
+            Carregando lojas disponíveis...
+          </div>
+        )}
+        {!storesLoading && stores.length === 0 && (
           <div className="col-span-full border border-dashed border-border rounded-md p-10 text-center bg-card/40">
             <StoreIcon className="size-8 mx-auto text-muted-foreground" />
             <h3 className="mt-3 text-sm font-medium">Nenhuma loja ainda</h3>
             <p className="text-xs text-muted-foreground mt-1">Cadastre sua primeira loja para começar a usar o sistema.</p>
           </div>
         )}
-        {stores?.map((s) => {
+        {stores.map((s) => {
           const isDefault = profile?.default_store_id === s.id;
           return (
             <div key={s.id} className={`border rounded-md bg-card p-5 ${isDefault ? "border-primary/60" : "border-border"}`}>

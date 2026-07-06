@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resetCurrentStoreSelection } from "@/lib/current-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +27,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -46,6 +49,10 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         toast.success("Autenticado");
+        qc.clear();
+        resetCurrentStoreSelection();
+        await qc.invalidateQueries({ queryKey: ["stores"] });
+        await qc.invalidateQueries({ queryKey: ["my-profile"] });
         navigate({ to: "/dashboard", replace: true });
       } else {
         const { error } = await supabase.auth.signUp({
@@ -116,7 +123,7 @@ function AuthPage() {
         </div>
 
         <p className="text-center text-[11px] font-mono uppercase tracking-wider text-muted-foreground mt-6">
-          Ambiente: homologação · dados protegidos por RLS
+          Ambiente seguro · dados protegidos por loja
         </p>
       </div>
     </div>

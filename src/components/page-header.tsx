@@ -44,8 +44,8 @@ export function StoreRequired() {
   return (
     <div className="p-6">
       <EmptyState
-        title="Nenhuma loja selecionada"
-        description="Cadastre ou selecione uma loja no topo para operar este módulo."
+        title="Nenhuma loja disponível"
+        description="Cadastre uma loja ou selecione uma loja no topo para operar este módulo."
       />
     </div>
   );

@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { store, stores, setStoreId } = useCurrentStore();
+  const { store, stores, setStoreId, isLoading, isError } = useCurrentStore();
   const [email, setEmail] = useState<string>("");
 
   useEffect(() => {
@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="p-3 border-t border-sidebar-border text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-          v0.1 · homologação
+          v0.1 · produção
         </div>
       </aside>
 
@@ -116,14 +116,24 @@ export function AppShell({ children }: { children: ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
                   <Store className="size-4" />
-                  {store ? (store.fantasy_name || store.name) : "Selecionar loja"}
+                  {isLoading ? "Carregando lojas" : store ? (store.fantasy_name || store.name) : "Selecionar loja"}
                   <ChevronDown className="size-3" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64">
                 <DropdownMenuLabel>Lojas disponíveis</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {stores.length === 0 && (
+                {isLoading && (
+                  <div className="px-2 py-6 text-center text-xs text-muted-foreground">
+                    Carregando lojas disponíveis...
+                  </div>
+                )}
+                {isError && (
+                  <div className="px-2 py-6 text-center text-xs text-destructive">
+                    Não foi possível carregar as lojas.
+                  </div>
+                )}
+                {!isLoading && !isError && stores.length === 0 && (
                   <div className="px-2 py-6 text-center text-xs text-muted-foreground">
                     Nenhuma loja. Cadastre a primeira em <b>Lojas</b>.
                   </div>
@@ -151,7 +161,27 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto">{children}</main>
+        
+        <main className="flex-1 overflow-auto">
+          {!store && stores.length > 0 && (
+            <div className="bg-warning/10 border-b border-warning/20 px-4 py-2 text-[11px] font-medium text-warning flex items-center gap-2 uppercase tracking-wider">
+              <AlertTriangle className="size-3" />
+              Nenhuma loja ativa. Selecione uma no menu acima para ver os dados.
+            </div>
+          )}
+          {stores.length === 0 && pathname !== "/lojas" && (
+            <div className="bg-primary/10 border-b border-primary/20 px-4 py-3 text-sm text-primary flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Store className="size-4" />
+                <span>Você ainda não possui lojas cadastradas.</span>
+              </div>
+              <Button asChild size="sm" variant="outline" className="h-7 text-[10px] border-primary/40 hover:bg-primary/20 text-primary">
+                <Link to="/lojas">CADASTRAR PRIMEIRA LOJA</Link>
+              </Button>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );
