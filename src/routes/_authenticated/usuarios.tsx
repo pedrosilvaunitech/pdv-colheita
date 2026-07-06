@@ -12,7 +12,8 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, UserPlus, Star } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
@@ -100,24 +101,37 @@ function UsuariosPage() {
         title="Usuários & papéis"
         description="Todos os usuários e papéis de todas as lojas às quais você tem acesso."
         actions={
-          <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-2" disabled={stores.length === 0}>
-                <UserPlus className="size-4" /> Vincular usuário
-              </Button>
-            </DialogTrigger>
-            <LinkUserDialog
-              stores={stores}
-              loading={linkUser.isPending}
-              onSubmit={(payload) => linkUser.mutate(payload)}
-            />
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => { qc.invalidateQueries({ queryKey: ["roles-all"] }); qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); qc.invalidateQueries({ queryKey: ["stores"] }); toast.success("Atualizado"); }}>
+              <RefreshCw className="size-4" /> Atualizar
+            </Button>
+            <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2" disabled={stores.length === 0}>
+                  <UserPlus className="size-4" /> Vincular usuário
+                </Button>
+              </DialogTrigger>
+              <LinkUserDialog
+                stores={stores}
+                loading={linkUser.isPending}
+                onSubmit={(payload) => linkUser.mutate(payload)}
+              />
+            </Dialog>
+          </div>
         }
       />
       <div className="p-6 space-y-4">
-        <div className="border border-border rounded-md bg-card p-4 text-xs text-muted-foreground">
-          Para adicionar um usuário: ele cria a conta em <b>Entrar → Criar conta</b>, depois um admin/gerente vincula o e-mail a uma loja.
-        </div>
+        <Tabs defaultValue="lista">
+          <TabsList>
+            <TabsTrigger value="lista">Lista de vínculos</TabsTrigger>
+            <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="lista" className="mt-4 space-y-4">
+            <div className="border border-border rounded-md bg-card p-4 text-xs text-muted-foreground">
+              Para adicionar um usuário: ele cria a conta em <b>Entrar → Criar conta</b>, depois um admin/gerente vincula o e-mail a uma loja.
+            </div>
+
 
         <div className="flex items-end gap-3">
           <div className="w-72">
@@ -186,7 +200,86 @@ function UsuariosPage() {
             </TableBody>
           </Table>
         </div>
+          </TabsContent>
+
+          <TabsContent value="auditoria" className="mt-4">
+            <AuditPanel roles={roles} profiles={profiles} stores={stores} loading={loading} />
+          </TabsContent>
+        </Tabs>
       </div>
+    </div>
+  );
+}
+
+function AuditPanel({ roles, profiles, stores, loading }: {
+  roles: Array<{ id: string; user_id: string; store_id: string; role: string }>;
+  profiles: Array<{ id: string; full_name: string | null; email: string | null; default_store_id: string | null }>;
+  stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
+  loading: boolean;
+}) {
+  const storeIdSet = new Set(stores.map((s) => s.id));
+  const profileMap = Object.fromEntries(profiles.map((p) => [p.id, p]));
+  const orphanRoles = roles.filter((r) => !storeIdSet.has(r.store_id));
+  const usersWithoutDefault = profiles.filter((p) => !p.default_store_id);
+  const usersWithInvalidDefault = profiles.filter((p) => p.default_store_id && !storeIdSet.has(p.default_store_id));
+  const rolesByStore = stores.map((s) => ({ store: s, count: roles.filter((r) => r.store_id === s.id).length }));
+  const storesWithoutAdmin = stores.filter((s) => !roles.some((r) => r.store_id === s.id && r.role === "admin"));
+
+  const Metric = ({ label, value, tone = "neutral", icon: Icon }: { label: string; value: number; tone?: "ok" | "warn" | "neutral"; icon: typeof CheckCircle2 }) => (
+    <div className={`border rounded-md p-4 ${tone === "warn" ? "border-warning/40 bg-warning/5" : tone === "ok" ? "border-primary/40 bg-primary/5" : "border-border bg-card"}`}>
+      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground"><Icon className="size-3" /> {label}</div>
+      <div className={`text-2xl font-mono mt-1 ${tone === "warn" ? "text-warning" : tone === "ok" ? "text-primary" : ""}`}>{value}</div>
+    </div>
+  );
+
+  if (loading) return <div className="text-sm text-muted-foreground">Auditando...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Metric label="Lojas" value={stores.length} icon={CheckCircle2} tone="ok" />
+        <Metric label="Usuários" value={profiles.length} icon={CheckCircle2} tone="ok" />
+        <Metric label="Vínculos" value={roles.length} icon={CheckCircle2} tone="ok" />
+        <Metric label="Vínculos órfãos" value={orphanRoles.length} icon={ShieldAlert} tone={orphanRoles.length ? "warn" : "neutral"} />
+        <Metric label="Sem loja padrão" value={usersWithoutDefault.length} icon={ShieldAlert} tone={usersWithoutDefault.length ? "warn" : "neutral"} />
+        <Metric label="Padrão inválida" value={usersWithInvalidDefault.length} icon={ShieldAlert} tone={usersWithInvalidDefault.length ? "warn" : "neutral"} />
+        <Metric label="Lojas sem admin" value={storesWithoutAdmin.length} icon={ShieldAlert} tone={storesWithoutAdmin.length ? "warn" : "neutral"} />
+      </div>
+
+      <div className="border border-border rounded-md bg-card overflow-hidden">
+        <div className="px-4 py-2 text-xs font-semibold border-b border-border">Vínculos por loja</div>
+        <Table>
+          <TableHeader><TableRow><TableHead>Loja</TableHead><TableHead className="w-32 text-right">Vínculos</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {rolesByStore.map(({ store, count }) => (
+              <TableRow key={store.id}>
+                <TableCell className="text-sm">{store.fantasy_name || store.name}</TableCell>
+                <TableCell className="text-right font-mono">{count}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {usersWithoutDefault.length > 0 && (
+        <div className="border border-warning/40 rounded-md bg-warning/5 p-4">
+          <div className="text-xs font-semibold text-warning mb-2">Usuários sem loja padrão ({usersWithoutDefault.length})</div>
+          <ul className="text-xs space-y-1 font-mono">
+            {usersWithoutDefault.slice(0, 20).map((p) => (<li key={p.id}>{p.email || p.id}</li>))}
+          </ul>
+        </div>
+      )}
+
+      {orphanRoles.length > 0 && (
+        <div className="border border-destructive/40 rounded-md bg-destructive/5 p-4">
+          <div className="text-xs font-semibold text-destructive mb-2">Vínculos órfãos (loja removida) — {orphanRoles.length}</div>
+          <ul className="text-xs space-y-1 font-mono">
+            {orphanRoles.slice(0, 20).map((r) => (
+              <li key={r.id}>{profileMap[r.user_id]?.email || r.user_id} · store={r.store_id.slice(0, 8)} · {r.role}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

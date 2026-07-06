@@ -17,6 +17,7 @@ import {
   ShoppingBag,
   Wallet,
   Settings,
+  RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -121,7 +122,17 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64">
-                <DropdownMenuLabel>Lojas disponíveis</DropdownMenuLabel>
+                <DropdownMenuLabel className="flex items-center justify-between">
+                  <span>Lojas disponíveis</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); qc.invalidateQueries({ queryKey: ["stores"] }); qc.invalidateQueries({ queryKey: ["my-profile"] }); toast.success("Lojas recarregadas"); }}
+                    className="text-muted-foreground hover:text-foreground p-1 rounded"
+                    title="Recarregar lojas"
+                  >
+                    <RefreshCw className="size-3" />
+                  </button>
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {isLoading && (
                   <div className="px-2 py-6 text-center text-xs text-muted-foreground">
