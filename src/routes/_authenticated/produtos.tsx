@@ -153,20 +153,36 @@ function ProdutosPage() {
 }
 
 function ProductDialog({ onSubmit, loading }: { onSubmit: (v: z.infer<typeof productSchema>) => void; loading: boolean }) {
+  const { storeId } = useCurrentStore();
   const [form, setForm] = useState({
-    name: "", barcode: "", sku: "", unit: "UN",
-    price_sell: "0", price_cost: "0", ncm: "", cfop: "5102", csosn: "102",
+    name: "", barcode: "", sku: "", unit: "UN", category: "",
+    price_sell: "0", price_cost: "0",
+    min_stock: "0", max_stock: "", lead_time_days: "7", supplier_id: "",
+    ncm: "", cfop: "5102", csosn: "102",
+  });
+
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers-lite", storeId],
+    enabled: Boolean(storeId),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("suppliers").select("id,name").eq("store_id", storeId!).order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = productSchema.safeParse(form);
+    const parsed = productSchema.safeParse({
+      ...form,
+      max_stock: form.max_stock === "" ? undefined : form.max_stock,
+    });
     if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
     onSubmit(parsed.data);
   };
 
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader><DialogTitle>Novo produto</DialogTitle></DialogHeader>
       <form onSubmit={submit} className="grid grid-cols-2 gap-4">
         <Field label="Código de barras (EAN)" className="col-span-2">
@@ -174,6 +190,7 @@ function ProductDialog({ onSubmit, loading }: { onSubmit: (v: z.infer<typeof pro
         </Field>
         <Field label="Nome" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
         <Field label="SKU interno"><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></Field>
+        <Field label="Categoria"><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Bebidas, Higiene…" /></Field>
         <Field label="Unidade">
           <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -182,11 +199,25 @@ function ProductDialog({ onSubmit, loading }: { onSubmit: (v: z.infer<typeof pro
             </SelectContent>
           </Select>
         </Field>
+        <Field label="Fornecedor">
+          <Select value={form.supplier_id} onValueChange={(v) => setForm({ ...form, supplier_id: v })}>
+            <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+            <SelectContent>{suppliers?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </Field>
         <Field label="Preço de venda (R$)"><Input type="number" step="0.01" min="0" value={form.price_sell} onChange={(e) => setForm({ ...form, price_sell: e.target.value })} /></Field>
         <Field label="Preço de custo (R$)"><Input type="number" step="0.01" min="0" value={form.price_cost} onChange={(e) => setForm({ ...form, price_cost: e.target.value })} /></Field>
-        <Field label="NCM"><Input value={form.ncm} onChange={(e) => setForm({ ...form, ncm: e.target.value })} placeholder="ex 22021000" className="font-mono" /></Field>
-        <Field label="CFOP"><Input value={form.cfop} onChange={(e) => setForm({ ...form, cfop: e.target.value })} className="font-mono" /></Field>
-        <Field label="CSOSN (Simples)"><Input value={form.csosn} onChange={(e) => setForm({ ...form, csosn: e.target.value })} className="font-mono" /></Field>
+        <Field label="Estoque mínimo"><Input type="number" step="0.001" min="0" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} /></Field>
+        <Field label="Estoque máximo (opcional)"><Input type="number" step="0.001" min="0" value={form.max_stock} onChange={(e) => setForm({ ...form, max_stock: e.target.value })} /></Field>
+        <Field label="Prazo de reposição (dias)"><Input type="number" min="0" value={form.lead_time_days} onChange={(e) => setForm({ ...form, lead_time_days: e.target.value })} /></Field>
+        <div className="col-span-2 border-t border-border pt-3 mt-1">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono mb-2">Tributação</div>
+          <div className="grid grid-cols-3 gap-4">
+            <Field label="NCM"><Input value={form.ncm} onChange={(e) => setForm({ ...form, ncm: e.target.value })} placeholder="ex 22021000" className="font-mono" /></Field>
+            <Field label="CFOP"><Input value={form.cfop} onChange={(e) => setForm({ ...form, cfop: e.target.value })} className="font-mono" /></Field>
+            <Field label="CSOSN (Simples)"><Input value={form.csosn} onChange={(e) => setForm({ ...form, csosn: e.target.value })} className="font-mono" /></Field>
+          </div>
+        </div>
         <DialogFooter className="col-span-2">
           <Button type="submit" disabled={loading}>{loading ? "Salvando..." : "Cadastrar"}</Button>
         </DialogFooter>
@@ -194,6 +225,7 @@ function ProductDialog({ onSubmit, loading }: { onSubmit: (v: z.infer<typeof pro
     </DialogContent>
   );
 }
+
 
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
