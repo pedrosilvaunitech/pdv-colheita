@@ -14,50 +14,175 @@ export type Database = {
   }
   public: {
     Tables: {
+      cash_movements: {
+        Row: {
+          amount: number
+          cash_register_id: string
+          created_at: string
+          created_by: string
+          id: string
+          reason: string | null
+          store_id: string
+          type: string
+        }
+        Insert: {
+          amount: number
+          cash_register_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          reason?: string | null
+          store_id: string
+          type: string
+        }
+        Update: {
+          amount?: number
+          cash_register_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          reason?: string | null
+          store_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_movements_cash_register_id_fkey"
+            columns: ["cash_register_id"]
+            isOneToOne: false
+            referencedRelation: "cash_registers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_registers: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          closing_amount: number | null
+          created_at: string
+          difference: number | null
+          expected_amount: number | null
+          id: string
+          notes: string | null
+          opened_at: string
+          opened_by: string
+          opening_amount: number
+          status: string
+          store_id: string
+          terminal: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_amount?: number | null
+          created_at?: string
+          difference?: number | null
+          expected_amount?: number | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by: string
+          opening_amount?: number
+          status?: string
+          store_id: string
+          terminal?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_amount?: number | null
+          created_at?: string
+          difference?: number | null
+          expected_amount?: number | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by?: string
+          opening_amount?: number
+          status?: string
+          store_id?: string
+          terminal?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_registers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address_line: string | null
+          birthday: string | null
           city: string | null
           created_at: string
+          credit_limit: number
+          discount_percent: number
           doc: string | null
           doc_type: string | null
           email: string | null
           id: string
           name: string
+          notes: string | null
           phone: string | null
           state: string | null
           store_id: string
           updated_at: string
+          whatsapp: string | null
           zip: string | null
         }
         Insert: {
           address_line?: string | null
+          birthday?: string | null
           city?: string | null
           created_at?: string
+          credit_limit?: number
+          discount_percent?: number
           doc?: string | null
           doc_type?: string | null
           email?: string | null
           id?: string
           name: string
+          notes?: string | null
           phone?: string | null
           state?: string | null
           store_id: string
           updated_at?: string
+          whatsapp?: string | null
           zip?: string | null
         }
         Update: {
           address_line?: string | null
+          birthday?: string | null
           city?: string | null
           created_at?: string
+          credit_limit?: number
+          discount_percent?: number
           doc?: string | null
           doc_type?: string | null
           email?: string | null
           id?: string
           name?: string
+          notes?: string | null
           phone?: string | null
           state?: string | null
           store_id?: string
           updated_at?: string
+          whatsapp?: string | null
           zip?: string | null
         }
         Relationships: [
@@ -299,6 +424,7 @@ export type Database = {
           active: boolean
           barcode: string | null
           category: string | null
+          cest: string | null
           cfop: string | null
           created_at: string
           csosn: string | null
@@ -306,6 +432,8 @@ export type Database = {
           description: string | null
           icms_rate: number | null
           id: string
+          image_url: string | null
+          is_weighable: boolean
           lead_time_days: number
           max_stock: number | null
           min_stock: number
@@ -325,6 +453,7 @@ export type Database = {
           active?: boolean
           barcode?: string | null
           category?: string | null
+          cest?: string | null
           cfop?: string | null
           created_at?: string
           csosn?: string | null
@@ -332,6 +461,8 @@ export type Database = {
           description?: string | null
           icms_rate?: number | null
           id?: string
+          image_url?: string | null
+          is_weighable?: boolean
           lead_time_days?: number
           max_stock?: number | null
           min_stock?: number
@@ -351,6 +482,7 @@ export type Database = {
           active?: boolean
           barcode?: string | null
           category?: string | null
+          cest?: string | null
           cfop?: string | null
           created_at?: string
           csosn?: string | null
@@ -358,6 +490,8 @@ export type Database = {
           description?: string | null
           icms_rate?: number | null
           id?: string
+          image_url?: string | null
+          is_weighable?: boolean
           lead_time_days?: number
           max_stock?: number | null
           min_stock?: number
@@ -536,6 +670,53 @@ export type Database = {
           },
         ]
       }
+      receipt_settings: {
+        Row: {
+          ask_customer: boolean
+          created_at: string
+          default_document: string
+          footer_text: string | null
+          header_text: string | null
+          logo_url: string | null
+          paper_width: number
+          print_auto: boolean
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          ask_customer?: boolean
+          created_at?: string
+          default_document?: string
+          footer_text?: string | null
+          header_text?: string | null
+          logo_url?: string | null
+          paper_width?: number
+          print_auto?: boolean
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          ask_customer?: boolean
+          created_at?: string
+          default_document?: string
+          footer_text?: string | null
+          header_text?: string | null
+          logo_url?: string | null
+          paper_width?: number
+          print_auto?: boolean
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipt_settings_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_items: {
         Row: {
           barcode: string | null
@@ -648,11 +829,14 @@ export type Database = {
       }
       sales: {
         Row: {
+          cash_register_id: string | null
+          change_given: number
           created_at: string
           customer_cpf: string | null
           customer_id: string | null
           customer_name: string | null
           discount: number
+          document_type: string
           finalized_at: string | null
           id: string
           operator_id: string
@@ -663,11 +847,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cash_register_id?: string | null
+          change_given?: number
           created_at?: string
           customer_cpf?: string | null
           customer_id?: string | null
           customer_name?: string | null
           discount?: number
+          document_type?: string
           finalized_at?: string | null
           id?: string
           operator_id: string
@@ -678,11 +865,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cash_register_id?: string | null
+          change_given?: number
           created_at?: string
           customer_cpf?: string | null
           customer_id?: string | null
           customer_name?: string | null
           discount?: number
+          document_type?: string
           finalized_at?: string | null
           id?: string
           operator_id?: string
@@ -693,6 +883,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_cash_register_fk"
+            columns: ["cash_register_id"]
+            isOneToOne: false
+            referencedRelation: "cash_registers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_customer_id_fkey"
             columns: ["customer_id"]
@@ -958,6 +1155,7 @@ export type Database = {
         Args: { _store_id: string; _user_id: string }
         Returns: boolean
       }
+      current_open_register: { Args: { _store_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
