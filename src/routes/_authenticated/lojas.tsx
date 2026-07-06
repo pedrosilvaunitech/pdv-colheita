@@ -64,9 +64,13 @@ function LojasPage() {
       const { error } = await supabase.from("stores").insert(clean);
       if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ""}${error.hint ? ` (${error.hint})` : ""}`);
     },
-    onSuccess: () => { toast.success("Loja cadastrada. Você é admin dela."); qc.invalidateQueries({ queryKey: ["stores"] }); setOpen(false); },
+    onSuccess: () => { toast.success("Loja cadastrada. Você é admin dela."); qc.invalidateQueries({ queryKey: ["stores"] }); qc.invalidateQueries({ queryKey: ["my-profile"] }); setOpen(false); },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const { data: profile } = useMyProfile();
+  const setDefault = useSetDefaultStore();
+  const { setStoreId } = useCurrentStore();
 
 
   return (
