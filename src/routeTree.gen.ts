@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
+import { Route as AuthenticatedReposicaoRouteImport } from './routes/_authenticated/reposicao'
 import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticated/produtos'
 import { Route as AuthenticatedPdvRouteImport } from './routes/_authenticated/pdv'
 import { Route as AuthenticatedLojasRouteImport } from './routes/_authenticated/lojas'
@@ -37,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedReposicaoRoute = AuthenticatedReposicaoRouteImport.update({
+  id: '/reposicao',
+  path: '/reposicao',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedProdutosRoute = AuthenticatedProdutosRouteImport.update({
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/lojas': typeof AuthenticatedLojasRoute
   '/pdv': typeof AuthenticatedPdvRoute
   '/produtos': typeof AuthenticatedProdutosRoute
+  '/reposicao': typeof AuthenticatedReposicaoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesByTo {
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/lojas': typeof AuthenticatedLojasRoute
   '/pdv': typeof AuthenticatedPdvRoute
   '/produtos': typeof AuthenticatedProdutosRoute
+  '/reposicao': typeof AuthenticatedReposicaoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesById {
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/_authenticated/lojas': typeof AuthenticatedLojasRoute
   '/_authenticated/pdv': typeof AuthenticatedPdvRoute
   '/_authenticated/produtos': typeof AuthenticatedProdutosRoute
+  '/_authenticated/reposicao': typeof AuthenticatedReposicaoRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRouteTypes {
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/lojas'
     | '/pdv'
     | '/produtos'
+    | '/reposicao'
     | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/lojas'
     | '/pdv'
     | '/produtos'
+    | '/reposicao'
     | '/usuarios'
   id:
     | '__root__'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/_authenticated/lojas'
     | '/_authenticated/pdv'
     | '/_authenticated/produtos'
+    | '/_authenticated/reposicao'
     | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
 }
@@ -176,6 +188,13 @@ declare module '@tanstack/react-router' {
       path: '/usuarios'
       fullPath: '/usuarios'
       preLoaderRoute: typeof AuthenticatedUsuariosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/reposicao': {
+      id: '/_authenticated/reposicao'
+      path: '/reposicao'
+      fullPath: '/reposicao'
+      preLoaderRoute: typeof AuthenticatedReposicaoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/produtos': {
@@ -230,6 +249,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLojasRoute: typeof AuthenticatedLojasRoute
   AuthenticatedPdvRoute: typeof AuthenticatedPdvRoute
   AuthenticatedProdutosRoute: typeof AuthenticatedProdutosRoute
+  AuthenticatedReposicaoRoute: typeof AuthenticatedReposicaoRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
 
@@ -240,6 +260,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLojasRoute: AuthenticatedLojasRoute,
   AuthenticatedPdvRoute: AuthenticatedPdvRoute,
   AuthenticatedProdutosRoute: AuthenticatedProdutosRoute,
+  AuthenticatedReposicaoRoute: AuthenticatedReposicaoRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }
 
