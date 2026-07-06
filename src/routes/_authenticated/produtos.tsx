@@ -24,12 +24,18 @@ const productSchema = z.object({
   barcode: z.string().trim().max(64).optional().or(z.literal("")),
   sku: z.string().trim().max(64).optional().or(z.literal("")),
   unit: z.string().trim().min(1).max(8),
+  category: z.string().trim().max(80).optional().or(z.literal("")),
   price_sell: z.coerce.number().min(0),
   price_cost: z.coerce.number().min(0),
+  min_stock: z.coerce.number().min(0),
+  max_stock: z.coerce.number().min(0).optional(),
+  lead_time_days: z.coerce.number().int().min(0).max(365),
+  supplier_id: z.string().uuid().optional().or(z.literal("")),
   ncm: z.string().trim().max(10).optional().or(z.literal("")),
   cfop: z.string().trim().max(6).optional().or(z.literal("")),
   csosn: z.string().trim().max(6).optional().or(z.literal("")),
 });
+
 
 function ProdutosPage() {
   const { store, storeId } = useCurrentStore();
