@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="p-3 border-t border-sidebar-border text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-          v0.1 · homologação
+          v0.1 · produção
         </div>
       </aside>
 

@@ -123,7 +123,7 @@ function AuthPage() {
         </div>
 
         <p className="text-center text-[11px] font-mono uppercase tracking-wider text-muted-foreground mt-6">
-          Ambiente: homologação · dados protegidos por RLS
+          Ambiente seguro · dados protegidos por loja
         </p>
       </div>
     </div>
