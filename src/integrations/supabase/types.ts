@@ -1182,14 +1182,6 @@ export type Database = {
         Args: { _store_id: string; _user_id: string }
         Returns: boolean
       }
-      link_user_to_store_by_email: {
-        Args: {
-          _email: string
-          _role: Database["public"]["Enums"]["app_role"]
-          _store_id: string
-        }
-        Returns: string
-      }
     }
     Enums: {
       app_role: "admin" | "gerente" | "caixa" | "estoquista"

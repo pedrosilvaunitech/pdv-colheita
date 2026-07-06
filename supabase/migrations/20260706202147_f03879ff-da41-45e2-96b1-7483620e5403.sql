@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.link_user_to_store_by_email(uuid, text, app_role);
