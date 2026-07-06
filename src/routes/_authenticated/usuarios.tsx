@@ -34,6 +34,8 @@ function UsuariosPage() {
   const { data: stores = [], isLoading: storesLoading } = useStores();
   const [storeFilter, setStoreFilter] = useState<string>("__all__");
   const [linkOpen, setLinkOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  useEffect(() => { supabase.auth.getUser().then((r) => setCurrentUserId(r.data.user?.id ?? null)); }, []);
 
   const storeIds = useMemo(() => stores.map((s) => s.id), [stores]);
 
