@@ -101,24 +101,37 @@ function UsuariosPage() {
         title="Usuários & papéis"
         description="Todos os usuários e papéis de todas as lojas às quais você tem acesso."
         actions={
-          <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-2" disabled={stores.length === 0}>
-                <UserPlus className="size-4" /> Vincular usuário
-              </Button>
-            </DialogTrigger>
-            <LinkUserDialog
-              stores={stores}
-              loading={linkUser.isPending}
-              onSubmit={(payload) => linkUser.mutate(payload)}
-            />
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => { qc.invalidateQueries({ queryKey: ["roles-all"] }); qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); qc.invalidateQueries({ queryKey: ["stores"] }); toast.success("Atualizado"); }}>
+              <RefreshCw className="size-4" /> Atualizar
+            </Button>
+            <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2" disabled={stores.length === 0}>
+                  <UserPlus className="size-4" /> Vincular usuário
+                </Button>
+              </DialogTrigger>
+              <LinkUserDialog
+                stores={stores}
+                loading={linkUser.isPending}
+                onSubmit={(payload) => linkUser.mutate(payload)}
+              />
+            </Dialog>
+          </div>
         }
       />
       <div className="p-6 space-y-4">
-        <div className="border border-border rounded-md bg-card p-4 text-xs text-muted-foreground">
-          Para adicionar um usuário: ele cria a conta em <b>Entrar → Criar conta</b>, depois um admin/gerente vincula o e-mail a uma loja.
-        </div>
+        <Tabs defaultValue="lista">
+          <TabsList>
+            <TabsTrigger value="lista">Lista de vínculos</TabsTrigger>
+            <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="lista" className="mt-4 space-y-4">
+            <div className="border border-border rounded-md bg-card p-4 text-xs text-muted-foreground">
+              Para adicionar um usuário: ele cria a conta em <b>Entrar → Criar conta</b>, depois um admin/gerente vincula o e-mail a uma loja.
+            </div>
+
 
         <div className="flex items-end gap-3">
           <div className="w-72">
