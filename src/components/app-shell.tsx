@@ -11,6 +11,10 @@ import {
   LogOut,
   ChevronDown,
   Circle,
+  AlertTriangle,
+  Truck,
+  UserSquare2,
+  ShoppingBag,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -32,10 +36,15 @@ const NAV = [
   { to: "/pdv", label: "PDV / Caixa", icon: ScanBarcode },
   { to: "/produtos", label: "Produtos", icon: Package },
   { to: "/estoque", label: "Estoque", icon: Boxes },
+  { to: "/reposicao", label: "Reposição", icon: AlertTriangle },
+  { to: "/compras", label: "Compras / NF entrada", icon: ShoppingBag },
+  { to: "/fornecedores", label: "Fornecedores", icon: Truck },
+  { to: "/clientes", label: "Clientes", icon: UserSquare2 },
   { to: "/fiscal", label: "Nota Fiscal", icon: FileText },
   { to: "/lojas", label: "Lojas", icon: Store },
   { to: "/usuarios", label: "Usuários", icon: Users },
 ] as const;
+
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
