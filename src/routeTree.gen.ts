@@ -9,38 +9,161 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
+import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticated/produtos'
+import { Route as AuthenticatedPdvRouteImport } from './routes/_authenticated/pdv'
+import { Route as AuthenticatedLojasRouteImport } from './routes/_authenticated/lojas'
+import { Route as AuthenticatedFiscalRouteImport } from './routes/_authenticated/fiscal'
+import { Route as AuthenticatedEstoqueRouteImport } from './routes/_authenticated/estoque'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProdutosRoute = AuthenticatedProdutosRouteImport.update({
+  id: '/produtos',
+  path: '/produtos',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPdvRoute = AuthenticatedPdvRouteImport.update({
+  id: '/pdv',
+  path: '/pdv',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLojasRoute = AuthenticatedLojasRouteImport.update({
+  id: '/lojas',
+  path: '/lojas',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFiscalRoute = AuthenticatedFiscalRouteImport.update({
+  id: '/fiscal',
+  path: '/fiscal',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedEstoqueRoute = AuthenticatedEstoqueRouteImport.update({
+  id: '/estoque',
+  path: '/estoque',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/estoque': typeof AuthenticatedEstoqueRoute
+  '/fiscal': typeof AuthenticatedFiscalRoute
+  '/lojas': typeof AuthenticatedLojasRoute
+  '/pdv': typeof AuthenticatedPdvRoute
+  '/produtos': typeof AuthenticatedProdutosRoute
+  '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/estoque': typeof AuthenticatedEstoqueRoute
+  '/fiscal': typeof AuthenticatedFiscalRoute
+  '/lojas': typeof AuthenticatedLojasRoute
+  '/pdv': typeof AuthenticatedPdvRoute
+  '/produtos': typeof AuthenticatedProdutosRoute
+  '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/estoque': typeof AuthenticatedEstoqueRoute
+  '/_authenticated/fiscal': typeof AuthenticatedFiscalRoute
+  '/_authenticated/lojas': typeof AuthenticatedLojasRoute
+  '/_authenticated/pdv': typeof AuthenticatedPdvRoute
+  '/_authenticated/produtos': typeof AuthenticatedProdutosRoute
+  '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/estoque'
+    | '/fiscal'
+    | '/lojas'
+    | '/pdv'
+    | '/produtos'
+    | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/estoque'
+    | '/fiscal'
+    | '/lojas'
+    | '/pdv'
+    | '/produtos'
+    | '/usuarios'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/dashboard'
+    | '/_authenticated/estoque'
+    | '/_authenticated/fiscal'
+    | '/_authenticated/lojas'
+    | '/_authenticated/pdv'
+    | '/_authenticated/produtos'
+    | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +171,85 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/usuarios': {
+      id: '/_authenticated/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof AuthenticatedUsuariosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/produtos': {
+      id: '/_authenticated/produtos'
+      path: '/produtos'
+      fullPath: '/produtos'
+      preLoaderRoute: typeof AuthenticatedProdutosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/pdv': {
+      id: '/_authenticated/pdv'
+      path: '/pdv'
+      fullPath: '/pdv'
+      preLoaderRoute: typeof AuthenticatedPdvRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/lojas': {
+      id: '/_authenticated/lojas'
+      path: '/lojas'
+      fullPath: '/lojas'
+      preLoaderRoute: typeof AuthenticatedLojasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/fiscal': {
+      id: '/_authenticated/fiscal'
+      path: '/fiscal'
+      fullPath: '/fiscal'
+      preLoaderRoute: typeof AuthenticatedFiscalRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/estoque': {
+      id: '/_authenticated/estoque'
+      path: '/estoque'
+      fullPath: '/estoque'
+      preLoaderRoute: typeof AuthenticatedEstoqueRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedEstoqueRoute: typeof AuthenticatedEstoqueRoute
+  AuthenticatedFiscalRoute: typeof AuthenticatedFiscalRoute
+  AuthenticatedLojasRoute: typeof AuthenticatedLojasRoute
+  AuthenticatedPdvRoute: typeof AuthenticatedPdvRoute
+  AuthenticatedProdutosRoute: typeof AuthenticatedProdutosRoute
+  AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedEstoqueRoute: AuthenticatedEstoqueRoute,
+  AuthenticatedFiscalRoute: AuthenticatedFiscalRoute,
+  AuthenticatedLojasRoute: AuthenticatedLojasRoute,
+  AuthenticatedPdvRoute: AuthenticatedPdvRoute,
+  AuthenticatedProdutosRoute: AuthenticatedProdutosRoute,
+  AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

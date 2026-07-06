@@ -76,9 +76,23 @@ const STEPS: Step[] = [
   },
 ];
 
-const DEFAULT_CONFIG = {
-  provider: "none" as const,
-  environment: "homologacao" as const,
+type FiscalProvider = "none" | "focus_nfe" | "nfe_io" | "plugnotas";
+type FiscalEnv = "homologacao" | "producao";
+interface FiscalForm {
+  provider: FiscalProvider;
+  environment: FiscalEnv;
+  nfce_series: number;
+  nfce_next_number: number;
+  nfe_series: number;
+  nfe_next_number: number;
+  csc_id: string;
+  csc_token: string;
+  certificate_uploaded: boolean;
+  certificate_expires_on: string;
+}
+const DEFAULT_CONFIG: FiscalForm = {
+  provider: "none",
+  environment: "homologacao",
   nfce_series: 1,
   nfce_next_number: 1,
   nfe_series: 1,
