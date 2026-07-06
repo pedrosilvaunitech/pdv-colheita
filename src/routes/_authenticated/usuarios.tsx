@@ -85,6 +85,15 @@ function UsuariosPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const setDefault = useMutation({
+    mutationFn: async (payload: { userId: string; storeId: string }) => {
+      const { error } = await supabase.from("profiles").update({ default_store_id: payload.storeId }).eq("id", payload.userId);
+      if (error) throw error;
+    },
+    onSuccess: async () => { toast.success("Loja padrão do usuário atualizada"); await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); await qc.invalidateQueries({ queryKey: ["my-profile"] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <div>
       <PageHeader
