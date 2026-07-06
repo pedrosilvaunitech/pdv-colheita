@@ -256,6 +256,16 @@ function AuditPanel({ roles, profiles, stores, loading }: {
         </Button>
       </div>
 
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Metric label="Lojas" value={stores.length} icon={CheckCircle2} tone="ok" />
+        <Metric label="Usuários" value={profiles.length} icon={CheckCircle2} tone="ok" />
+        <Metric label="Vínculos" value={roles.length} icon={CheckCircle2} tone="ok" />
+        <Metric label="Vínculos órfãos" value={orphanRoles.length} icon={ShieldAlert} tone={orphanRoles.length ? "warn" : "neutral"} />
+        <Metric label="Sem loja padrão" value={usersWithoutDefault.length} icon={ShieldAlert} tone={usersWithoutDefault.length ? "warn" : "neutral"} />
+        <Metric label="Padrão inválida" value={usersWithInvalidDefault.length} icon={ShieldAlert} tone={usersWithInvalidDefault.length ? "warn" : "neutral"} />
+        <Metric label="Lojas sem admin" value={storesWithoutAdmin.length} icon={ShieldAlert} tone={storesWithoutAdmin.length ? "warn" : "neutral"} />
+      </div>
+
       <div className="border border-border rounded-md bg-card overflow-hidden">
         <div className="px-4 py-2 text-xs font-semibold border-b border-border">Vínculos por loja</div>
         <Table>
