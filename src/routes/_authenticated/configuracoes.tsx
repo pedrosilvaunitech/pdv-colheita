@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { buildReceiptHTML, printReceipt } from "@/lib/receipt";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2 } from "lucide-react";
+import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({ component: SettingsPage });
 
@@ -59,7 +59,18 @@ interface FiscalConfig {
   provider_api_url: string | null;
   cnae: string | null;
   crt: string | null;
+  defer_credentials: boolean;
+  credentials_note: string | null;
 }
+
+const PROVIDER_INFO: Record<string, { label: string; secret: string; url: string; note: string }> = {
+  focus_nfe:    { label: "Focus NFe",   secret: "FISCAL_FOCUS_NFE_TOKEN",   url: "https://focusnfe.com.br/doc/",           note: "Token em Empresas → Tokens de acesso." },
+  plugnotas:    { label: "PlugNotas",   secret: "FISCAL_PLUGNOTAS_API_KEY", url: "https://plugnotas.com.br/docs",          note: "API Key em API → Chaves de acesso." },
+  nfe_io:       { label: "NFe.io",      secret: "FISCAL_NFE_IO_API_KEY",    url: "https://nfe.io/docs",                    note: "Token da conta em Configurações → API." },
+  webmania:     { label: "WebmaniaBR",  secret: "FISCAL_WEBMANIA_API_KEY",  url: "https://webmaniabr.com/docs/rest-api-nfe", note: "Concatene consumer_key:consumer_secret:token:token_secret." },
+  tecnospeed:   { label: "TecnoSpeed",  secret: "FISCAL_TECNOSPEED_API_KEY", url: "https://tecnospeed.com.br",             note: "Token fornecido pelo comercial após contrato." },
+  direto_sefaz: { label: "Direto SEFAZ", secret: "—",                       url: "https://www.nfe.fazenda.gov.br/portal/",  note: "Sem provedor — assina localmente com o .pfx (avançado)." },
+};
 
 function SettingsPage() {
   const { store, storeId } = useCurrentStore();
