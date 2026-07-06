@@ -140,7 +140,7 @@ function SettingsPage() {
       if (form) {
         const next = { ...form, logo_url: url };
         setForm(next);
-        await supabase.from("receipt_settings").upsert(next, { onConflict: "store_id" });
+        await supabase.from("receipt_settings").upsert(next as never, { onConflict: "store_id" });
       }
       return url;
     },
@@ -163,7 +163,7 @@ function SettingsPage() {
         certificate_password_set: true,
         certificate_subject: fiscal?.certificate_subject ?? null,
       };
-      const { error } = await supabase.from("fiscal_configs").upsert(next, { onConflict: "store_id" });
+      const { error } = await supabase.from("fiscal_configs").upsert(next as never, { onConflict: "store_id" });
       if (error) throw error;
       setFiscal(next);
       setCertPassword("");
@@ -177,7 +177,7 @@ function SettingsPage() {
       if (!fiscal?.certificate_path) return;
       await supabase.storage.from("fiscal-certificates").remove([fiscal.certificate_path]);
       const next: FiscalConfig = { ...fiscal, certificate_uploaded: false, certificate_path: null, certificate_filename: null, certificate_password_set: false, certificate_subject: null };
-      const { error } = await supabase.from("fiscal_configs").upsert(next, { onConflict: "store_id" });
+      const { error } = await supabase.from("fiscal_configs").upsert(next as never, { onConflict: "store_id" });
       if (error) throw error;
       setFiscal(next);
     },
@@ -192,7 +192,7 @@ function SettingsPage() {
     const html = buildReceiptHTML({
       store: { name: store.fantasy_name || store.name, cnpj: form.show_cnpj ? store.cnpj : null, address: form.show_address ? ([store.city, store.state].filter(Boolean).join(" · ") || null) : null, phone: null },
       header: form.header_text, footer: [form.thank_you_text, form.footer_text, form.extra_info].filter(Boolean).join("\n"),
-      paper_width: form.paper_width, logo_url: form.show_logo ? form.logo_url : null,
+      paper_width: form.paper_width,
       items: [
         { name: "REFRIGERANTE COLA 2L", quantity: 2, unit_price: 8.5, total: 17, barcode: form.show_item_code ? "7891234567890" : undefined },
         { name: "PAO FRANCES KG", quantity: 0.42, unit_price: 15.9, total: 6.68 },
@@ -200,7 +200,7 @@ function SettingsPage() {
       subtotal: 23.68, discount: 0, total: 23.68, payment_method: "dinheiro",
       received: 30, change: 6.32,
       operator: form.show_operator ? "Operador exemplo" : undefined,
-      customer: form.show_customer ? "Cliente exemplo" : undefined,
+      customer: form.show_customer ? { name: "Cliente exemplo", doc: null } : undefined,
       sale_id: "PREVIEW00", document_type: form.default_document, issued_at: new Date(),
     });
     printReceipt(html);
