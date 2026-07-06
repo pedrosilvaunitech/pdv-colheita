@@ -529,6 +529,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           default_store_id: string | null
+          email: string | null
           full_name: string | null
           id: string
           updated_at: string
@@ -537,6 +538,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           default_store_id?: string | null
+          email?: string | null
           full_name?: string | null
           id: string
           updated_at?: string
@@ -545,6 +547,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           default_store_id?: string | null
+          email?: string | null
           full_name?: string | null
           id?: string
           updated_at?: string
@@ -1178,6 +1181,14 @@ export type Database = {
       has_store_access: {
         Args: { _store_id: string; _user_id: string }
         Returns: boolean
+      }
+      link_user_to_store_by_email: {
+        Args: {
+          _email: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _store_id: string
+        }
+        Returns: string
       }
     }
     Enums: {
