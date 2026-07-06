@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { store, stores, setStoreId } = useCurrentStore();
+  const { store, stores, setStoreId, isLoading, isError } = useCurrentStore();
   const [email, setEmail] = useState<string>("");
 
   useEffect(() => {
@@ -116,14 +116,24 @@ export function AppShell({ children }: { children: ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
                   <Store className="size-4" />
-                  {store ? (store.fantasy_name || store.name) : "Selecionar loja"}
+                  {isLoading ? "Carregando lojas" : store ? (store.fantasy_name || store.name) : "Selecionar loja"}
                   <ChevronDown className="size-3" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64">
                 <DropdownMenuLabel>Lojas disponíveis</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {stores.length === 0 && (
+                {isLoading && (
+                  <div className="px-2 py-6 text-center text-xs text-muted-foreground">
+                    Carregando lojas disponíveis...
+                  </div>
+                )}
+                {isError && (
+                  <div className="px-2 py-6 text-center text-xs text-destructive">
+                    Não foi possível carregar as lojas.
+                  </div>
+                )}
+                {!isLoading && !isError && stores.length === 0 && (
                   <div className="px-2 py-6 text-center text-xs text-muted-foreground">
                     Nenhuma loja. Cadastre a primeira em <b>Lojas</b>.
                   </div>

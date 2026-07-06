@@ -31,6 +31,12 @@ export function useStores() {
   });
 }
 
+export function resetCurrentStoreSelection() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(KEY);
+  window.dispatchEvent(new Event("bastion:store-changed"));
+}
+
 export function useMyProfile() {
   return useQuery({
     queryKey: ["my-profile"],
@@ -63,6 +69,7 @@ export function useSetDefaultStore() {
     onSuccess: () => {
       toast.success("Loja padrão definida");
       qc.invalidateQueries({ queryKey: ["my-profile"] });
+      qc.invalidateQueries({ queryKey: ["stores"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -70,8 +77,8 @@ export function useSetDefaultStore() {
 
 export function useCurrentStoreId() {
   const [storeId, setStoreId] = useState<string | null>(null);
-  const { data: stores } = useStores();
-  const { data: profile } = useMyProfile();
+  const { data: stores, isLoading: storesLoading, isError: storesError, error: storesErrorValue } = useStores();
+  const { data: profile, isLoading: profileLoading } = useMyProfile();
 
   useEffect(() => {
     if (!stores) return;
@@ -79,8 +86,8 @@ export function useCurrentStoreId() {
     const preferred = profile?.default_store_id;
 
     let next: string | null = null;
-    if (preferred && stores.some((s) => s.id === preferred)) next = preferred;
-    else if (saved && stores.some((s) => s.id === saved)) next = saved;
+    if (saved && stores.some((s) => s.id === saved)) next = saved;
+    else if (preferred && stores.some((s) => s.id === preferred)) next = preferred;
     else if (stores.length > 0) next = stores[0].id;
 
     setStoreId(next);
@@ -96,17 +103,25 @@ export function useCurrentStoreId() {
   useEffect(() => {
     const h = () => {
       const s = localStorage.getItem(KEY);
-      if (s) setStoreId(s);
+      setStoreId(s || null);
     };
     window.addEventListener("bastion:store-changed", h);
     return () => window.removeEventListener("bastion:store-changed", h);
   }, []);
 
-  return { storeId, setStoreId: change, stores: stores ?? [] };
+  return {
+    storeId,
+    setStoreId: change,
+    stores: stores ?? [],
+    isLoading: storesLoading || profileLoading,
+    isError: storesError,
+    error: storesErrorValue,
+    hasStores: Boolean(stores && stores.length > 0),
+  };
 }
 
 export function useCurrentStore() {
-  const { storeId, stores, setStoreId } = useCurrentStoreId();
+  const { storeId, stores, setStoreId, isLoading, isError, error, hasStores } = useCurrentStoreId();
   const current = stores.find((s) => s.id === storeId) ?? null;
-  return { store: current, storeId, stores, setStoreId };
+  return { store: current, storeId, stores, setStoreId, isLoading, isError, error, hasStores };
 }
