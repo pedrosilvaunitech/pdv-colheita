@@ -89,7 +89,7 @@ export function StoreRequired() {
             <h3 className="text-base font-semibold">Bem-vindo! Cadastre sua primeira loja</h3>
             <p className="text-xs text-muted-foreground mt-2">
               Cada loja tem estoque, usuários, caixa e configuração fiscal próprios.
-              Ao criar sua primeira loja, você é definido automaticamente como <b>admin</b>
+              Ao criar sua primeira loja, você é definido automaticamente como <b>admin dev</b>
               e ela vira sua loja padrão.
             </p>
           </div>

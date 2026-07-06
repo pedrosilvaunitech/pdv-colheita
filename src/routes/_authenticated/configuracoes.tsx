@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { buildReceiptHTML, printReceipt } from "@/lib/receipt";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2 } from "lucide-react";
+import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({ component: SettingsPage });
 
@@ -59,7 +59,18 @@ interface FiscalConfig {
   provider_api_url: string | null;
   cnae: string | null;
   crt: string | null;
+  defer_credentials: boolean;
+  credentials_note: string | null;
 }
+
+const PROVIDER_INFO: Record<string, { label: string; secret: string; url: string; note: string }> = {
+  focus_nfe:    { label: "Focus NFe",   secret: "FISCAL_FOCUS_NFE_TOKEN",   url: "https://focusnfe.com.br/doc/",           note: "Token em Empresas → Tokens de acesso." },
+  plugnotas:    { label: "PlugNotas",   secret: "FISCAL_PLUGNOTAS_API_KEY", url: "https://plugnotas.com.br/docs",          note: "API Key em API → Chaves de acesso." },
+  nfe_io:       { label: "NFe.io",      secret: "FISCAL_NFE_IO_API_KEY",    url: "https://nfe.io/docs",                    note: "Token da conta em Configurações → API." },
+  webmania:     { label: "WebmaniaBR",  secret: "FISCAL_WEBMANIA_API_KEY",  url: "https://webmaniabr.com/docs/rest-api-nfe", note: "Concatene consumer_key:consumer_secret:token:token_secret." },
+  tecnospeed:   { label: "TecnoSpeed",  secret: "FISCAL_TECNOSPEED_API_KEY", url: "https://tecnospeed.com.br",             note: "Token fornecido pelo comercial após contrato." },
+  direto_sefaz: { label: "Direto SEFAZ", secret: "—",                       url: "https://www.nfe.fazenda.gov.br/portal/",  note: "Sem provedor — assina localmente com o .pfx (avançado)." },
+};
 
 function SettingsPage() {
   const { store, storeId } = useCurrentStore();
@@ -101,6 +112,7 @@ function SettingsPage() {
         certificate_path: null, certificate_filename: null, certificate_password_set: false,
         certificate_subject: null, provider_api_key_set: false, provider_api_url: null,
         cnae: null, crt: null,
+        defer_credentials: true, credentials_note: null,
       };
     },
   });
@@ -379,6 +391,42 @@ function SettingsPage() {
                 </div>
                 <div><Label>CSC ID (Token NFC-e)</Label><Input value={fiscal.csc_id ?? ""} onChange={(e) => setFiscal({ ...fiscal, csc_id: e.target.value || null })} placeholder="000001" /></div>
                 <div><Label>CSC Token</Label><Input type="password" value={fiscal.csc_token ?? ""} onChange={(e) => setFiscal({ ...fiscal, csc_token: e.target.value || null })} /></div>
+              </div>
+
+              <div className="border border-warning/40 rounded-md bg-warning/5 p-4 space-y-3 md:col-span-2">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="size-4 text-warning" />
+                  <h3 className="text-sm font-semibold">Credencial do provedor (API)</h3>
+                  <Badge variant="outline" className={fiscal.defer_credentials ? "border-warning/40 text-warning gap-1" : "border-primary/40 text-primary gap-1"}>
+                    {fiscal.defer_credentials ? <><Clock className="size-3" /> Registrar depois</> : <><ShieldCheck className="size-3" /> Ativa no backend</>}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Você pode continuar sem cadastrar agora. Enquanto esta opção estiver marcada, o PDV funciona em modo <b>recibo não-fiscal</b> e a emissão real fica bloqueada com uma mensagem explicando o que falta.
+                </p>
+                <div className="flex items-center justify-between border border-border rounded p-3 bg-card">
+                  <div>
+                    <Label className="text-sm">Configurar credencial depois</Label>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Segredo esperado: <span className="font-mono">{PROVIDER_INFO[fiscal.provider]?.secret ?? "—"}</span>
+                      {PROVIDER_INFO[fiscal.provider] && ` · ${PROVIDER_INFO[fiscal.provider]!.note}`}
+                    </p>
+                  </div>
+                  <Switch checked={fiscal.defer_credentials} onCheckedChange={(c) => setFiscal({ ...fiscal, defer_credentials: c })} />
+                </div>
+                <div><Label>Anotação para lembrar depois</Label>
+                  <Textarea rows={2} value={fiscal.credentials_note ?? ""} onChange={(e) => setFiscal({ ...fiscal, credentials_note: e.target.value || null })} placeholder="Ex: aguardando contrato Focus NFe · responsável: contador João" />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <a href="/docs/fiscal-setup.md" target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1">
+                    <BookOpen className="size-3" /> Guia completo: como obter a API do provedor
+                  </a>
+                  {PROVIDER_INFO[fiscal.provider]?.url && (
+                    <a href={PROVIDER_INFO[fiscal.provider]!.url} target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1">
+                      Documentação {PROVIDER_INFO[fiscal.provider]!.label}
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           </TabsContent>

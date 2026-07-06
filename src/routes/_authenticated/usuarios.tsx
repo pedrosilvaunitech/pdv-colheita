@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useStores } from "@/lib/current-store";
-import { linkUserToStore } from "@/lib/users.functions";
+import { linkUserToStore, cleanupOrphanLinks } from "@/lib/users.functions";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ type AppRole = Database["public"]["Enums"]["app_role"];
 const linkSchema = z.object({
   storeId: z.string().uuid("Selecione uma loja"),
   email: z.string().trim().email("Email inválido"),
-  role: z.enum(["admin", "gerente", "caixa", "estoquista"]),
+  role: z.enum(["admin_dev", "admin", "gerente", "caixa", "estoquista"]),
 });
 
 function UsuariosPage() {
@@ -217,13 +217,26 @@ function AuditPanel({ roles, profiles, stores, loading }: {
   stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
   loading: boolean;
 }) {
+  const qc = useQueryClient();
   const storeIdSet = new Set(stores.map((s) => s.id));
   const profileMap = Object.fromEntries(profiles.map((p) => [p.id, p]));
   const orphanRoles = roles.filter((r) => !storeIdSet.has(r.store_id));
   const usersWithoutDefault = profiles.filter((p) => !p.default_store_id);
   const usersWithInvalidDefault = profiles.filter((p) => p.default_store_id && !storeIdSet.has(p.default_store_id));
   const rolesByStore = stores.map((s) => ({ store: s, count: roles.filter((r) => r.store_id === s.id).length }));
-  const storesWithoutAdmin = stores.filter((s) => !roles.some((r) => r.store_id === s.id && r.role === "admin"));
+  const storesWithoutAdmin = stores.filter((s) => !roles.some((r) => r.store_id === s.id && (r.role === "admin" || r.role === "admin_dev")));
+
+  const cleanup = useMutation({
+    mutationFn: async () => cleanupOrphanLinks(),
+    onSuccess: async (r) => {
+      toast.success(`Limpeza: ${r.removed_missing_store} vínculos órfãos, ${r.fixed_defaults} lojas padrão corrigidas, ${r.fixed_admin_links} vínculos admin recriados.`);
+      await qc.invalidateQueries({ queryKey: ["roles-all"] });
+      await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] });
+      await qc.invalidateQueries({ queryKey: ["my-profile"] });
+      await qc.invalidateQueries({ queryKey: ["stores"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const Metric = ({ label, value, tone = "neutral", icon: Icon }: { label: string; value: number; tone?: "ok" | "warn" | "neutral"; icon: typeof CheckCircle2 }) => (
     <div className={`border rounded-md p-4 ${tone === "warn" ? "border-warning/40 bg-warning/5" : tone === "ok" ? "border-primary/40 bg-primary/5" : "border-border bg-card"}`}>
@@ -236,6 +249,13 @@ function AuditPanel({ roles, profiles, stores, loading }: {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" className="gap-2" disabled={cleanup.isPending} onClick={() => cleanup.mutate()}>
+          {cleanup.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+          Executar limpeza automática
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Metric label="Lojas" value={stores.length} icon={CheckCircle2} tone="ok" />
         <Metric label="Usuários" value={profiles.length} icon={CheckCircle2} tone="ok" />
@@ -339,6 +359,7 @@ function LinkUserDialog({
           <Select value={role} onValueChange={(value) => setRole(value as AppRole)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="admin_dev">Admin Dev</SelectItem>
               <SelectItem value="admin">Admin</SelectItem>
               <SelectItem value="gerente">Gerente</SelectItem>
               <SelectItem value="caixa">Caixa</SelectItem>
@@ -359,10 +380,11 @@ function LinkUserDialog({
 
 function RoleBadge({ role }: { role: string }) {
   const map: Record<string, string> = {
+    admin_dev: "border-destructive/40 text-destructive",
     admin: "border-primary/40 text-primary",
     gerente: "border-info/40 text-info",
     caixa: "border-warning/40 text-warning",
     estoquista: "border-muted-foreground/40 text-muted-foreground",
   };
-  return <Badge variant="outline" className={map[role] || ""}>{role}</Badge>;
+  return <Badge variant="outline" className={map[role] || ""}>{role.replace("_", " ")}</Badge>;
 }
