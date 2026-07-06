@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useStores } from "@/lib/current-store";
@@ -12,7 +12,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, UserPlus, Star } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
@@ -34,6 +34,8 @@ function UsuariosPage() {
   const { data: stores = [], isLoading: storesLoading } = useStores();
   const [storeFilter, setStoreFilter] = useState<string>("__all__");
   const [linkOpen, setLinkOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  useEffect(() => { supabase.auth.getUser().then((r) => setCurrentUserId(r.data.user?.id ?? null)); }, []);
 
   const storeIds = useMemo(() => stores.map((s) => s.id), [stores]);
 
@@ -81,6 +83,15 @@ function UsuariosPage() {
       await qc.invalidateQueries({ queryKey: ["stores"] });
     },
     onError: (error: Error) => toast.error(error.message),
+  });
+
+  const setDefault = useMutation({
+    mutationFn: async (payload: { userId: string; storeId: string }) => {
+      const { error } = await supabase.from("profiles").update({ default_store_id: payload.storeId }).eq("id", payload.userId);
+      if (error) throw error;
+    },
+    onSuccess: async () => { toast.success("Loja padrão do usuário atualizada"); await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); await qc.invalidateQueries({ queryKey: ["my-profile"] }); },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -132,25 +143,42 @@ function UsuariosPage() {
               <TableHead>Usuário</TableHead>
               <TableHead>Loja</TableHead>
               <TableHead className="w-32">Papel</TableHead>
+              <TableHead className="w-40">Loja padrão</TableHead>
               <TableHead className="w-40">Desde</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="text-center py-10 text-sm text-muted-foreground">
+                <TableRow><TableCell colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
                   {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : "Sem usuários vinculados para este filtro."}
                 </TableCell></TableRow>
               )}
               {filtered.map((r) => {
                 const p = profileMap[r.user_id];
                 const s = storeMap[r.store_id];
+                const isDefault = p?.default_store_id === r.store_id;
+                const canSetOwn = currentUserId === r.user_id;
                 return (
                   <TableRow key={r.id}>
                     <TableCell>
-                      <div className="text-sm">{p?.full_name || <span className="text-muted-foreground">sem nome</span>}</div>
+                      <div className="text-sm flex items-center gap-2">
+                        {p?.full_name || <span className="text-muted-foreground">sem nome</span>}
+                        {canSetOwn && <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">você</Badge>}
+                      </div>
                       <div className="font-mono text-[10px] text-muted-foreground">{p?.email || r.user_id}</div>
                     </TableCell>
                     <TableCell className="text-sm">{s?.fantasy_name || s?.name || <span className="text-muted-foreground font-mono text-[10px]">{r.store_id}</span>}</TableCell>
                     <TableCell><RoleBadge role={r.role} /></TableCell>
+                    <TableCell>
+                      {isDefault ? (
+                        <Badge variant="outline" className="border-primary/40 text-primary gap-1"><Star className="size-3" /> Padrão</Badge>
+                      ) : canSetOwn ? (
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
+                          <Star className="size-3" /> Definir
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleString("pt-BR")}</TableCell>
                   </TableRow>
                 );
