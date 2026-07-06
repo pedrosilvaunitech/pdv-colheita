@@ -217,13 +217,26 @@ function AuditPanel({ roles, profiles, stores, loading }: {
   stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
   loading: boolean;
 }) {
+  const qc = useQueryClient();
   const storeIdSet = new Set(stores.map((s) => s.id));
   const profileMap = Object.fromEntries(profiles.map((p) => [p.id, p]));
   const orphanRoles = roles.filter((r) => !storeIdSet.has(r.store_id));
   const usersWithoutDefault = profiles.filter((p) => !p.default_store_id);
   const usersWithInvalidDefault = profiles.filter((p) => p.default_store_id && !storeIdSet.has(p.default_store_id));
   const rolesByStore = stores.map((s) => ({ store: s, count: roles.filter((r) => r.store_id === s.id).length }));
-  const storesWithoutAdmin = stores.filter((s) => !roles.some((r) => r.store_id === s.id && r.role === "admin"));
+  const storesWithoutAdmin = stores.filter((s) => !roles.some((r) => r.store_id === s.id && (r.role === "admin" || r.role === "admin_dev")));
+
+  const cleanup = useMutation({
+    mutationFn: async () => cleanupOrphanLinks({ data: undefined as never }),
+    onSuccess: async (r) => {
+      toast.success(`Limpeza: ${r.removed_missing_store} vínculos órfãos, ${r.fixed_defaults} lojas padrão corrigidas, ${r.fixed_admin_links} vínculos admin recriados.`);
+      await qc.invalidateQueries({ queryKey: ["roles-all"] });
+      await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] });
+      await qc.invalidateQueries({ queryKey: ["my-profile"] });
+      await qc.invalidateQueries({ queryKey: ["stores"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const Metric = ({ label, value, tone = "neutral", icon: Icon }: { label: string; value: number; tone?: "ok" | "warn" | "neutral"; icon: typeof CheckCircle2 }) => (
     <div className={`border rounded-md p-4 ${tone === "warn" ? "border-warning/40 bg-warning/5" : tone === "ok" ? "border-primary/40 bg-primary/5" : "border-border bg-card"}`}>
@@ -236,14 +249,11 @@ function AuditPanel({ roles, profiles, stores, loading }: {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Metric label="Lojas" value={stores.length} icon={CheckCircle2} tone="ok" />
-        <Metric label="Usuários" value={profiles.length} icon={CheckCircle2} tone="ok" />
-        <Metric label="Vínculos" value={roles.length} icon={CheckCircle2} tone="ok" />
-        <Metric label="Vínculos órfãos" value={orphanRoles.length} icon={ShieldAlert} tone={orphanRoles.length ? "warn" : "neutral"} />
-        <Metric label="Sem loja padrão" value={usersWithoutDefault.length} icon={ShieldAlert} tone={usersWithoutDefault.length ? "warn" : "neutral"} />
-        <Metric label="Padrão inválida" value={usersWithInvalidDefault.length} icon={ShieldAlert} tone={usersWithInvalidDefault.length ? "warn" : "neutral"} />
-        <Metric label="Lojas sem admin" value={storesWithoutAdmin.length} icon={ShieldAlert} tone={storesWithoutAdmin.length ? "warn" : "neutral"} />
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" className="gap-2" disabled={cleanup.isPending} onClick={() => cleanup.mutate()}>
+          {cleanup.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+          Executar limpeza automática
+        </Button>
       </div>
 
       <div className="border border-border rounded-md bg-card overflow-hidden">
