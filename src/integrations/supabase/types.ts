@@ -1220,6 +1220,10 @@ export type Database = {
         Args: { _store_id: string; _user_id: string }
         Returns: boolean
       }
+      cleanup_orphan_user_links: {
+        Args: { _manager_user_id?: string }
+        Returns: Json
+      }
       current_open_register: { Args: { _store_id: string }; Returns: string }
       has_role: {
         Args: {
