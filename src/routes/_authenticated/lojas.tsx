@@ -44,15 +44,29 @@ function LojasPage() {
 
   const create = useMutation({
     mutationFn: async (payload: z.infer<typeof storeSchema>) => {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) throw new Error("Não autenticado");
-      const clean = { ...payload, created_by: user.user.id };
+      const { data: userRes, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw new Error(`Sessão inválida: ${userErr.message}`);
+      if (!userRes.user) throw new Error("Você não está autenticado. Faça login novamente.");
+      const clean = {
+        name: payload.name,
+        fantasy_name: payload.fantasy_name || null,
+        cnpj: payload.cnpj || null,
+        ie: payload.ie || null,
+        address_line: payload.address_line || null,
+        city: payload.city || null,
+        state: payload.state ? payload.state.toUpperCase() : null,
+        zip: payload.zip || null,
+        phone: payload.phone || null,
+        tax_regime: payload.tax_regime,
+        created_by: userRes.user.id,
+      };
       const { error } = await supabase.from("stores").insert(clean);
-      if (error) throw error;
+      if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ""}${error.hint ? ` (${error.hint})` : ""}`);
     },
     onSuccess: () => { toast.success("Loja cadastrada. Você é admin dela."); qc.invalidateQueries({ queryKey: ["stores"] }); setOpen(false); },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   return (
     <div>
