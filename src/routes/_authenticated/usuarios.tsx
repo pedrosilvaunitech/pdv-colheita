@@ -227,7 +227,7 @@ function AuditPanel({ roles, profiles, stores, loading }: {
   const storesWithoutAdmin = stores.filter((s) => !roles.some((r) => r.store_id === s.id && (r.role === "admin" || r.role === "admin_dev")));
 
   const cleanup = useMutation({
-    mutationFn: async () => cleanupOrphanLinks({ data: undefined as never }),
+    mutationFn: async () => cleanupOrphanLinks(),
     onSuccess: async (r) => {
       toast.success(`Limpeza: ${r.removed_missing_store} vínculos órfãos, ${r.fixed_defaults} lojas padrão corrigidas, ${r.fixed_admin_links} vínculos admin recriados.`);
       await qc.invalidateQueries({ queryKey: ["roles-all"] });
