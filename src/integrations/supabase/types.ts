@@ -236,7 +236,13 @@ export type Database = {
       fiscal_configs: {
         Row: {
           certificate_expires_on: string | null
+          certificate_filename: string | null
+          certificate_password_set: boolean
+          certificate_path: string | null
+          certificate_subject: string | null
           certificate_uploaded: boolean
+          cnae: string | null
+          crt: string | null
           csc_id: string | null
           csc_token: string | null
           environment: Database["public"]["Enums"]["fiscal_env"]
@@ -246,12 +252,19 @@ export type Database = {
           nfe_series: number
           provider: Database["public"]["Enums"]["fiscal_provider"]
           provider_api_key_set: boolean
+          provider_api_url: string | null
           store_id: string
           updated_at: string
         }
         Insert: {
           certificate_expires_on?: string | null
+          certificate_filename?: string | null
+          certificate_password_set?: boolean
+          certificate_path?: string | null
+          certificate_subject?: string | null
           certificate_uploaded?: boolean
+          cnae?: string | null
+          crt?: string | null
           csc_id?: string | null
           csc_token?: string | null
           environment?: Database["public"]["Enums"]["fiscal_env"]
@@ -261,12 +274,19 @@ export type Database = {
           nfe_series?: number
           provider?: Database["public"]["Enums"]["fiscal_provider"]
           provider_api_key_set?: boolean
+          provider_api_url?: string | null
           store_id: string
           updated_at?: string
         }
         Update: {
           certificate_expires_on?: string | null
+          certificate_filename?: string | null
+          certificate_password_set?: boolean
+          certificate_path?: string | null
+          certificate_subject?: string | null
           certificate_uploaded?: boolean
+          cnae?: string | null
+          crt?: string | null
           csc_id?: string | null
           csc_token?: string | null
           environment?: Database["public"]["Enums"]["fiscal_env"]
@@ -276,6 +296,7 @@ export type Database = {
           nfe_series?: number
           provider?: Database["public"]["Enums"]["fiscal_provider"]
           provider_api_key_set?: boolean
+          provider_api_url?: string | null
           store_id?: string
           updated_at?: string
         }
@@ -689,36 +710,66 @@ export type Database = {
           ask_customer: boolean
           created_at: string
           default_document: string
+          extra_info: string | null
+          font_size: string
           footer_text: string | null
           header_text: string | null
           logo_url: string | null
           paper_width: number
           print_auto: boolean
+          show_address: boolean
+          show_cnpj: boolean
+          show_customer: boolean
+          show_item_code: boolean
+          show_logo: boolean
+          show_operator: boolean
+          show_qrcode: boolean
           store_id: string
+          thank_you_text: string | null
           updated_at: string
         }
         Insert: {
           ask_customer?: boolean
           created_at?: string
           default_document?: string
+          extra_info?: string | null
+          font_size?: string
           footer_text?: string | null
           header_text?: string | null
           logo_url?: string | null
           paper_width?: number
           print_auto?: boolean
+          show_address?: boolean
+          show_cnpj?: boolean
+          show_customer?: boolean
+          show_item_code?: boolean
+          show_logo?: boolean
+          show_operator?: boolean
+          show_qrcode?: boolean
           store_id: string
+          thank_you_text?: string | null
           updated_at?: string
         }
         Update: {
           ask_customer?: boolean
           created_at?: string
           default_document?: string
+          extra_info?: string | null
+          font_size?: string
           footer_text?: string | null
           header_text?: string | null
           logo_url?: string | null
           paper_width?: number
           print_auto?: boolean
+          show_address?: boolean
+          show_cnpj?: boolean
+          show_customer?: boolean
+          show_item_code?: boolean
+          show_logo?: boolean
+          show_operator?: boolean
+          show_qrcode?: boolean
           store_id?: string
+          thank_you_text?: string | null
           updated_at?: string
         }
         Relationships: [
