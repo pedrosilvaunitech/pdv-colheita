@@ -121,7 +121,7 @@ function SettingsPage() {
   const saveFiscal = useMutation({
     mutationFn: async () => {
       if (!fiscal) return;
-      const { error } = await supabase.from("fiscal_configs").upsert(fiscal, { onConflict: "store_id" });
+      const { error } = await supabase.from("fiscal_configs").upsert(fiscal as never, { onConflict: "store_id" });
       if (error) throw error;
     },
     onSuccess: () => { toast.success("Configuração fiscal salva"); qc.invalidateQueries({ queryKey: ["fiscal_configs"] }); },
