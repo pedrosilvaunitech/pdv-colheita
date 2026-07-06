@@ -63,14 +63,19 @@ function ProdutosPage() {
         barcode: payload.barcode || null,
         sku: payload.sku || null,
         unit: payload.unit,
+        category: payload.category || null,
         price_sell: payload.price_sell,
         price_cost: payload.price_cost,
+        min_stock: payload.min_stock,
+        max_stock: payload.max_stock ?? null,
+        lead_time_days: payload.lead_time_days,
+        supplier_id: payload.supplier_id || null,
         ncm: payload.ncm || null,
         cfop: payload.cfop || null,
         csosn: payload.csosn || null,
       };
       const { error } = await supabase.from("products").insert(clean);
-      if (error) throw error;
+      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Produto cadastrado");
@@ -79,6 +84,7 @@ function ProdutosPage() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   if (!store) return <StoreRequired />;
 
