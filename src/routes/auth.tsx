@@ -48,6 +48,7 @@ function AuthPage() {
       if (tab === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        await ensureCurrentUserProfile();
         toast.success("Autenticado");
         qc.clear();
         resetCurrentStoreSelection();
@@ -128,4 +129,30 @@ function AuthPage() {
       </div>
     </div>
   );
+}
+
+async function ensureCurrentUserProfile() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  const user = data.user;
+  if (!user) throw new Error("Sessão inválida após login");
+
+  const fullName =
+    typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name.trim().length > 0
+      ? user.user_metadata.full_name.trim()
+      : user.email?.split("@")[0] ?? "Usuário";
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: user.id,
+        email: user.email ?? null,
+        full_name: fullName,
+        avatar_url: typeof user.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null,
+      },
+      { onConflict: "id" },
+    );
+
+  if (profileError) throw new Error(`Falha ao preparar usuário: ${profileError.message}`);
 }
