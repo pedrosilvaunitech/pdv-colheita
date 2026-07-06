@@ -27,7 +27,7 @@ type AppRole = Database["public"]["Enums"]["app_role"];
 const linkSchema = z.object({
   storeId: z.string().uuid("Selecione uma loja"),
   email: z.string().trim().email("Email inválido"),
-  role: z.enum(["admin", "gerente", "caixa", "estoquista"]),
+  role: z.enum(["admin_dev", "admin", "gerente", "caixa", "estoquista"]),
 });
 
 function UsuariosPage() {
@@ -339,6 +339,7 @@ function LinkUserDialog({
           <Select value={role} onValueChange={(value) => setRole(value as AppRole)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="admin_dev">Admin Dev</SelectItem>
               <SelectItem value="admin">Admin</SelectItem>
               <SelectItem value="gerente">Gerente</SelectItem>
               <SelectItem value="caixa">Caixa</SelectItem>
@@ -359,10 +360,11 @@ function LinkUserDialog({
 
 function RoleBadge({ role }: { role: string }) {
   const map: Record<string, string> = {
+    admin_dev: "border-destructive/40 text-destructive",
     admin: "border-primary/40 text-primary",
     gerente: "border-info/40 text-info",
     caixa: "border-warning/40 text-warning",
     estoquista: "border-muted-foreground/40 text-muted-foreground",
   };
-  return <Badge variant="outline" className={map[role] || ""}>{role}</Badge>;
+  return <Badge variant="outline" className={map[role] || ""}>{role.replace("_", " ")}</Badge>;
 }

@@ -392,6 +392,42 @@ function SettingsPage() {
                 <div><Label>CSC ID (Token NFC-e)</Label><Input value={fiscal.csc_id ?? ""} onChange={(e) => setFiscal({ ...fiscal, csc_id: e.target.value || null })} placeholder="000001" /></div>
                 <div><Label>CSC Token</Label><Input type="password" value={fiscal.csc_token ?? ""} onChange={(e) => setFiscal({ ...fiscal, csc_token: e.target.value || null })} /></div>
               </div>
+
+              <div className="border border-warning/40 rounded-md bg-warning/5 p-4 space-y-3 md:col-span-2">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="size-4 text-warning" />
+                  <h3 className="text-sm font-semibold">Credencial do provedor (API)</h3>
+                  <Badge variant="outline" className={fiscal.defer_credentials ? "border-warning/40 text-warning gap-1" : "border-primary/40 text-primary gap-1"}>
+                    {fiscal.defer_credentials ? <><Clock className="size-3" /> Registrar depois</> : <><ShieldCheck className="size-3" /> Ativa no backend</>}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Você pode continuar sem cadastrar agora. Enquanto esta opção estiver marcada, o PDV funciona em modo <b>recibo não-fiscal</b> e a emissão real fica bloqueada com uma mensagem explicando o que falta.
+                </p>
+                <div className="flex items-center justify-between border border-border rounded p-3 bg-card">
+                  <div>
+                    <Label className="text-sm">Configurar credencial depois</Label>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Segredo esperado: <span className="font-mono">{PROVIDER_INFO[fiscal.provider]?.secret ?? "—"}</span>
+                      {PROVIDER_INFO[fiscal.provider] && ` · ${PROVIDER_INFO[fiscal.provider]!.note}`}
+                    </p>
+                  </div>
+                  <Switch checked={fiscal.defer_credentials} onCheckedChange={(c) => setFiscal({ ...fiscal, defer_credentials: c })} />
+                </div>
+                <div><Label>Anotação para lembrar depois</Label>
+                  <Textarea rows={2} value={fiscal.credentials_note ?? ""} onChange={(e) => setFiscal({ ...fiscal, credentials_note: e.target.value || null })} placeholder="Ex: aguardando contrato Focus NFe · responsável: contador João" />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <a href="/docs/fiscal-setup.md" target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1">
+                    <BookOpen className="size-3" /> Guia completo: como obter a API do provedor
+                  </a>
+                  {PROVIDER_INFO[fiscal.provider]?.url && (
+                    <a href={PROVIDER_INFO[fiscal.provider]!.url} target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1">
+                      Documentação {PROVIDER_INFO[fiscal.provider]!.label}
+                    </a>
+                  )}
+                </div>
+              </div>
             </div>
           </TabsContent>
 
