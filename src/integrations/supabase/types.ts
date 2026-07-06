@@ -242,9 +242,11 @@ export type Database = {
           certificate_subject: string | null
           certificate_uploaded: boolean
           cnae: string | null
+          credentials_note: string | null
           crt: string | null
           csc_id: string | null
           csc_token: string | null
+          defer_credentials: boolean
           environment: Database["public"]["Enums"]["fiscal_env"]
           nfce_next_number: number
           nfce_series: number
@@ -264,9 +266,11 @@ export type Database = {
           certificate_subject?: string | null
           certificate_uploaded?: boolean
           cnae?: string | null
+          credentials_note?: string | null
           crt?: string | null
           csc_id?: string | null
           csc_token?: string | null
+          defer_credentials?: boolean
           environment?: Database["public"]["Enums"]["fiscal_env"]
           nfce_next_number?: number
           nfce_series?: number
@@ -286,9 +290,11 @@ export type Database = {
           certificate_subject?: string | null
           certificate_uploaded?: boolean
           cnae?: string | null
+          credentials_note?: string | null
           crt?: string | null
           csc_id?: string | null
           csc_token?: string | null
+          defer_credentials?: boolean
           environment?: Database["public"]["Enums"]["fiscal_env"]
           nfce_next_number?: number
           nfce_series?: number
