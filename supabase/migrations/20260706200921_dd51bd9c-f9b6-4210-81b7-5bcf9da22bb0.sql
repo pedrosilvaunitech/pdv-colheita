@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS default_store_id uuid REFERENCES public.stores(id) ON DELETE SET NULL;

@@ -528,6 +528,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          default_store_id: string | null
           full_name: string | null
           id: string
           updated_at: string
@@ -535,6 +536,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          default_store_id?: string | null
           full_name?: string | null
           id: string
           updated_at?: string
@@ -542,11 +544,20 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          default_store_id?: string | null
           full_name?: string | null
           id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_default_store_id_fkey"
+            columns: ["default_store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       purchase_items: {
         Row: {
