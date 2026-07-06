@@ -11,8 +11,11 @@ export interface StoreRow {
   fantasy_name: string | null;
   cnpj: string | null;
   ie: string | null;
+  address_line: string | null;
   city: string | null;
   state: string | null;
+  zip: string | null;
+  phone: string | null;
   tax_regime: string;
 }
 
@@ -22,7 +25,7 @@ export function useStores() {
     queryFn: async (): Promise<StoreRow[]> => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id,name,fantasy_name,cnpj,ie,city,state,tax_regime")
+        .select("id,name,fantasy_name,cnpj,ie,address_line,city,state,zip,phone,tax_regime")
         .order("name");
       if (error) throw error;
       return (data ?? []) as StoreRow[];
@@ -66,8 +69,12 @@ export function useSetDefaultStore() {
         .eq("id", u.user.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, storeId) => {
       toast.success("Loja padrão definida");
+      if (typeof window !== "undefined") {
+        localStorage.setItem(KEY, storeId);
+        window.dispatchEvent(new Event("bastion:store-changed"));
+      }
       qc.invalidateQueries({ queryKey: ["my-profile"] });
       qc.invalidateQueries({ queryKey: ["stores"] });
     },
