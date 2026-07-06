@@ -15,6 +15,8 @@ import {
   Truck,
   UserSquare2,
   ShoppingBag,
+  Wallet,
+  Settings,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,7 +35,8 @@ import { toast } from "sonner";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/pdv", label: "PDV / Caixa", icon: ScanBarcode },
+  { to: "/pdv", label: "PDV / Frente", icon: ScanBarcode },
+  { to: "/caixa", label: "Caixa", icon: Wallet },
   { to: "/produtos", label: "Produtos", icon: Package },
   { to: "/estoque", label: "Estoque", icon: Boxes },
   { to: "/reposicao", label: "Reposição", icon: AlertTriangle },
@@ -43,6 +46,7 @@ const NAV = [
   { to: "/fiscal", label: "Nota Fiscal", icon: FileText },
   { to: "/lojas", label: "Lojas", icon: Store },
   { to: "/usuarios", label: "Usuários", icon: Users },
+  { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
 

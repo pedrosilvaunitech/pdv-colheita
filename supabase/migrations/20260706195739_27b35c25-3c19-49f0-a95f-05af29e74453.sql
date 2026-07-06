@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.current_open_register(UUID) FROM PUBLIC, anon, authenticated;
