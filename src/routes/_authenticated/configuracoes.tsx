@@ -34,7 +34,7 @@ function SettingsPage() {
   const q = useQuery({
     queryKey: ["receipt_settings", storeId],
     enabled: !!storeId,
-    queryFn: async () => {
+    queryFn: async (): Promise<ReceiptSettings> => {
       const { data, error } = await supabase.from("receipt_settings").select("*").eq("store_id", storeId!).maybeSingle();
       if (error) throw error;
       return (data as ReceiptSettings | null) ?? {
@@ -62,7 +62,7 @@ function SettingsPage() {
 
   const preview = () => {
     const html = buildReceiptHTML({
-      store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: [store.address_line, store.city, store.state].filter(Boolean).join(" · "), phone: store.phone },
+      store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: [store.city, store.state].filter(Boolean).join(" · ") || null, phone: null },
       header: form.header_text, footer: form.footer_text, paper_width: form.paper_width,
       items: [
         { name: "REFRIGERANTE COLA 2L", quantity: 2, unit_price: 8.5, total: 17, barcode: "7891234567890" },
