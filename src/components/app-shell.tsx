@@ -151,7 +151,27 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto">{children}</main>
+        
+        <main className="flex-1 overflow-auto">
+          {!store && stores.length > 0 && (
+            <div className="bg-warning/10 border-b border-warning/20 px-4 py-2 text-[11px] font-medium text-warning flex items-center gap-2 uppercase tracking-wider">
+              <AlertTriangle className="size-3" />
+              Nenhuma loja ativa. Selecione uma no menu acima para ver os dados.
+            </div>
+          )}
+          {stores.length === 0 && pathname !== "/lojas" && (
+            <div className="bg-primary/10 border-b border-primary/20 px-4 py-3 text-sm text-primary flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Store className="size-4" />
+                <span>Você ainda não possui lojas cadastradas.</span>
+              </div>
+              <Button asChild size="sm" variant="outline" className="h-7 text-[10px] border-primary/40 hover:bg-primary/20 text-primary">
+                <Link to="/lojas">CADASTRAR PRIMEIRA LOJA</Link>
+              </Button>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );
