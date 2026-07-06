@@ -112,6 +112,7 @@ function SettingsPage() {
         certificate_path: null, certificate_filename: null, certificate_password_set: false,
         certificate_subject: null, provider_api_key_set: false, provider_api_url: null,
         cnae: null, crt: null,
+        defer_credentials: true, credentials_note: null,
       };
     },
   });
