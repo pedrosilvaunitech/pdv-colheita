@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Plus, Store as StoreIcon } from "lucide-react";
+import { Plus, Store as StoreIcon, Star, StarOff } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useMyProfile, useSetDefaultStore, useCurrentStore } from "@/lib/current-store";
 
 export const Route = createFileRoute("/_authenticated/lojas")({
   component: LojasPage,
@@ -63,9 +64,13 @@ function LojasPage() {
       const { error } = await supabase.from("stores").insert(clean);
       if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ""}${error.hint ? ` (${error.hint})` : ""}`);
     },
-    onSuccess: () => { toast.success("Loja cadastrada. Você é admin dela."); qc.invalidateQueries({ queryKey: ["stores"] }); setOpen(false); },
+    onSuccess: () => { toast.success("Loja cadastrada. Você é admin dela."); qc.invalidateQueries({ queryKey: ["stores"] }); qc.invalidateQueries({ queryKey: ["my-profile"] }); setOpen(false); },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const { data: profile } = useMyProfile();
+  const setDefault = useSetDefaultStore();
+  const { setStoreId } = useCurrentStore();
 
 
   return (
@@ -88,25 +93,43 @@ function LojasPage() {
             <p className="text-xs text-muted-foreground mt-1">Cadastre sua primeira loja para começar a usar o sistema.</p>
           </div>
         )}
-        {stores?.map((s) => (
-          <div key={s.id} className="border border-border rounded-md bg-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-sm font-semibold">{s.fantasy_name || s.name}</div>
-                <div className="text-xs text-muted-foreground">{s.name}</div>
+        {stores?.map((s) => {
+          const isDefault = profile?.default_store_id === s.id;
+          return (
+            <div key={s.id} className={`border rounded-md bg-card p-5 ${isDefault ? "border-primary/60" : "border-border"}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-sm font-semibold flex items-center gap-2">
+                    {s.fantasy_name || s.name}
+                    {isDefault && <span className="text-[10px] font-mono uppercase text-primary border border-primary/40 rounded-sm px-1.5 py-0.5">Padrão</span>}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{s.name}</div>
+                </div>
+                <span className="text-[10px] font-mono uppercase text-muted-foreground border border-border rounded-sm px-2 py-1">
+                  {s.tax_regime.replace(/_/g, " ")}
+                </span>
               </div>
-              <span className="text-[10px] font-mono uppercase text-muted-foreground border border-border rounded-sm px-2 py-1">
-                {s.tax_regime.replace(/_/g, " ")}
-              </span>
+              <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                <Info label="CNPJ" value={s.cnpj} mono />
+                <Info label="IE" value={s.ie} mono />
+                <Info label="Cidade / UF" value={[s.city, s.state].filter(Boolean).join(" / ")} />
+                <Info label="Telefone" value={s.phone} mono />
+              </dl>
+              <div className="mt-4 flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setStoreId(s.id)}>Selecionar</Button>
+                <Button
+                  size="sm"
+                  variant={isDefault ? "secondary" : "default"}
+                  disabled={isDefault || setDefault.isPending}
+                  onClick={() => setDefault.mutate(s.id)}
+                  className="gap-1.5"
+                >
+                  {isDefault ? <><StarOff className="size-3.5" /> Já é padrão</> : <><Star className="size-3.5" /> Definir como padrão</>}
+                </Button>
+              </div>
             </div>
-            <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
-              <Info label="CNPJ" value={s.cnpj} mono />
-              <Info label="IE" value={s.ie} mono />
-              <Info label="Cidade / UF" value={[s.city, s.state].filter(Boolean).join(" / ")} />
-              <Info label="Telefone" value={s.phone} mono />
-            </dl>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
