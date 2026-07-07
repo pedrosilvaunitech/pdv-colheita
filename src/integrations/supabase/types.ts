@@ -1216,6 +1216,7 @@ export type Database = {
           id: string
           ie: string | null
           im: string | null
+          master_password_hash: string | null
           name: string
           phone: string | null
           state: string | null
@@ -1233,6 +1234,7 @@ export type Database = {
           id?: string
           ie?: string | null
           im?: string | null
+          master_password_hash?: string | null
           name: string
           phone?: string | null
           state?: string | null
@@ -1250,6 +1252,7 @@ export type Database = {
           id?: string
           ie?: string | null
           im?: string | null
+          master_password_hash?: string | null
           name?: string
           phone?: string | null
           state?: string | null
@@ -1344,6 +1347,38 @@ export type Database = {
           },
         ]
       }
+      user_store_codes: {
+        Row: {
+          admin_code: string
+          created_at: string
+          store_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_code: string
+          created_at?: string
+          store_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_code?: string
+          created_at?: string
+          store_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_store_codes_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       v_reorder: {
@@ -1398,6 +1433,7 @@ export type Database = {
         Returns: Json
       }
       current_open_register: { Args: { _store_id: string }; Returns: string }
+      generate_admin_code: { Args: { _store_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1418,6 +1454,18 @@ export type Database = {
           _store_id: string
         }
         Returns: string
+      }
+      regenerate_admin_code: {
+        Args: { _store_id: string; _user_id: string }
+        Returns: string
+      }
+      set_store_master_password: {
+        Args: { _password: string; _store_id: string }
+        Returns: undefined
+      }
+      store_has_master_password: {
+        Args: { _store_id: string }
+        Returns: boolean
       }
       verify_admin_code: {
         Args: { _code: string; _store_id: string }

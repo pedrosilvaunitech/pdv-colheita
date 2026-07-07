@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2, UserCog, Unlink, Trash2 } from "lucide-react";
+import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2, UserCog, Unlink, Trash2, KeyRound, Copy, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
@@ -81,8 +81,45 @@ function UsuariosPage() {
     },
   });
 
+  // Códigos de administrador (5 dígitos) por (loja, usuário)
+  const { data: codes = [] } = useQuery({
+    queryKey: ["user-store-codes", storeIds],
+    enabled: storeIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_store_codes")
+        .select("store_id,user_id,admin_code")
+        .in("store_id", storeIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const codeMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const c of codes) m[`${c.store_id}:${c.user_id}`] = c.admin_code;
+    return m;
+  }, [codes]);
+  const getCode = (storeId: string, userId: string) => codeMap[`${storeId}:${userId}`];
+
   const profileMap = useMemo(() => Object.fromEntries(profiles.map((p) => [p.id, p])), [profiles]);
   const storeMap = useMemo(() => Object.fromEntries(stores.map((s) => [s.id, s])), [stores]);
+
+  const regenCode = useMutation({
+    mutationFn: async (payload: { storeId: string; userId: string }) => {
+      const { data, error } = await supabase.rpc("regenerate_admin_code", {
+        _store_id: payload.storeId, _user_id: payload.userId,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: async (code) => {
+      toast.success(`Novo código: ${code}`);
+      await qc.invalidateQueries({ queryKey: ["user-store-codes"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const [masterOpen, setMasterOpen] = useState<{ storeId: string; storeName: string } | null>(null);
 
   const filtered = storeFilter === "__all__" ? roles : roles.filter((r) => r.store_id === storeFilter);
   const loading = storesLoading || rolesLoading || profilesLoading;
@@ -243,6 +280,16 @@ function UsuariosPage() {
           <div className="text-xs text-muted-foreground pb-2">
             {filtered.length} vínculo(s) · {new Set(filtered.map((r) => r.user_id)).size} usuário(s)
           </div>
+          {storeFilter !== "__all__" && (() => {
+            const s = storeMap[storeFilter];
+            return s ? (
+              <div className="ml-auto pb-1">
+                <Button size="sm" variant="outline" className="gap-2" onClick={() => setMasterOpen({ storeId: s.id, storeName: s.fantasy_name || s.name })}>
+                  <Shield className="size-4" /> Senha mestra
+                </Button>
+              </div>
+            ) : null;
+          })()}
         </div>
 
         <div className="border border-border rounded-md bg-card overflow-hidden">
@@ -250,11 +297,12 @@ function UsuariosPage() {
             <TableHeader><TableRow>
               <TableHead>Usuário</TableHead>
               {isGrouped ? (
-                <TableHead>Acessos (loja · papel)</TableHead>
+                <TableHead>Acessos (loja · papel · código)</TableHead>
               ) : (
                 <>
                   <TableHead>Loja</TableHead>
                   <TableHead className="w-32">Papel</TableHead>
+                  <TableHead className="w-32">Código</TableHead>
                   <TableHead className="w-40">Loja padrão</TableHead>
                 </>
               )}
@@ -263,7 +311,7 @@ function UsuariosPage() {
             </TableRow></TableHeader>
             <TableBody>
               {(isGrouped ? grouped.length === 0 : filtered.length === 0) && (
-                <TableRow><TableCell colSpan={isGrouped ? 4 : 6} className="text-center py-10 text-sm text-muted-foreground">
+                <TableRow><TableCell colSpan={isGrouped ? 4 : 7} className="text-center py-10 text-sm text-muted-foreground">
                   {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : "Sem usuários vinculados para este filtro."}
                 </TableCell></TableRow>
               )}
@@ -295,6 +343,7 @@ function UsuariosPage() {
                               <span className="font-medium truncate max-w-[9rem]">{storeLabel}</span>
                               <span className="text-muted-foreground">·</span>
                               <RoleBadge role={r.role} compact />
+                              <CodeChip code={getCode(r.store_id, r.user_id)} onRegen={() => regenCode.mutate({ storeId: r.store_id, userId: r.user_id })} />
                               <button type="button" title="Alterar papel"
                                 className="opacity-60 hover:opacity-100 hover:text-primary p-0.5 rounded"
                                 onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
@@ -345,6 +394,7 @@ function UsuariosPage() {
                     </TableCell>
                     <TableCell className="text-sm">{s?.fantasy_name || s?.name || <span className="text-muted-foreground font-mono text-[10px]">{r.store_id}</span>}</TableCell>
                     <TableCell><RoleBadge role={r.role} /></TableCell>
+                    <TableCell><CodeChip code={getCode(r.store_id, r.user_id)} onRegen={() => regenCode.mutate({ storeId: r.store_id, userId: r.user_id })} /></TableCell>
                     <TableCell>
                       {isDefault ? (
                         <Badge variant="outline" className="border-primary/40 text-primary gap-1"><Star className="size-3" /> Padrão</Badge>
@@ -421,6 +471,14 @@ function UsuariosPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {masterOpen && (
+          <MasterPasswordDialog
+            storeId={masterOpen.storeId}
+            storeName={masterOpen.storeName}
+            onClose={() => setMasterOpen(null)}
+          />
+        )}
 
           </TabsContent>
 
@@ -729,4 +787,106 @@ function ChangeRoleDialog({
     </DialogContent>
   );
 }
+
+function CodeChip({ code, onRegen }: { code: string | undefined; onRegen: () => void }) {
+  const copyCode = async () => {
+    if (!code) return;
+    try { await navigator.clipboard.writeText(code); toast.success(`Código ${code} copiado`); }
+    catch { toast.error("Não foi possível copiar"); }
+  };
+  if (!code) {
+    return (
+      <button type="button" onClick={onRegen}
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-border text-[10px] font-mono uppercase text-muted-foreground hover:text-primary hover:border-primary/40">
+        <KeyRound className="size-3" /> gerar
+      </button>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0 rounded border border-info/40 bg-info/10 text-info font-mono text-[11px] tracking-widest tabular-nums">
+      <KeyRound className="size-3 opacity-70" />
+      <span className="font-semibold">{code}</span>
+      <button type="button" title="Copiar código" onClick={copyCode}
+        className="p-0.5 opacity-60 hover:opacity-100"><Copy className="size-3" /></button>
+      <button type="button" title="Gerar novo código" onClick={onRegen}
+        className="p-0.5 opacity-60 hover:opacity-100"><RefreshCw className="size-3" /></button>
+    </span>
+  );
+}
+
+function MasterPasswordDialog({ storeId, storeName, onClose }: { storeId: string; storeName: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const { data: hasMaster, isLoading } = useQuery({
+    queryKey: ["store-master", storeId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("store_has_master_password", { _store_id: storeId });
+      if (error) throw error;
+      return Boolean(data);
+    },
+  });
+  const setMaster = useMutation({
+    mutationFn: async (pwd: string) => {
+      const { error } = await supabase.rpc("set_store_master_password", { _store_id: storeId, _password: pwd });
+      if (error) throw error;
+    },
+    onSuccess: async (_r, pwd) => {
+      toast.success(pwd ? "Senha mestra atualizada" : "Senha mestra removida");
+      await qc.invalidateQueries({ queryKey: ["store-master", storeId] });
+      setPassword(""); setConfirm("");
+      if (!pwd) onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const submit = () => {
+    if (!password) { toast.error("Informe a senha"); return; }
+    if (password.length < 4) { toast.error("Mínimo 4 caracteres"); return; }
+    if (password !== confirm) { toast.error("As senhas não conferem"); return; }
+    setMaster.mutate(password);
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Shield className="size-4 text-primary" /> Senha mestra · {storeName}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="border border-info/30 bg-info/5 rounded-md p-3 text-xs text-muted-foreground">
+            A senha mestra autoriza sangria, reforço e abertura/fechamento de caixa no PDV — em substituição ao código de 5 dígitos de um gerente. Guarde em local seguro.
+          </div>
+          <div className="text-xs">
+            Status atual: {isLoading ? <span className="text-muted-foreground">...</span>
+              : hasMaster
+                ? <Badge variant="outline" className="border-primary/40 text-primary">definida</Badge>
+                : <Badge variant="outline" className="border-warning/40 text-warning">não definida</Badge>}
+          </div>
+          <div>
+            <Label className="text-xs">Nova senha mestra</Label>
+            <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 font-mono" />
+          </div>
+          <div>
+            <Label className="text-xs">Confirmar</Label>
+            <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-1 font-mono" />
+          </div>
+        </div>
+        <DialogFooter className="gap-2 sm:justify-between">
+          {hasMaster && (
+            <Button variant="ghost" className="text-destructive hover:text-destructive"
+              onClick={() => setMaster.mutate("")} disabled={setMaster.isPending}>
+              Remover senha mestra
+            </Button>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button onClick={submit} disabled={setMaster.isPending}>
+              {setMaster.isPending && <Loader2 className="mr-2 size-4 animate-spin" />} Salvar
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
