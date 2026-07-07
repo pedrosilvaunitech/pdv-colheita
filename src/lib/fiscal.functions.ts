@@ -45,7 +45,7 @@ const SECRET_NAME: Record<Provider, string | null> = {
 
 export const emitInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => emitSchema.parse(d))
+  .validator((d) => emitSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
 
