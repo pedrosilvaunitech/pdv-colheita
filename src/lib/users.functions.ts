@@ -10,7 +10,7 @@ const linkUserSchema = z.object({
 
 export const linkUserToStore = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) => linkUserSchema.parse(data))
+  .validator((data) => linkUserSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: linkedUserId, error } = await supabaseAdmin.rpc("link_user_to_store_by_email", {
@@ -33,7 +33,7 @@ const createUserSchema = z.object({
 
 export const createUserByAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) => createUserSchema.parse(data))
+  .validator((data) => createUserSchema.parse(data))
   .handler(async ({ data, context }) => {
     // Autorização: só admin/admin_dev/gerente da loja pode criar usuário
     const { data: managerRole, error: roleErr } = await context.supabase
@@ -107,7 +107,7 @@ const deleteUserSchema = z.object({ userId: z.string().uuid() });
 
 export const deleteUserAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => deleteUserSchema.parse(d))
+  .validator((d) => deleteUserSchema.parse(d))
   .handler(async ({ data, context }) => {
     if (data.userId === context.userId) throw new Error("Não é possível excluir sua própria conta por aqui.");
     // Autorização: precisa ser admin/admin_dev/gerente em pelo menos UMA loja comum ao usuário-alvo.
