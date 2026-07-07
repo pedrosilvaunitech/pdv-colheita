@@ -60,7 +60,7 @@ function RelatoriosPage() {
 
       const [itemsRes, paymentsRes] = await Promise.all([
         supabase.from("sale_items").select("sale_id,product_id,product_name,quantity,total").eq("store_id", storeId!).in("sale_id", saleIds),
-        supabase.from("sale_payments").select("method,amount,sale_id").eq("store_id", storeId!).in("sale_id", saleIds),
+        supabase.from("sale_payments").select("method,amount,sale_id,installments").eq("store_id", storeId!).in("sale_id", saleIds),
       ]);
       if (itemsRes.error) throw itemsRes.error;
       if (paymentsRes.error) throw paymentsRes.error;
