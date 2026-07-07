@@ -199,19 +199,38 @@ function PdvPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart.length]);
 
+  const MIN_PARCEL_VALUE = 5; // R$ mínimo por parcela (regra usual de adquirente)
+  const MAX_INSTALLMENTS = 12;
+
   const addPayment = () => {
     const value = Number(payAmount || 0);
-    if (value <= 0) { toast.error("Informe o valor do pagamento"); return; }
+    if (!Number.isFinite(value) || value <= 0) { toast.error("Informe um valor válido de pagamento"); return; }
+    // Validação de parcelas — só permite parcelamento em crédito
+    let installments: number | undefined;
+    if (payMethod === "credito") {
+      const n = Math.trunc(Number(payInstallments || 1));
+      if (!Number.isInteger(n) || n < 1 || n > MAX_INSTALLMENTS) {
+        toast.error(`Parcelas devem ser um número inteiro entre 1 e ${MAX_INSTALLMENTS}`); return;
+      }
+      if (n > 1 && value / n < MIN_PARCEL_VALUE) {
+        toast.error(`Cada parcela precisa ser ≥ ${brl(MIN_PARCEL_VALUE)} (parcela atual: ${brl(value / n)})`); return;
+      }
+      installments = n;
+    } else if (payInstallments !== 1) {
+      // reset silencioso: parcelas só existem para crédito
+      setPayInstallments(1);
+    }
     if (payMethod === "pix") {
       if (!openReg.data) { toast.error("Abra o caixa antes"); return; }
       setPixAmount(value);
       setPixOpen(true);
       return;
     }
-    const label = payMethod === "credito" && payInstallments > 1
-      ? `Crédito ${payInstallments}x`
+    const label = installments && installments > 1
+      ? `Crédito ${installments}x de ${brl(value / installments)}`
       : METHOD_LABEL[payMethod];
-    setPayments((p) => [...p, { method: payMethod, amount: value, installments: payMethod === "credito" ? payInstallments : undefined, label }]);
+    setPayments((p) => [...p, { method: payMethod, amount: value, installments, label }]);
+    setPayAmount("");
     setPayInstallments(1);
   };
 
