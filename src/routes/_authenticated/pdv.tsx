@@ -51,6 +51,7 @@ function PdvPage() {
   const { store, storeId } = useCurrentStore();
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const discountRef = useRef<HTMLInputElement>(null);
   const [scan, setScan] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [docType, setDocType] = useState<"fiscal" | "nao_fiscal">("nao_fiscal");
@@ -65,6 +66,7 @@ function PdvPage() {
   const [payInstallments, setPayInstallments] = useState<number>(1);
   const [pixOpen, setPixOpen] = useState(false);
   const [pixAmount, setPixAmount] = useState<number>(0);
+
 
   const settings = useQuery({
     queryKey: ["receipt_settings", storeId],
@@ -325,7 +327,79 @@ function PdvPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // ============================================================
+  // ATALHOS DE TECLADO (uso exclusivo do PDV, sem mouse)
+  //   F1  → focar leitor de código de barras
+  //   F2  → forma de pagamento: Dinheiro
+  //   F3  → forma de pagamento: PIX
+  //   F4  → forma de pagamento: Débito
+  //   F5  → forma de pagamento: Crédito
+  //   F6  → preencher restante e adicionar pagamento
+  //   F7  → focar campo de desconto
+  //   F8  → finalizar venda (quando pronto)
+  //   ESC → volta o foco para o leitor
+  // Além dos atalhos, qualquer tecla digitada fora de um input é redirecionada
+  // para o leitor de código de barras — o leitor bipa mesmo se o operador
+  // clicou em outro lugar da tela por acidente.
+  // ============================================================
+  const handlersRef = useRef({ addPayment, finalize, canFinalize, remaining });
+  handlersRef.current = { addPayment, finalize, canFinalize, remaining };
+  useEffect(() => {
+    const isEditable = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el === inputRef.current) return false; // o próprio leitor não conta
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const h = handlersRef.current;
+      switch (e.key) {
+        case "F1": e.preventDefault(); inputRef.current?.focus(); return;
+        case "F2": e.preventDefault(); setPayMethod("dinheiro"); return;
+        case "F3": e.preventDefault(); setPayMethod("pix"); return;
+        case "F4": e.preventDefault(); setPayMethod("debito"); return;
+        case "F5": e.preventDefault(); setPayMethod("credito"); return;
+        case "F6":
+          e.preventDefault();
+          if (h.remaining > 0) setPayAmount(h.remaining.toFixed(2));
+          setTimeout(() => handlersRef.current.addPayment(), 0);
+          return;
+        case "F7":
+          e.preventDefault();
+          discountRef.current?.focus();
+          discountRef.current?.select();
+          return;
+        case "F8":
+          e.preventDefault();
+          if (h.canFinalize && !h.finalize.isPending) h.finalize.mutate();
+          return;
+        case "Escape":
+          e.preventDefault();
+          inputRef.current?.focus();
+          return;
+      }
+      // Se está digitando em outro input (desconto, cliente, valor), respeita
+      if (isEditable(e.target)) return;
+      // Ignora combos com modificadores (atalhos do navegador, copiar/colar etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // Redireciona a digitação para o leitor — cobre o caso do operador
+      // clicar fora do input por acidente enquanto bipa códigos.
+      if (e.key === "Enter") {
+        inputRef.current?.focus();
+        return;
+      }
+      if (e.key.length === 1) {
+        e.preventDefault();
+        inputRef.current?.focus();
+        setScan((prev) => prev + e.key);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (!store) return <StoreRequired />;
+
 
   return (
     <div className="h-full flex flex-col">
@@ -438,18 +512,20 @@ function PdvPage() {
           )}
 
           <div className="border border-border rounded-md bg-card p-4 space-y-2">
-            <div className="text-xs font-medium">Desconto (R$)</div>
-            <Input type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="font-mono" />
+            <div className="text-xs font-medium">Desconto (R$) <span className="text-[10px] font-mono text-muted-foreground ml-1">F7</span></div>
+            <Input ref={discountRef} type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="font-mono" />
           </div>
 
+
           <div className="border border-border rounded-md bg-card p-4 space-y-3">
-            <div className="text-xs font-medium mb-1">Forma de pagamento</div>
+            <div className="text-xs font-medium mb-1">Forma de pagamento <span className="text-[10px] font-mono text-muted-foreground ml-1">F2·F3·F4·F5</span></div>
             <div className="grid grid-cols-2 gap-2">
-              <PayBtn active={payMethod === "dinheiro"} onClick={() => setPayMethod("dinheiro")} icon={Banknote} label="Dinheiro" />
-              <PayBtn active={payMethod === "pix"} onClick={() => setPayMethod("pix")} icon={Smartphone} label="PIX" />
-              <PayBtn active={payMethod === "debito"} onClick={() => setPayMethod("debito")} icon={CreditCard} label="Débito" />
-              <PayBtn active={payMethod === "credito"} onClick={() => setPayMethod("credito")} icon={CreditCard} label="Crédito" />
+              <PayBtn active={payMethod === "dinheiro"} onClick={() => setPayMethod("dinheiro")} icon={Banknote} label="Dinheiro · F2" />
+              <PayBtn active={payMethod === "pix"} onClick={() => setPayMethod("pix")} icon={Smartphone} label="PIX · F3" />
+              <PayBtn active={payMethod === "debito"} onClick={() => setPayMethod("debito")} icon={CreditCard} label="Débito · F4" />
+              <PayBtn active={payMethod === "credito"} onClick={() => setPayMethod("credito")} icon={CreditCard} label="Crédito · F5" />
             </div>
+
 
             {payMethod === "credito" && (
               <div>
@@ -474,8 +550,9 @@ function PdvPage() {
             </div>
 
             <Button type="button" size="sm" className="w-full gap-2" onClick={addPayment} disabled={!openReg.data || total <= 0}>
-              <Plus className="size-4" /> {payMethod === "pix" ? "Gerar QR PIX" : "Adicionar pagamento"}
+              <Plus className="size-4" /> {payMethod === "pix" ? "Gerar QR PIX" : "Adicionar pagamento · F6"}
             </Button>
+
 
             {payments.length > 0 && (
               <div className="border-t border-border pt-2 space-y-1">
@@ -494,7 +571,7 @@ function PdvPage() {
 
           <Button size="lg" className="h-14 text-base gap-2" disabled={!canFinalize || finalize.isPending || !openReg.data} onClick={() => finalize.mutate()}>
             <Printer className="size-5" />
-            {finalize.isPending ? "Finalizando..." : `Finalizar e imprimir · ${docType === "fiscal" ? "NFC-e" : "Recibo"}`}
+            {finalize.isPending ? "Finalizando..." : `Finalizar · ${docType === "fiscal" ? "NFC-e" : "Recibo"} · F8`}
           </Button>
           {docType === "fiscal" && (
             <p className="text-[10px] font-mono uppercase text-warning text-center">
