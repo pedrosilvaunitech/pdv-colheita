@@ -15,7 +15,10 @@ import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled
 import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 
-export const Route = createFileRoute("/_authenticated/pdv")({ component: PdvPage });
+export const Route = createFileRoute("/_authenticated/pdv")({
+  component: PdvPage,
+  validateSearch: (s: Record<string, unknown>) => ({ kiosk: s.kiosk === "1" || s.kiosk === 1 ? "1" as const : undefined }),
+});
 
 interface CartItem {
   product_id: string;
