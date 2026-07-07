@@ -18,6 +18,7 @@ import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2, UserCog,
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
   component: UsuariosPage,
@@ -893,8 +894,9 @@ function ChangeRoleDialog({
 function CodeChip({ code, onRegen }: { code: string | undefined; onRegen: () => void }) {
   const copyCode = async () => {
     if (!code) return;
-    try { await navigator.clipboard.writeText(code); toast.success(`Código ${code} copiado`); }
-    catch { toast.error("Não foi possível copiar"); }
+    const ok = await copyToClipboard(code);
+    if (ok) toast.success(`Código ${code} copiado`);
+    else toast.error("Não foi possível copiar");
   };
   if (!code) {
     return (
@@ -1057,8 +1059,9 @@ function EditUserDialog({
   });
 
   const copyCode = async (code: string) => {
-    try { await navigator.clipboard.writeText(code); toast.success(`Código ${code} copiado`); }
-    catch { toast.error("Não foi possível copiar"); }
+    const ok = await copyToClipboard(code);
+    if (ok) toast.success(`Código ${code} copiado`);
+    else toast.error("Não foi possível copiar");
   };
 
   return (
