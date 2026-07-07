@@ -106,8 +106,34 @@ function PdvPage() {
   }, [remaining, payMethod]);
 
   const addByBarcode = async (raw: string) => {
-    const code = raw.trim();
+    let code = raw.trim();
     if (!code || !storeId) return;
+
+    // Prefixo multiplicador: "N*<codigo>"  ou  "N*"  (sem código = aplica ao último item).
+    // Exemplos: "3*7891234567895" → 3 unidades em UMA linha.
+    //           "5*"              → multiplica a última linha por 5.
+    let multiplier = 1;
+    const mMatch = code.match(/^(\d+)\s*[*xX]\s*(.*)$/);
+    if (mMatch) {
+      const n = Number(mMatch[1]);
+      if (!Number.isFinite(n) || n <= 0 || n > 9999) { toast.error("Multiplicador inválido"); return; }
+      multiplier = n;
+      code = mMatch[2].trim();
+      // Se só veio "N*" sem código, aplica no último item do carrinho.
+      if (!code) {
+        setCart((prev) => {
+          if (prev.length === 0) { toast.error("Carrinho vazio — bipe um produto primeiro"); return prev; }
+          const cp = [...prev];
+          const last = cp[cp.length - 1];
+          cp[cp.length - 1] = { ...last, quantity: Number((last.quantity * multiplier).toFixed(3)) };
+          toast.success(`${last.name} × ${multiplier}`);
+          return cp;
+        });
+        setScan("");
+        return;
+      }
+    }
+
     let barcode = code;
     let weighablePrice: number | null = null;
     if (code.length === 13 && code.startsWith("2")) {
@@ -120,14 +146,19 @@ function PdvPage() {
     if (error) { toast.error(error.message); return; }
     if (!data) { toast.error(`Código ${code} não encontrado`); return; }
     const price = weighablePrice ?? Number(data.price_sell);
+
+    // Regra de linhas:
+    //  - Peso embutido (EAN-2)  → sempre linha nova (peso é único).
+    //  - Com multiplicador N*   → adiciona UMA linha com quantidade N (não mescla).
+    //  - Bip simples repetido   → cada bip cria uma linha nova, nunca soma.
     setCart((prev) => {
       if (weighablePrice != null) {
         return [...prev, { product_id: data.id, name: data.name, barcode: data.barcode, unit_price: 1, quantity: price, is_weighable: true }];
       }
-      const idx = prev.findIndex((i) => i.product_id === data.id);
-      if (idx >= 0) { const cp = [...prev]; cp[idx] = { ...cp[idx], quantity: cp[idx].quantity + 1 }; return cp; }
-      return [...prev, { product_id: data.id, name: data.name, barcode: data.barcode, unit_price: price, quantity: 1, is_weighable: !!data.is_weighable }];
+      const qty = multiplier;
+      return [...prev, { product_id: data.id, name: data.name, barcode: data.barcode, unit_price: price, quantity: qty, is_weighable: !!data.is_weighable }];
     });
+    if (multiplier > 1) toast.success(`${data.name} × ${multiplier}`);
     setScan("");
   };
 
