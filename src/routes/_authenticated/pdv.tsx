@@ -308,6 +308,17 @@ function PdvPage() {
           )}
         </div>
       </div>
+
+      {storeId && (
+        <PixChargeModal
+          open={pixOpen}
+          onClose={() => setPixOpen(false)}
+          onPaid={() => { setPixPaid(true); setPixOpen(false); }}
+          storeId={storeId}
+          amount={total}
+          description={`Venda PDV · ${cart.length} item(ns)`}
+        />
+      )}
     </div>
   );
 }
