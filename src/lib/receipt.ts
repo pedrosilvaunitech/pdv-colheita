@@ -9,6 +9,13 @@ export interface ReceiptItem {
   barcode?: string | null;
 }
 
+export interface ReceiptPayment {
+  label: string;         // "Dinheiro", "PIX", "Crédito 3x de R$ 100,00"
+  amount: number;        // valor pago nessa forma (já descontado troco, se aplicável)
+  method?: string;       // dinheiro | pix | debito | credito
+  installments?: number; // parcelas (crédito)
+}
+
 export interface ReceiptData {
   store: { name: string; cnpj?: string | null; address?: string | null; phone?: string | null };
   header?: string | null;
@@ -18,7 +25,10 @@ export interface ReceiptData {
   subtotal: number;
   discount: number;
   total: number;
+  /** Compat: rótulo curto agregado (ex.: "PIX + Crédito 3x"). Preferir `payments`. */
   payment_method: string;
+  /** Lista detalhada de pagamentos parciais — usada para imprimir cada linha. */
+  payments?: ReceiptPayment[];
   received?: number;
   change?: number;
   operator?: string;
