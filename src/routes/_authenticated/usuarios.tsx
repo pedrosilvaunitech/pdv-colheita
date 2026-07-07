@@ -370,7 +370,7 @@ function UsuariosPage() {
             <TableHeader><TableRow>
               <TableHead>Usuário</TableHead>
               {isGrouped ? (
-                <TableHead>Acessos (loja · papel · código)</TableHead>
+                <TableHead>Lojas vinculadas</TableHead>
               ) : (
                 <>
                   <TableHead>Loja</TableHead>
