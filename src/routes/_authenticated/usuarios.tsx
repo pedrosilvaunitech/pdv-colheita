@@ -36,6 +36,10 @@ function UsuariosPage() {
   const { data: stores = [], isLoading: storesLoading } = useStores();
   const [storeFilter, setStoreFilter] = useState<string>("__all__");
   const [linkOpen, setLinkOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [changeRole, setChangeRole] = useState<{ id: string; user_id: string; store_id: string; role: string; email?: string } | null>(null);
+  const [confirmUnlink, setConfirmUnlink] = useState<{ id: string; label: string } | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ userId: string; email: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   useEffect(() => { supabase.auth.getUser().then((r) => setCurrentUserId(r.data.user?.id ?? null)); }, []);
 
