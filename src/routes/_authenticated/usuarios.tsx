@@ -516,6 +516,24 @@ function UsuariosPage() {
           </Table>
         </div>
 
+        {totalRows > pageSize && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div>
+              Mostrando <span className="font-mono">{pageStart + 1}</span>–<span className="font-mono">{Math.min(pageEnd, totalRows)}</span> de <span className="font-mono">{totalRows}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-7 gap-1" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft className="size-3" /> Anterior
+              </Button>
+              <span className="font-mono">{currentPage} / {totalPages}</span>
+              <Button size="sm" variant="outline" className="h-7 gap-1" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                Próxima <ChevronRight className="size-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+
         <Dialog open={!!changeRole} onOpenChange={(o) => !o && setChangeRole(null)}>
           {changeRole && (
             <ChangeRoleDialog
