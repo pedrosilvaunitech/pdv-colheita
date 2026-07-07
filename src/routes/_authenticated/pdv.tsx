@@ -11,7 +11,8 @@ import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, F
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
-import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled, tryPrintEscPos } from "@/lib/escpos";
+import { tryPrintEscPos } from "@/lib/escpos";
+import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
 import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 import { ScaleWidget } from "@/components/pdv/scale-widget";
