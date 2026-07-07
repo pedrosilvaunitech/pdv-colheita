@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2, UserCog, Unlink, Trash2, KeyRound, Copy, Shield } from "lucide-react";
+import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2, UserCog, Unlink, Trash2, KeyRound, Copy, Shield, Download, Search, Store as StoreIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
@@ -44,12 +44,17 @@ function UsuariosPage() {
   const { data: stores = [], isLoading: storesLoading } = useStores();
   const [storeFilter, setStoreFilter] = useState<string>("__all__");
   const [linkOpen, setLinkOpen] = useState(false);
+  const [linkPrefill, setLinkPrefill] = useState<{ email?: string; storeId?: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [changeRole, setChangeRole] = useState<{ id: string; user_id: string; store_id: string; role: string; email?: string } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState<{ id: string; label: string } | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ userId: string; email: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
   useEffect(() => { supabase.auth.getUser().then((r) => setCurrentUserId(r.data.user?.id ?? null)); }, []);
+  useEffect(() => { setPage(1); }, [search, storeFilter]);
 
   const storeIds = useMemo(() => stores.map((s) => s.id), [stores]);
 
@@ -125,6 +130,13 @@ function UsuariosPage() {
   const loading = storesLoading || rolesLoading || profilesLoading;
   const isGrouped = storeFilter === "__all__";
 
+  const matchesSearch = (userId: string) => {
+    if (!search.trim()) return true;
+    const p = profileMap[userId];
+    const q = search.trim().toLowerCase();
+    return (p?.full_name || "").toLowerCase().includes(q) || (p?.email || "").toLowerCase().includes(q) || userId.toLowerCase().includes(q);
+  };
+
   // Agrupamento por usuário para o modo "Todas as lojas"
   type GroupedUser = {
     user_id: string;
@@ -141,14 +153,61 @@ function UsuariosPage() {
       if (r.created_at < g.earliest) g.earliest = r.created_at;
       map.set(r.user_id, g);
     }
-    return Array.from(map.values()).sort((a, b) => (a.profile?.full_name || a.profile?.email || "").localeCompare(b.profile?.full_name || b.profile?.email || ""));
-  }, [filtered, profileMap, isGrouped]);
+    return Array.from(map.values())
+      .filter((g) => matchesSearch(g.user_id))
+      .sort((a, b) => (a.profile?.full_name || a.profile?.email || "").localeCompare(b.profile?.full_name || b.profile?.email || ""));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, profileMap, isGrouped, search]);
+
+  const filteredSearched = useMemo(() => isGrouped ? filtered : filtered.filter((r) => matchesSearch(r.user_id)),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [filtered, isGrouped, search, profileMap]);
+
+  const totalRows = isGrouped ? grouped.length : filteredSearched.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageEnd = pageStart + pageSize;
+  const groupedPage = grouped.slice(pageStart, pageEnd);
+  const filteredPage = filteredSearched.slice(pageStart, pageEnd);
+
+  const exportCsv = () => {
+    const header = ["usuario_nome", "usuario_email", "user_id", "loja", "store_id", "papel", "codigo", "loja_padrao", "criado_em"];
+    const rows = filtered
+      .filter((r) => matchesSearch(r.user_id))
+      .map((r) => {
+        const p = profileMap[r.user_id];
+        const s = storeMap[r.store_id];
+        return [
+          p?.full_name ?? "",
+          p?.email ?? "",
+          r.user_id,
+          s?.fantasy_name ?? s?.name ?? "",
+          r.store_id,
+          r.role,
+          getCode(r.store_id, r.user_id) ?? "",
+          p?.default_store_id === r.store_id ? "sim" : "nao",
+          new Date(r.created_at).toISOString(),
+        ];
+      });
+    const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [header, ...rows].map((row) => row.map(esc).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vinculos-usuarios-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${rows.length} vínculo(s) exportado(s)`);
+  };
 
   const linkUser = useMutation({
     mutationFn: async (payload: z.infer<typeof linkSchema>) => linkUserToStore({ data: payload }),
     onSuccess: async () => {
       toast.success("Usuário vinculado à loja");
       setLinkOpen(false);
+      setLinkPrefill(null);
       await qc.invalidateQueries({ queryKey: ["roles-all"] });
       await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] });
       await qc.invalidateQueries({ queryKey: ["stores"] });
@@ -158,10 +217,11 @@ function UsuariosPage() {
 
   const setDefault = useMutation({
     mutationFn: async (payload: { userId: string; storeId: string }) => {
-      const { error } = await supabase.from("profiles").update({ default_store_id: payload.storeId }).eq("id", payload.userId);
+      const newVal = payload.storeId ? payload.storeId : null;
+      const { error } = await supabase.from("profiles").update({ default_store_id: newVal }).eq("id", payload.userId);
       if (error) throw error;
     },
-    onSuccess: async () => { toast.success("Loja padrão do usuário atualizada"); await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); await qc.invalidateQueries({ queryKey: ["my-profile"] }); },
+    onSuccess: async (_r, vars) => { toast.success(vars.storeId ? "Loja padrão do usuário atualizada" : "Loja padrão removida"); await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); await qc.invalidateQueries({ queryKey: ["my-profile"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -223,7 +283,10 @@ function UsuariosPage() {
             <Button size="sm" variant="outline" className="gap-2" onClick={() => { qc.invalidateQueries({ queryKey: ["roles-all"] }); qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); qc.invalidateQueries({ queryKey: ["stores"] }); toast.success("Atualizado"); }}>
               <RefreshCw className="size-4" /> Atualizar
             </Button>
-            <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+            <Button size="sm" variant="outline" className="gap-2" onClick={exportCsv} disabled={filtered.length === 0}>
+              <Download className="size-4" /> Exportar CSV
+            </Button>
+            <Dialog open={linkOpen} onOpenChange={(o) => { setLinkOpen(o); if (!o) setLinkPrefill(null); }}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="gap-2" disabled={stores.length === 0}>
                   <UserPlus className="size-4" /> Vincular existente
@@ -232,6 +295,7 @@ function UsuariosPage() {
               <LinkUserDialog
                 stores={stores}
                 loading={linkUser.isPending}
+                prefill={linkPrefill ?? undefined}
                 onSubmit={(payload) => linkUser.mutate(payload)}
               />
             </Dialog>
@@ -264,7 +328,7 @@ function UsuariosPage() {
             </div>
 
 
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-3 flex-wrap">
           <div className="w-72">
             <Label className="text-xs">Filtrar por loja</Label>
             <Select value={storeFilter} onValueChange={setStoreFilter}>
@@ -277,8 +341,15 @@ function UsuariosPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="w-72">
+            <Label className="text-xs">Buscar usuário</Label>
+            <div className="relative mt-1">
+              <Search className="size-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nome ou email..." className="pl-7 h-9" />
+            </div>
+          </div>
           <div className="text-xs text-muted-foreground pb-2">
-            {filtered.length} vínculo(s) · {new Set(filtered.map((r) => r.user_id)).size} usuário(s)
+            {filteredSearched.length} vínculo(s) · {new Set(filteredSearched.map((r) => r.user_id)).size} usuário(s)
           </div>
           {storeFilter !== "__all__" && (() => {
             const s = storeMap[storeFilter];
@@ -310,15 +381,17 @@ function UsuariosPage() {
               <TableHead className="w-40 text-right">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {(isGrouped ? grouped.length === 0 : filtered.length === 0) && (
+              {(isGrouped ? grouped.length === 0 : filteredSearched.length === 0) && (
                 <TableRow><TableCell colSpan={isGrouped ? 4 : 7} className="text-center py-10 text-sm text-muted-foreground">
-                  {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : "Sem usuários vinculados para este filtro."}
+                  {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : search ? `Nenhum usuário encontrado para "${search}".` : "Sem usuários vinculados para este filtro."}
                 </TableCell></TableRow>
               )}
 
-              {isGrouped && grouped.map((g) => {
+              {isGrouped && groupedPage.map((g) => {
                 const p = g.profile;
                 const isMe = currentUserId === g.user_id;
+                const linkedStoreIds = new Set(g.links.map((l) => l.store_id));
+                const canAddMoreStores = stores.some((s) => !linkedStoreIds.has(s.id));
                 return (
                   <TableRow key={g.user_id}>
                     <TableCell className="align-top">
@@ -330,7 +403,7 @@ function UsuariosPage() {
                       <div className="font-mono text-[10px] text-muted-foreground">{p?.email || g.user_id}</div>
                     </TableCell>
                     <TableCell className="align-top">
-                      <div className="flex flex-wrap gap-1.5 py-0.5">
+                      <div className="flex flex-wrap gap-1.5 py-0.5 items-center">
                         {g.links.map((r) => {
                           const s = storeMap[r.store_id];
                           const isDefault = p?.default_store_id === r.store_id;
@@ -339,7 +412,11 @@ function UsuariosPage() {
                             <div key={r.id}
                               className={`inline-flex items-center gap-1.5 rounded-sm border pl-2 pr-1 py-0.5 text-[11px] transition-colors ${isDefault ? "border-primary/50 bg-primary/10" : "border-border bg-muted/40"}`}
                               title={`${storeLabel} · ${r.role}`}>
-                              {isDefault && <Star className="size-3 text-primary shrink-0" />}
+                              <button type="button" title={isDefault ? "Loja padrão (clique para remover)" : "Definir como padrão"}
+                                className={`p-0.5 rounded ${isDefault ? "text-primary" : "opacity-50 hover:opacity-100 hover:text-primary"}`}
+                                onClick={() => setDefault.mutate({ userId: r.user_id, storeId: isDefault ? "" : r.store_id } as never)}>
+                                <Star className={`size-3 ${isDefault ? "fill-current" : ""}`} />
+                              </button>
                               <span className="font-medium truncate max-w-[9rem]">{storeLabel}</span>
                               <span className="text-muted-foreground">·</span>
                               <RoleBadge role={r.role} compact />
@@ -349,13 +426,6 @@ function UsuariosPage() {
                                 onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
                                 <UserCog className="size-3" />
                               </button>
-                              {isMe && !isDefault && (
-                                <button type="button" title="Definir como padrão"
-                                  className="opacity-60 hover:opacity-100 hover:text-primary p-0.5 rounded"
-                                  onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
-                                  <Star className="size-3" />
-                                </button>
-                              )}
                               <button type="button" title="Desvincular desta loja"
                                 className="opacity-60 hover:opacity-100 hover:text-destructive p-0.5 rounded"
                                 onClick={() => setConfirmUnlink({ id: r.id, label: `${p?.email ?? r.user_id} — ${storeLabel}` })}>
@@ -364,6 +434,13 @@ function UsuariosPage() {
                             </div>
                           );
                         })}
+                        {canAddMoreStores && p?.email && (
+                          <button type="button" title="Vincular a outra loja"
+                            className="inline-flex items-center gap-1 rounded-sm border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-primary hover:border-primary/40"
+                            onClick={() => { setLinkPrefill({ email: p.email ?? "" }); setLinkOpen(true); }}>
+                            <StoreIcon className="size-3" /> vincular loja
+                          </button>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-[11px] text-muted-foreground align-top">{new Date(g.earliest).toLocaleDateString("pt-BR")}</TableCell>
@@ -378,7 +455,7 @@ function UsuariosPage() {
                 );
               })}
 
-              {!isGrouped && filtered.map((r) => {
+              {!isGrouped && filteredPage.map((r) => {
                 const p = profileMap[r.user_id];
                 const s = storeMap[r.store_id];
                 const isDefault = p?.default_store_id === r.store_id;
@@ -397,18 +474,26 @@ function UsuariosPage() {
                     <TableCell><CodeChip code={getCode(r.store_id, r.user_id)} onRegen={() => regenCode.mutate({ storeId: r.store_id, userId: r.user_id })} /></TableCell>
                     <TableCell>
                       {isDefault ? (
-                        <Badge variant="outline" className="border-primary/40 text-primary gap-1"><Star className="size-3" /> Padrão</Badge>
-                      ) : isMe ? (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
-                          <Star className="size-3" /> Definir
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-primary"
+                          title="Clique para remover como padrão"
+                          onClick={() => setDefault.mutate({ userId: r.user_id, storeId: "" } as never)}>
+                          <Star className="size-3 fill-current" /> Padrão
                         </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
+                          onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
+                          <Star className="size-3" /> Definir
+                        </Button>
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex gap-1">
+                        <Button size="icon" variant="ghost" className="size-8" title="Vincular a outra loja"
+                          disabled={!p?.email}
+                          onClick={() => { setLinkPrefill({ email: p?.email ?? "" }); setLinkOpen(true); }}>
+                          <StoreIcon className="size-3.5" />
+                        </Button>
                         <Button size="icon" variant="ghost" className="size-8" title="Alterar papel"
                           onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
                           <UserCog className="size-3.5" />
@@ -430,6 +515,24 @@ function UsuariosPage() {
             </TableBody>
           </Table>
         </div>
+
+        {totalRows > pageSize && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div>
+              Mostrando <span className="font-mono">{pageStart + 1}</span>–<span className="font-mono">{Math.min(pageEnd, totalRows)}</span> de <span className="font-mono">{totalRows}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-7 gap-1" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft className="size-3" /> Anterior
+              </Button>
+              <span className="font-mono">{currentPage} / {totalPages}</span>
+              <Button size="sm" variant="outline" className="h-7 gap-1" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                Próxima <ChevronRight className="size-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+
 
         <Dialog open={!!changeRole} onOpenChange={(o) => !o && setChangeRole(null)}>
           {changeRole && (
@@ -587,14 +690,16 @@ function AuditPanel({ roles, profiles, stores, loading }: {
 function LinkUserDialog({
   stores,
   loading,
+  prefill,
   onSubmit,
 }: {
   stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
   loading: boolean;
+  prefill?: { email?: string; storeId?: string };
   onSubmit: (payload: z.infer<typeof linkSchema>) => void;
 }) {
-  const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
-  const [email, setEmail] = useState("");
+  const [storeId, setStoreId] = useState(prefill?.storeId ?? stores[0]?.id ?? "");
+  const [email, setEmail] = useState(prefill?.email ?? "");
   const [role, setRole] = useState<AppRole>("caixa");
 
   const submit = (event: React.FormEvent) => {
