@@ -217,10 +217,11 @@ function UsuariosPage() {
 
   const setDefault = useMutation({
     mutationFn: async (payload: { userId: string; storeId: string }) => {
-      const { error } = await supabase.from("profiles").update({ default_store_id: payload.storeId }).eq("id", payload.userId);
+      const newVal = payload.storeId ? payload.storeId : null;
+      const { error } = await supabase.from("profiles").update({ default_store_id: newVal }).eq("id", payload.userId);
       if (error) throw error;
     },
-    onSuccess: async () => { toast.success("Loja padrão do usuário atualizada"); await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); await qc.invalidateQueries({ queryKey: ["my-profile"] }); },
+    onSuccess: async (_r, vars) => { toast.success(vars.storeId ? "Loja padrão do usuário atualizada" : "Loja padrão removida"); await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); await qc.invalidateQueries({ queryKey: ["my-profile"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
 
