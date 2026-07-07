@@ -86,6 +86,26 @@ function UsuariosPage() {
 
   const filtered = storeFilter === "__all__" ? roles : roles.filter((r) => r.store_id === storeFilter);
   const loading = storesLoading || rolesLoading || profilesLoading;
+  const isGrouped = storeFilter === "__all__";
+
+  // Agrupamento por usuário para o modo "Todas as lojas"
+  type GroupedUser = {
+    user_id: string;
+    profile: typeof profiles[number] | undefined;
+    links: typeof roles;
+    earliest: string;
+  };
+  const grouped: GroupedUser[] = useMemo(() => {
+    if (!isGrouped) return [];
+    const map = new Map<string, GroupedUser>();
+    for (const r of filtered) {
+      const g = map.get(r.user_id) ?? { user_id: r.user_id, profile: profileMap[r.user_id], links: [], earliest: r.created_at };
+      g.links.push(r);
+      if (r.created_at < g.earliest) g.earliest = r.created_at;
+      map.set(r.user_id, g);
+    }
+    return Array.from(map.values()).sort((a, b) => (a.profile?.full_name || a.profile?.email || "").localeCompare(b.profile?.full_name || b.profile?.email || ""));
+  }, [filtered, profileMap, isGrouped]);
 
   const linkUser = useMutation({
     mutationFn: async (payload: z.infer<typeof linkSchema>) => linkUserToStore({ data: payload }),
@@ -229,19 +249,87 @@ function UsuariosPage() {
           <Table>
             <TableHeader><TableRow>
               <TableHead>Usuário</TableHead>
-              <TableHead>Loja</TableHead>
-              <TableHead className="w-32">Papel</TableHead>
-              <TableHead className="w-40">Loja padrão</TableHead>
+              {isGrouped ? (
+                <TableHead>Acessos (loja · papel)</TableHead>
+              ) : (
+                <>
+                  <TableHead>Loja</TableHead>
+                  <TableHead className="w-32">Papel</TableHead>
+                  <TableHead className="w-40">Loja padrão</TableHead>
+                </>
+              )}
               <TableHead className="w-32">Desde</TableHead>
               <TableHead className="w-40 text-right">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center py-10 text-sm text-muted-foreground">
+              {(isGrouped ? grouped.length === 0 : filtered.length === 0) && (
+                <TableRow><TableCell colSpan={isGrouped ? 4 : 6} className="text-center py-10 text-sm text-muted-foreground">
                   {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : "Sem usuários vinculados para este filtro."}
                 </TableCell></TableRow>
               )}
-              {filtered.map((r) => {
+
+              {isGrouped && grouped.map((g) => {
+                const p = g.profile;
+                const isMe = currentUserId === g.user_id;
+                return (
+                  <TableRow key={g.user_id}>
+                    <TableCell className="align-top">
+                      <div className="text-sm flex items-center gap-2">
+                        {p?.full_name || <span className="text-muted-foreground">sem nome</span>}
+                        {isMe && <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">você</Badge>}
+                        <Badge variant="secondary" className="text-[10px]">{g.links.length} loja(s)</Badge>
+                      </div>
+                      <div className="font-mono text-[10px] text-muted-foreground">{p?.email || g.user_id}</div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="flex flex-wrap gap-1.5 py-0.5">
+                        {g.links.map((r) => {
+                          const s = storeMap[r.store_id];
+                          const isDefault = p?.default_store_id === r.store_id;
+                          const storeLabel = s?.fantasy_name || s?.name || r.store_id.slice(0, 6);
+                          return (
+                            <div key={r.id}
+                              className={`inline-flex items-center gap-1.5 rounded-sm border pl-2 pr-1 py-0.5 text-[11px] transition-colors ${isDefault ? "border-primary/50 bg-primary/10" : "border-border bg-muted/40"}`}
+                              title={`${storeLabel} · ${r.role}`}>
+                              {isDefault && <Star className="size-3 text-primary shrink-0" />}
+                              <span className="font-medium truncate max-w-[9rem]">{storeLabel}</span>
+                              <span className="text-muted-foreground">·</span>
+                              <RoleBadge role={r.role} compact />
+                              <button type="button" title="Alterar papel"
+                                className="opacity-60 hover:opacity-100 hover:text-primary p-0.5 rounded"
+                                onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
+                                <UserCog className="size-3" />
+                              </button>
+                              {isMe && !isDefault && (
+                                <button type="button" title="Definir como padrão"
+                                  className="opacity-60 hover:opacity-100 hover:text-primary p-0.5 rounded"
+                                  onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
+                                  <Star className="size-3" />
+                                </button>
+                              )}
+                              <button type="button" title="Desvincular desta loja"
+                                className="opacity-60 hover:opacity-100 hover:text-destructive p-0.5 rounded"
+                                onClick={() => setConfirmUnlink({ id: r.id, label: `${p?.email ?? r.user_id} — ${storeLabel}` })}>
+                                <Unlink className="size-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-[11px] text-muted-foreground align-top">{new Date(g.earliest).toLocaleDateString("pt-BR")}</TableCell>
+                    <TableCell className="text-right align-top">
+                      <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive"
+                        disabled={isMe} title={isMe ? "Não é possível excluir a própria conta" : "Excluir conta do usuário"}
+                        onClick={() => setConfirmDeleteUser({ userId: g.user_id, email: p?.email ?? g.user_id })}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+
+              {!isGrouped && filtered.map((r) => {
                 const p = profileMap[r.user_id];
                 const s = storeMap[r.store_id];
                 const isDefault = p?.default_store_id === r.store_id;
@@ -512,7 +600,7 @@ function LinkUserDialog({
   );
 }
 
-function RoleBadge({ role }: { role: string }) {
+function RoleBadge({ role, compact = false }: { role: string; compact?: boolean }) {
   const map: Record<string, string> = {
     admin_dev: "border-destructive/40 text-destructive",
     admin: "border-primary/40 text-primary",
@@ -520,7 +608,7 @@ function RoleBadge({ role }: { role: string }) {
     caixa: "border-warning/40 text-warning",
     estoquista: "border-muted-foreground/40 text-muted-foreground",
   };
-  return <Badge variant="outline" className={map[role] || ""}>{role.replace("_", " ")}</Badge>;
+  return <Badge variant="outline" className={`${map[role] || ""} ${compact ? "px-1.5 py-0 text-[10px] leading-tight font-mono uppercase" : ""}`}>{role.replace("_", " ")}</Badge>;
 }
 
 function CreateUserDialog({
