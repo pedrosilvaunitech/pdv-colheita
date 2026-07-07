@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2, UserCog, Unlink, Trash2, KeyRound, Copy, Shield, Download, Search, Store as StoreIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2, UserCog, Unlink, Trash2, KeyRound, Copy, Shield, Download, Search, Store as StoreIcon, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
@@ -49,6 +49,7 @@ function UsuariosPage() {
   const [changeRole, setChangeRole] = useState<{ id: string; user_id: string; store_id: string; role: string; email?: string } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState<{ id: string; label: string } | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ userId: string; email: string } | null>(null);
+  const [editUser, setEditUser] = useState<{ userId: string; email: string; fullName: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -86,25 +87,26 @@ function UsuariosPage() {
     },
   });
 
-  // Códigos de administrador (5 dígitos) por (loja, usuário)
+  // Códigos de administrador (5 dígitos) e permissões por (loja, usuário)
   const { data: codes = [] } = useQuery({
     queryKey: ["user-store-codes", storeIds],
     enabled: storeIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_store_codes")
-        .select("store_id,user_id,admin_code")
+        .select("store_id,user_id,admin_code,can_all,can_sangria,can_open_close_cash")
         .in("store_id", storeIds);
       if (error) throw error;
       return data ?? [];
     },
   });
   const codeMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const c of codes) m[`${c.store_id}:${c.user_id}`] = c.admin_code;
+    const m: Record<string, { admin_code: string; can_all: boolean; can_sangria: boolean; can_open_close_cash: boolean }> = {};
+    for (const c of codes) m[`${c.store_id}:${c.user_id}`] = { admin_code: c.admin_code, can_all: c.can_all ?? false, can_sangria: c.can_sangria ?? false, can_open_close_cash: c.can_open_close_cash ?? false };
     return m;
   }, [codes]);
-  const getCode = (storeId: string, userId: string) => codeMap[`${storeId}:${userId}`];
+  const getCode = (storeId: string, userId: string) => codeMap[`${storeId}:${userId}`]?.admin_code;
+  const getPerms = (storeId: string, userId: string) => codeMap[`${storeId}:${userId}`] ?? { admin_code: "", can_all: false, can_sangria: false, can_open_close_cash: false };
 
   const profileMap = useMemo(() => Object.fromEntries(profiles.map((p) => [p.id, p])), [profiles]);
   const storeMap = useMemo(() => Object.fromEntries(stores.map((s) => [s.id, s])), [stores]);
@@ -445,11 +447,17 @@ function UsuariosPage() {
                     </TableCell>
                     <TableCell className="font-mono text-[11px] text-muted-foreground align-top">{new Date(g.earliest).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right align-top">
-                      <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive"
-                        disabled={isMe} title={isMe ? "Não é possível excluir a própria conta" : "Excluir conta do usuário"}
-                        onClick={() => setConfirmDeleteUser({ userId: g.user_id, email: p?.email ?? g.user_id })}>
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                      <div className="inline-flex gap-1">
+                        <Button size="icon" variant="ghost" className="size-8" title="Editar usuário"
+                          onClick={() => setEditUser({ userId: g.user_id, email: p?.email ?? g.user_id, fullName: p?.full_name ?? "" })}>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive"
+                          disabled={isMe} title={isMe ? "Não é possível excluir a própria conta" : "Excluir conta do usuário"}
+                          onClick={() => setConfirmDeleteUser({ userId: g.user_id, email: p?.email ?? g.user_id })}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -489,6 +497,10 @@ function UsuariosPage() {
                     <TableCell className="font-mono text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex gap-1">
+                        <Button size="icon" variant="ghost" className="size-8" title="Editar usuário"
+                          onClick={() => setEditUser({ userId: r.user_id, email: p?.email ?? r.user_id, fullName: p?.full_name ?? "" })}>
+                          <Pencil className="size-3.5" />
+                        </Button>
                         <Button size="icon" variant="ghost" className="size-8" title="Vincular a outra loja"
                           disabled={!p?.email}
                           onClick={() => { setLinkPrefill({ email: p?.email ?? "" }); setLinkOpen(true); }}>
@@ -515,6 +527,7 @@ function UsuariosPage() {
             </TableBody>
           </Table>
         </div>
+
 
         {totalRows > pageSize && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -580,6 +593,18 @@ function UsuariosPage() {
             storeId={masterOpen.storeId}
             storeName={masterOpen.storeName}
             onClose={() => setMasterOpen(null)}
+          />
+        )}
+
+        {editUser && (
+          <EditUserDialog
+            user={editUser}
+            roles={roles.filter((r) => r.user_id === editUser.userId)}
+            stores={stores}
+            codeMap={codeMap}
+            onClose={() => setEditUser(null)}
+            onRegen={(storeId) => regenCode.mutate({ storeId, userId: editUser.userId })}
+            onSaved={async () => { await qc.invalidateQueries({ queryKey: ["user-store-codes"] }); }}
           />
         )}
 
@@ -993,5 +1018,200 @@ function MasterPasswordDialog({ storeId, storeName, onClose }: { storeId: string
     </Dialog>
   );
 }
+
+type PermRow = { admin_code: string; can_all: boolean; can_sangria: boolean; can_open_close_cash: boolean };
+
+function EditUserDialog({
+  user, roles, stores, codeMap, onClose, onRegen, onSaved,
+}: {
+  user: { userId: string; email: string; fullName: string };
+  roles: Array<{ id: string; user_id: string; store_id: string; role: string; created_at: string }>;
+  stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
+  codeMap: Record<string, PermRow>;
+  onClose: () => void;
+  onRegen: (storeId: string) => void;
+  onSaved: () => Promise<void>;
+}) {
+  const storeMap = Object.fromEntries(stores.map((s) => [s.id, s]));
+  // draft per store
+  type Draft = { can_all: boolean; can_sangria: boolean; can_open_close_cash: boolean };
+  const initial = () => {
+    const d: Record<string, Draft> = {};
+    for (const r of roles) {
+      const key = `${r.store_id}:${r.user_id}`;
+      const cur = codeMap[key];
+      d[r.store_id] = {
+        can_all: cur?.can_all ?? false,
+        can_sangria: cur?.can_sangria ?? false,
+        can_open_close_cash: cur?.can_open_close_cash ?? false,
+      };
+    }
+    return d;
+  };
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(initial);
+  useEffect(() => { setDrafts(initial()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user.userId, codeMap]);
+
+  const setField = (storeId: string, field: keyof Draft, value: boolean) => {
+    setDrafts((d) => {
+      const cur = d[storeId] ?? { can_all: false, can_sangria: false, can_open_close_cash: false };
+      const next: Draft = { ...cur, [field]: value };
+      // "can_all" ativa as demais (visual)
+      if (field === "can_all" && value) { next.can_sangria = true; next.can_open_close_cash = true; }
+      return { ...d, [storeId]: next };
+    });
+  };
+
+  const save = useMutation({
+    mutationFn: async () => {
+      for (const r of roles) {
+        const d = drafts[r.store_id];
+        if (!d) continue;
+        const { error } = await supabase.rpc("set_user_store_permissions", {
+          _store_id: r.store_id,
+          _user_id: user.userId,
+          _can_all: d.can_all,
+          _can_sangria: d.can_sangria,
+          _can_open_close_cash: d.can_open_close_cash,
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: async () => {
+      toast.success("Permissões atualizadas");
+      await onSaved();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const copyCode = async (code: string) => {
+    try { await navigator.clipboard.writeText(code); toast.success(`Código ${code} copiado`); }
+    catch { toast.error("Não foi possível copiar"); }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserCog className="size-4 text-primary" /> Editar usuário
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="border border-border rounded-md bg-card p-3">
+            <div className="text-sm font-medium">{user.fullName || <span className="text-muted-foreground">sem nome</span>}</div>
+            <div className="font-mono text-[11px] text-muted-foreground">{user.email}</div>
+          </div>
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Lojas vinculadas ({roles.length})</div>
+            {roles.length === 0 && (
+              <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-4 text-center">
+                Nenhuma loja vinculada.
+              </div>
+            )}
+            <div className="space-y-3">
+              {roles.map((r) => {
+                const s = storeMap[r.store_id];
+                const perm = codeMap[`${r.store_id}:${user.userId}`];
+                const d = drafts[r.store_id] ?? { can_all: false, can_sangria: false, can_open_close_cash: false };
+                const isManager = r.role === "admin_dev" || r.role === "admin" || r.role === "gerente";
+                return (
+                  <div key={r.id} className="border border-border rounded-md p-3 bg-card space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <StoreIcon className="size-4 text-muted-foreground" />
+                        <div className="text-sm font-medium">{s?.fantasy_name || s?.name || r.store_id.slice(0, 8)}</div>
+                        <RoleBadge role={r.role} compact />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">código</span>
+                        {perm?.admin_code ? (
+                          <>
+                            <span className="font-mono text-sm tracking-widest tabular-nums px-2 py-0.5 rounded border border-info/40 bg-info/10 text-info font-semibold">
+                              {perm.admin_code}
+                            </span>
+                            <Button size="icon" variant="ghost" className="size-7" title="Copiar" onClick={() => copyCode(perm.admin_code)}>
+                              <Copy className="size-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="size-7" title="Regenerar" onClick={() => onRegen(r.store_id)}>
+                              <RefreshCw className="size-3" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => onRegen(r.store_id)}>
+                            <KeyRound className="size-3" /> Gerar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <PermToggle
+                        label="Permissão de tudo"
+                        description="Substitui o papel — libera todas as operações"
+                        checked={d.can_all || isManager}
+                        disabled={isManager}
+                        onChange={(v) => setField(r.store_id, "can_all", v)}
+                      />
+                      <PermToggle
+                        label="Sangria"
+                        description="Retirar dinheiro do caixa"
+                        checked={d.can_sangria || d.can_all || isManager}
+                        disabled={isManager || d.can_all}
+                        onChange={(v) => setField(r.store_id, "can_sangria", v)}
+                      />
+                      <PermToggle
+                        label="Abrir/fechar caixa"
+                        description="Abertura e fechamento de caixa"
+                        checked={d.can_open_close_cash || d.can_all || isManager}
+                        disabled={isManager || d.can_all}
+                        onChange={(v) => setField(r.store_id, "can_open_close_cash", v)}
+                      />
+                    </div>
+                    {isManager && (
+                      <div className="text-[11px] text-muted-foreground">
+                        Papel <span className="font-mono">{r.role}</span> já autoriza todas as operações; overrides não se aplicam.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+          <Button onClick={() => save.mutate()} disabled={save.isPending || roles.length === 0}>
+            {save.isPending && <Loader2 className="mr-2 size-4 animate-spin" />} Salvar permissões
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PermToggle({ label, description, checked, disabled, onChange }: {
+  label: string; description: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className={`flex items-start gap-2 border rounded-md p-2 cursor-pointer transition-colors ${checked ? "border-primary/50 bg-primary/5" : "border-border bg-muted/20"} ${disabled ? "opacity-60 cursor-not-allowed" : "hover:border-primary/30"}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 accent-primary size-4 shrink-0"
+      />
+      <div className="min-w-0">
+        <div className="text-xs font-medium leading-tight">{label}</div>
+        <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">{description}</div>
+      </div>
+    </label>
+  );
+}
+
 
 

@@ -1350,6 +1350,9 @@ export type Database = {
       user_store_codes: {
         Row: {
           admin_code: string
+          can_all: boolean
+          can_open_close_cash: boolean
+          can_sangria: boolean
           created_at: string
           store_id: string
           updated_at: string
@@ -1357,6 +1360,9 @@ export type Database = {
         }
         Insert: {
           admin_code: string
+          can_all?: boolean
+          can_open_close_cash?: boolean
+          can_sangria?: boolean
           created_at?: string
           store_id: string
           updated_at?: string
@@ -1364,6 +1370,9 @@ export type Database = {
         }
         Update: {
           admin_code?: string
+          can_all?: boolean
+          can_open_close_cash?: boolean
+          can_sangria?: boolean
           created_at?: string
           store_id?: string
           updated_at?: string
@@ -1463,9 +1472,28 @@ export type Database = {
         Args: { _password: string; _store_id: string }
         Returns: undefined
       }
+      set_user_store_permissions: {
+        Args: {
+          _can_all: boolean
+          _can_open_close_cash: boolean
+          _can_sangria: boolean
+          _store_id: string
+          _user_id: string
+        }
+        Returns: undefined
+      }
       store_has_master_password: {
         Args: { _store_id: string }
         Returns: boolean
+      }
+      user_store_permissions: {
+        Args: { _store_id: string; _user_id: string }
+        Returns: {
+          can_all: boolean
+          can_open_close_cash: boolean
+          can_sangria: boolean
+          role: Database["public"]["Enums"]["app_role"]
+        }[]
       }
       verify_admin_code: {
         Args: { _code: string; _store_id: string }
