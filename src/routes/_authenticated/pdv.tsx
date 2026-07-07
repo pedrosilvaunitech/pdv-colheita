@@ -550,8 +550,9 @@ function PdvPage() {
             </div>
 
             <Button type="button" size="sm" className="w-full gap-2" onClick={addPayment} disabled={!openReg.data || total <= 0}>
-              <Plus className="size-4" /> {payMethod === "pix" ? "Gerar QR PIX" : "Adicionar pagamento"}
+              <Plus className="size-4" /> {payMethod === "pix" ? "Gerar QR PIX" : "Adicionar pagamento · F6"}
             </Button>
+
 
             {payments.length > 0 && (
               <div className="border-t border-border pt-2 space-y-1">
