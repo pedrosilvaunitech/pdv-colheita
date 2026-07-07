@@ -282,7 +282,10 @@ function UsuariosPage() {
             <Button size="sm" variant="outline" className="gap-2" onClick={() => { qc.invalidateQueries({ queryKey: ["roles-all"] }); qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); qc.invalidateQueries({ queryKey: ["stores"] }); toast.success("Atualizado"); }}>
               <RefreshCw className="size-4" /> Atualizar
             </Button>
-            <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+            <Button size="sm" variant="outline" className="gap-2" onClick={exportCsv} disabled={filtered.length === 0}>
+              <Download className="size-4" /> Exportar CSV
+            </Button>
+            <Dialog open={linkOpen} onOpenChange={(o) => { setLinkOpen(o); if (!o) setLinkPrefill(null); }}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="gap-2" disabled={stores.length === 0}>
                   <UserPlus className="size-4" /> Vincular existente
@@ -291,6 +294,7 @@ function UsuariosPage() {
               <LinkUserDialog
                 stores={stores}
                 loading={linkUser.isPending}
+                prefill={linkPrefill ?? undefined}
                 onSubmit={(payload) => linkUser.mutate(payload)}
               />
             </Dialog>
