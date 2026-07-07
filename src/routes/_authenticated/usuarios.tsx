@@ -788,3 +788,105 @@ function ChangeRoleDialog({
   );
 }
 
+function CodeChip({ code, onRegen }: { code: string | undefined; onRegen: () => void }) {
+  const copyCode = async () => {
+    if (!code) return;
+    try { await navigator.clipboard.writeText(code); toast.success(`Código ${code} copiado`); }
+    catch { toast.error("Não foi possível copiar"); }
+  };
+  if (!code) {
+    return (
+      <button type="button" onClick={onRegen}
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-border text-[10px] font-mono uppercase text-muted-foreground hover:text-primary hover:border-primary/40">
+        <KeyRound className="size-3" /> gerar
+      </button>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0 rounded border border-info/40 bg-info/10 text-info font-mono text-[11px] tracking-widest tabular-nums">
+      <KeyRound className="size-3 opacity-70" />
+      <span className="font-semibold">{code}</span>
+      <button type="button" title="Copiar código" onClick={copyCode}
+        className="p-0.5 opacity-60 hover:opacity-100"><Copy className="size-3" /></button>
+      <button type="button" title="Gerar novo código" onClick={onRegen}
+        className="p-0.5 opacity-60 hover:opacity-100"><RefreshCw className="size-3" /></button>
+    </span>
+  );
+}
+
+function MasterPasswordDialog({ storeId, storeName, onClose }: { storeId: string; storeName: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const { data: hasMaster, isLoading } = useQuery({
+    queryKey: ["store-master", storeId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("store_has_master_password", { _store_id: storeId });
+      if (error) throw error;
+      return Boolean(data);
+    },
+  });
+  const setMaster = useMutation({
+    mutationFn: async (pwd: string) => {
+      const { error } = await supabase.rpc("set_store_master_password", { _store_id: storeId, _password: pwd });
+      if (error) throw error;
+    },
+    onSuccess: async (_r, pwd) => {
+      toast.success(pwd ? "Senha mestra atualizada" : "Senha mestra removida");
+      await qc.invalidateQueries({ queryKey: ["store-master", storeId] });
+      setPassword(""); setConfirm("");
+      if (!pwd) onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const submit = () => {
+    if (!password) { toast.error("Informe a senha"); return; }
+    if (password.length < 4) { toast.error("Mínimo 4 caracteres"); return; }
+    if (password !== confirm) { toast.error("As senhas não conferem"); return; }
+    setMaster.mutate(password);
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Shield className="size-4 text-primary" /> Senha mestra · {storeName}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="border border-info/30 bg-info/5 rounded-md p-3 text-xs text-muted-foreground">
+            A senha mestra autoriza sangria, reforço e abertura/fechamento de caixa no PDV — em substituição ao código de 5 dígitos de um gerente. Guarde em local seguro.
+          </div>
+          <div className="text-xs">
+            Status atual: {isLoading ? <span className="text-muted-foreground">...</span>
+              : hasMaster
+                ? <Badge variant="outline" className="border-primary/40 text-primary">definida</Badge>
+                : <Badge variant="outline" className="border-warning/40 text-warning">não definida</Badge>}
+          </div>
+          <div>
+            <Label className="text-xs">Nova senha mestra</Label>
+            <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 font-mono" />
+          </div>
+          <div>
+            <Label className="text-xs">Confirmar</Label>
+            <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-1 font-mono" />
+          </div>
+        </div>
+        <DialogFooter className="gap-2 sm:justify-between">
+          {hasMaster && (
+            <Button variant="ghost" className="text-destructive hover:text-destructive"
+              onClick={() => setMaster.mutate("")} disabled={setMaster.isPending}>
+              Remover senha mestra
+            </Button>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button onClick={submit} disabled={setMaster.isPending}>
+              {setMaster.isPending && <Loader2 className="mr-2 size-4 animate-spin" />} Salvar
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
