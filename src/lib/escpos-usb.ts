@@ -96,14 +96,11 @@ export async function printUsbRaw(device: USBDevice, payload: Uint8Array): Promi
 function pickPrinterInterface(device: USBDevice): USBInterface | null {
   const cfg = device.configuration;
   if (!cfg) return null;
-  // Prefere interface classe 7 (Printer); senão a primeira com endpoint OUT bulk.
   for (const iface of cfg.interfaces) {
-    const alt = iface.alternate;
-    if (alt.interfaceClass === 7) return iface;
+    if (iface.alternate.interfaceClass === 7) return iface;
   }
   for (const iface of cfg.interfaces) {
-    const alt = iface.alternate;
-    if (alt.endpoints.some((e) => e.direction === "out" && e.type === "bulk")) return iface;
+    if (iface.alternate.endpoints.some((ep) => ep.direction === "out" && ep.type === "bulk")) return iface;
   }
   return null;
 }
