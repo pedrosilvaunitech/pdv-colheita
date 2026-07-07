@@ -154,6 +154,39 @@ function RelatoriosPage() {
           </div>
         </section>
 
+        <section className="border border-border rounded-md bg-card p-4">
+          <h2 className="text-sm font-semibold mb-3">Detalhamento de pagamentos parciais</h2>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Forma</TableHead>
+                <TableHead className="text-right">Nº de recebimentos</TableHead>
+                <TableHead className="text-right">Ticket médio</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">% do total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.payments.length === 0 && (
+                <TableRow><TableCell colSpan={5} className="text-center py-6 text-sm text-muted-foreground">Sem pagamentos no período.</TableCell></TableRow>
+              )}
+              {data.payments.map((p) => {
+                const paymentsTotal = data.payments.reduce((s, x) => s + x.amount, 0);
+                const share = paymentsTotal > 0 ? (p.amount / paymentsTotal) * 100 : 0;
+                return (
+                  <TableRow key={p.method}>
+                    <TableCell className="font-medium">{p.method}</TableCell>
+                    <TableCell className="text-right font-mono">{p.count}</TableCell>
+                    <TableCell className="text-right font-mono">{brl(p.count > 0 ? p.amount / p.count : 0)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{brl(p.amount)}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{share.toFixed(1)}%</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </section>
+
         <section className="grid gap-4 xl:grid-cols-3">
           <Ranking title="Mais vendidos" rows={data.topSelling} icon={TrendingUp} empty="Sem vendas no período." />
           <Ranking title="Menos vendidos" rows={data.lowSelling} icon={TrendingDown} empty="Sem itens suficientes para ranking." />
