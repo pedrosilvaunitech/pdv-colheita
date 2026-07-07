@@ -11,16 +11,27 @@ import { toast } from "sonner";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 
 interface AdminRow { user_id: string; full_name: string | null; email: string | null; role: string }
+type PermCheck = "can_open_close_cash" | "can_sangria" | "can_all";
 
-async function verifyAdmin(storeId: string, code: string): Promise<AdminRow> {
-  const clean = code.trim();
-  if (!clean) throw new Error("Digite o código de administrador");
+async function verifyAdmin(storeId: string, code: string, perm: PermCheck): Promise<AdminRow> {
+  const clean = code.replace(/\D/g, "");
+  if (clean.length !== 5) throw new Error("Digite o código de 5 dígitos");
   const { data, error } = await supabase.rpc("verify_admin_code", { _store_id: storeId, _code: clean });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
-  if (!row) throw new Error("Código de administrador inválido");
+  if (!row) throw new Error("Código inválido");
+  // Senha mestra (user_id nulo) autoriza qualquer ação.
+  if (!row.user_id) return row as AdminRow;
+  const { data: permData, error: permErr } = await supabase.rpc("user_store_permissions", {
+    _user_id: row.user_id, _store_id: storeId,
+  });
+  if (permErr) throw permErr;
+  const p = Array.isArray(permData) ? permData[0] : permData;
+  const allowed = !!p && (p.can_all || p[perm]);
+  if (!allowed) throw new Error("Usuário sem permissão para esta ação");
   return row as AdminRow;
 }
+
 
 export function CaixaQuickActions({ storeId }: { storeId: string }) {
   const qc = useQueryClient();
@@ -102,47 +113,56 @@ function KioskToggle() {
   );
 }
 
-function AdminCodeField({ code, setCode, admin, setAdmin, storeId }: {
+function AdminCodeField({ code, setCode, admin, setAdmin, storeId, perm }: {
   code: string; setCode: (v: string) => void;
   admin: AdminRow | null; setAdmin: (a: AdminRow | null) => void;
   storeId: string;
+  perm: PermCheck;
 }) {
   const [checking, setChecking] = useState(false);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
   const check = async (raw: string) => {
-    setCode(raw);
-    if (raw.trim().length < 6) { setAdmin(null); return; }
+    const digits = raw.replace(/\D/g, "").slice(0, 5);
+    setCode(digits);
+    setErrMsg(null);
+    if (digits.length < 5) { setAdmin(null); return; }
     setChecking(true);
     try {
-      const a = await verifyAdmin(storeId, raw);
+      const a = await verifyAdmin(storeId, digits, perm);
       setAdmin(a);
-    } catch {
+    } catch (e) {
       setAdmin(null);
+      setErrMsg(e instanceof Error ? e.message : "Código inválido");
     } finally {
       setChecking(false);
     }
   };
   return (
     <div>
-      <Label className="flex items-center gap-1"><ShieldCheck className="size-3" /> Código de administrador</Label>
+      <Label className="flex items-center gap-1"><ShieldCheck className="size-3" /> Código de administrador (5 dígitos)</Label>
       <Input
         autoFocus
         value={code}
         onChange={(e) => check(e.target.value)}
-        placeholder="Cole o ID do gerente (ou os 8 primeiros caracteres)"
-        className="font-mono"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={5}
+        placeholder="_ _ _ _ _"
+        className="font-mono text-center text-2xl tracking-[0.6em] tabular-nums"
       />
       <div className="text-[11px] mt-1 h-4">
         {checking && <span className="text-muted-foreground">Validando…</span>}
         {!checking && admin && (
           <span className="text-primary font-mono uppercase">✓ {admin.full_name || admin.email} · {admin.role}</span>
         )}
-        {!checking && !admin && code.trim().length >= 6 && (
-          <span className="text-destructive">Código inválido para esta loja</span>
+        {!checking && !admin && errMsg && code.length === 5 && (
+          <span className="text-destructive">{errMsg}</span>
         )}
       </div>
     </div>
   );
 }
+
 
 function OpenButton({ storeId, onDone }: { storeId: string; onDone: () => void }) {
   const [open, setOpen] = useState(false);
