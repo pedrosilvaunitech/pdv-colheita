@@ -232,7 +232,8 @@ function PdvPage() {
         title="PDV · Frente de caixa"
         description={`Loja ${store.fantasy_name || store.name}${openReg.data ? ` · caixa ${openReg.data.terminal} aberto` : " · CAIXA FECHADO"}`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {storeId && <CaixaQuickActions storeId={storeId} />}
             <EscPosButton />
             <Select value={docType} onValueChange={(v) => setDocType(v as "fiscal" | "nao_fiscal")}>
               <SelectTrigger className="w-56 h-9">
