@@ -232,11 +232,12 @@ function UsuariosPage() {
               <TableHead>Loja</TableHead>
               <TableHead className="w-32">Papel</TableHead>
               <TableHead className="w-40">Loja padrão</TableHead>
-              <TableHead className="w-40">Desde</TableHead>
+              <TableHead className="w-32">Desde</TableHead>
+              <TableHead className="w-40 text-right">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
+                <TableRow><TableCell colSpan={6} className="text-center py-10 text-sm text-muted-foreground">
                   {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : "Sem usuários vinculados para este filtro."}
                 </TableCell></TableRow>
               )}
@@ -244,13 +245,13 @@ function UsuariosPage() {
                 const p = profileMap[r.user_id];
                 const s = storeMap[r.store_id];
                 const isDefault = p?.default_store_id === r.store_id;
-                const canSetOwn = currentUserId === r.user_id;
+                const isMe = currentUserId === r.user_id;
                 return (
                   <TableRow key={r.id}>
                     <TableCell>
                       <div className="text-sm flex items-center gap-2">
                         {p?.full_name || <span className="text-muted-foreground">sem nome</span>}
-                        {canSetOwn && <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">você</Badge>}
+                        {isMe && <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">você</Badge>}
                       </div>
                       <div className="font-mono text-[10px] text-muted-foreground">{p?.email || r.user_id}</div>
                     </TableCell>
@@ -259,7 +260,7 @@ function UsuariosPage() {
                     <TableCell>
                       {isDefault ? (
                         <Badge variant="outline" className="border-primary/40 text-primary gap-1"><Star className="size-3" /> Padrão</Badge>
-                      ) : canSetOwn ? (
+                      ) : isMe ? (
                         <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
                           <Star className="size-3" /> Definir
                         </Button>
@@ -267,13 +268,72 @@ function UsuariosPage() {
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="font-mono text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleString("pt-BR")}</TableCell>
+                    <TableCell className="font-mono text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="inline-flex gap-1">
+                        <Button size="icon" variant="ghost" className="size-8" title="Alterar papel"
+                          onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
+                          <UserCog className="size-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="size-8" title="Desvincular desta loja"
+                          onClick={() => setConfirmUnlink({ id: r.id, label: `${p?.email ?? r.user_id} — ${s?.fantasy_name ?? s?.name ?? r.store_id}` })}>
+                          <Unlink className="size-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive"
+                          disabled={isMe} title={isMe ? "Não é possível excluir a própria conta" : "Excluir conta do usuário"}
+                          onClick={() => setConfirmDeleteUser({ userId: r.user_id, email: p?.email ?? r.user_id })}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
           </Table>
         </div>
+
+        <Dialog open={!!changeRole} onOpenChange={(o) => !o && setChangeRole(null)}>
+          {changeRole && (
+            <ChangeRoleDialog
+              current={changeRole}
+              loading={updateRole.isPending}
+              onSubmit={(role) => updateRole.mutate({ id: changeRole.id, role })}
+            />
+          )}
+        </Dialog>
+
+        <AlertDialog open={!!confirmUnlink} onOpenChange={(o) => !o && setConfirmUnlink(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Desvincular usuário desta loja?</AlertDialogTitle>
+              <AlertDialogDescription>{confirmUnlink?.label}. A conta do usuário permanece; apenas o acesso a esta loja é removido.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => confirmUnlink && unlink.mutate(confirmUnlink.id)}>Desvincular</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={!!confirmDeleteUser} onOpenChange={(o) => !o && setConfirmDeleteUser(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir conta definitivamente?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A conta <b>{confirmDeleteUser?.email}</b> será removida do sistema, com todos os vínculos em todas as lojas. Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => confirmDeleteUser && deleteUser.mutate(confirmDeleteUser.userId)}>
+                Excluir conta
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
           </TabsContent>
 
           <TabsContent value="auditoria" className="mt-4">
