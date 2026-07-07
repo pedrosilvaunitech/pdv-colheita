@@ -447,11 +447,17 @@ function UsuariosPage() {
                     </TableCell>
                     <TableCell className="font-mono text-[11px] text-muted-foreground align-top">{new Date(g.earliest).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right align-top">
-                      <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive"
-                        disabled={isMe} title={isMe ? "Não é possível excluir a própria conta" : "Excluir conta do usuário"}
-                        onClick={() => setConfirmDeleteUser({ userId: g.user_id, email: p?.email ?? g.user_id })}>
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                      <div className="inline-flex gap-1">
+                        <Button size="icon" variant="ghost" className="size-8" title="Editar usuário"
+                          onClick={() => setEditUser({ userId: g.user_id, email: p?.email ?? g.user_id, fullName: p?.full_name ?? "" })}>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive"
+                          disabled={isMe} title={isMe ? "Não é possível excluir a própria conta" : "Excluir conta do usuário"}
+                          onClick={() => setConfirmDeleteUser({ userId: g.user_id, email: p?.email ?? g.user_id })}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
