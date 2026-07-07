@@ -518,13 +518,14 @@ function PdvPage() {
 
 
           <div className="border border-border rounded-md bg-card p-4 space-y-3">
-            <div className="text-xs font-medium mb-1">Forma de pagamento</div>
+            <div className="text-xs font-medium mb-1">Forma de pagamento <span className="text-[10px] font-mono text-muted-foreground ml-1">F2·F3·F4·F5</span></div>
             <div className="grid grid-cols-2 gap-2">
-              <PayBtn active={payMethod === "dinheiro"} onClick={() => setPayMethod("dinheiro")} icon={Banknote} label="Dinheiro" />
-              <PayBtn active={payMethod === "pix"} onClick={() => setPayMethod("pix")} icon={Smartphone} label="PIX" />
-              <PayBtn active={payMethod === "debito"} onClick={() => setPayMethod("debito")} icon={CreditCard} label="Débito" />
-              <PayBtn active={payMethod === "credito"} onClick={() => setPayMethod("credito")} icon={CreditCard} label="Crédito" />
+              <PayBtn active={payMethod === "dinheiro"} onClick={() => setPayMethod("dinheiro")} icon={Banknote} label="Dinheiro · F2" />
+              <PayBtn active={payMethod === "pix"} onClick={() => setPayMethod("pix")} icon={Smartphone} label="PIX · F3" />
+              <PayBtn active={payMethod === "debito"} onClick={() => setPayMethod("debito")} icon={CreditCard} label="Débito · F4" />
+              <PayBtn active={payMethod === "credito"} onClick={() => setPayMethod("credito")} icon={CreditCard} label="Crédito · F5" />
             </div>
+
 
             {payMethod === "credito" && (
               <div>
