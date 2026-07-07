@@ -1,14 +1,7 @@
-/**
- * Detecta se o erro foi causado por uma política de permissões (Permissions-Policy)
- * que bloqueia o acesso ao recurso (Serial ou USB).
- */
+import { getBrowserDeviceBlockedMessage, isBrowserDevicePolicyError } from "./browser-device-permissions";
+
 export function isPermissionPolicyError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error);
-  return (
-    msg.toLowerCase().includes("permissions policy") || 
-    msg.toLowerCase().includes("disallowed by permissions policy") ||
-    (error instanceof Error && error.name === "SecurityError")
-  );
+  return isBrowserDevicePolicyError(error) || (error instanceof Error && error.name === "SecurityError");
 }
 
 /**
@@ -16,7 +9,7 @@ export function isPermissionPolicyError(error: unknown): boolean {
  */
 export function getHardwareErrorMessage(error: unknown, type: 'serial' | 'usb'): string {
   if (isPermissionPolicyError(error)) {
-    return `O acesso ao recurso ${type.toUpperCase()} está bloqueado pela política de permissões do navegador. \n\nIsso pode ocorrer em iframes ou sites sem permissão explícita. Tente usar o Agente Local ou verifique as configurações de segurança do navegador.`;
+    return getBrowserDeviceBlockedMessage(type);
   }
 
   const msg = error instanceof Error ? error.message : String(error);
