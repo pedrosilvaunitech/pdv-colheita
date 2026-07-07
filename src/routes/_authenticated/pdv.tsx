@@ -130,6 +130,43 @@ function PdvPage() {
     setScan("");
   };
 
+  /**
+   * Aplica um peso lido da balança ao último item pesável do carrinho.
+   * Se nenhum item pesável estiver presente, avisa o operador.
+   * Se a balança emitir uma leitura durante a chamada de leitura direta
+   * pelo scanner, o mesmo caminho pode ser usado.
+   */
+  const applyWeightToLastWeighable = (kg: number) => {
+    if (kg <= 0) { toast.error("Peso inválido"); return; }
+    setCart((prev) => {
+      const idx = [...prev].reverse().findIndex((i) => i.is_weighable);
+      if (idx === -1) { toast.error("Nenhum item pesável no carrinho. Bipe o produto pesável primeiro."); return prev; }
+      const realIdx = prev.length - 1 - idx;
+      const cp = [...prev];
+      cp[realIdx] = { ...cp[realIdx], quantity: Number(kg.toFixed(3)) };
+      toast.success(`Peso ${kg.toFixed(3)} kg aplicado em "${cp[realIdx].name}"`);
+      return cp;
+    });
+  };
+
+  // Se a balança já estiver ligada e o operador bipar um produto pesável
+  // sem preço embutido, tenta ler o peso automaticamente após adicionar ao carrinho.
+  useEffect(() => {
+    const last = cart[cart.length - 1];
+    if (!last || !last.is_weighable) return;
+    // só dispara auto-leitura quando qty ainda é 1 (default) e a balança está conectada
+    if (last.quantity !== 1) return;
+    const scale = getToledoScale();
+    if (!scale.isOpen()) return;
+    let cancelled = false;
+    scale.requestWeight().then((r) => {
+      if (cancelled) return;
+      if (r.status === "ok" && r.weightKg > 0) applyWeightToLastWeighable(r.weightKg);
+    }).catch(() => { /* silencioso — operador pode ler manualmente */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.length]);
+
   const addPayment = () => {
     const value = Number(payAmount || 0);
     if (value <= 0) { toast.error("Informe o valor do pagamento"); return; }
