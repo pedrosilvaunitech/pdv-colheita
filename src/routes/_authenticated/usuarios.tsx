@@ -343,6 +343,7 @@ function UsuariosPage() {
                               <span className="font-medium truncate max-w-[9rem]">{storeLabel}</span>
                               <span className="text-muted-foreground">·</span>
                               <RoleBadge role={r.role} compact />
+                              <CodeChip code={getCode(r.store_id, r.user_id)} onRegen={() => regenCode.mutate({ storeId: r.store_id, userId: r.user_id })} />
                               <button type="button" title="Alterar papel"
                                 className="opacity-60 hover:opacity-100 hover:text-primary p-0.5 rounded"
                                 onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
