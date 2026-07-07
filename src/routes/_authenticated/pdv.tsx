@@ -51,6 +51,7 @@ function PdvPage() {
   const { store, storeId } = useCurrentStore();
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const discountRef = useRef<HTMLInputElement>(null);
   const [scan, setScan] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [docType, setDocType] = useState<"fiscal" | "nao_fiscal">("nao_fiscal");
@@ -65,6 +66,7 @@ function PdvPage() {
   const [payInstallments, setPayInstallments] = useState<number>(1);
   const [pixOpen, setPixOpen] = useState(false);
   const [pixAmount, setPixAmount] = useState<number>(0);
+
 
   const settings = useQuery({
     queryKey: ["receipt_settings", storeId],
