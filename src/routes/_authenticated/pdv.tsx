@@ -310,7 +310,7 @@ function PdvPage() {
           header: settings.data?.header_text ?? null, footer: settings.data?.footer_text ?? null,
           paper_width: (settings.data?.paper_width ?? 80) as 58 | 80,
           items: cart.map((i) => ({ name: i.name, quantity: i.quantity, unit_price: i.unit_price, total: i.quantity * i.unit_price, barcode: i.barcode })),
-          subtotal, discount: disc, total, payment_method: paymentLabel || "—", received: paid, change: overpaid,
+          subtotal, discount: disc, total, payment_method: paymentLabel || "—", payments: receiptPayments, received: paid, change: overpaid,
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };
