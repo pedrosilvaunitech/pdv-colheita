@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { createPixCharge, checkPixCharge, confirmPixManually } from "@/lib/pix.functions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Copy, CheckCircle2, Loader2, QrCode, RefreshCw } from "lucide-react";
+import { Copy, CheckCircle2, Loader2, QrCode, RefreshCw, Settings2, AlertTriangle } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -25,15 +26,21 @@ export function PixChargeModal({ open, onClose, onPaid, storeId, amount, descrip
 
   const [charge, setCharge] = useState<{ id: string; brcode: string; qr_image: string | null; provider: string; status: string } | null>(null);
 
+  const [configMissing, setConfigMissing] = useState(false);
+
   const create = useMutation({
     mutationFn: async () => createFn({ data: { storeId, amount, description } }),
-    onSuccess: (data) => setCharge(data as never),
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: (data) => { setCharge(data as never); setConfigMissing(false); },
+    onError: (e: Error) => {
+      const msg = e.message || "";
+      if (/PIX não configurado|Configure chave PIX/i.test(msg)) { setConfigMissing(true); return; }
+      toast.error(msg);
+    },
   });
 
   useEffect(() => {
-    if (open && !charge && !create.isPending) create.mutate();
-    if (!open) setCharge(null);
+    if (open && !charge && !create.isPending && !configMissing) create.mutate();
+    if (!open) { setCharge(null); setConfigMissing(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -73,6 +80,27 @@ export function PixChargeModal({ open, onClose, onPaid, storeId, amount, descrip
             <Loader2 className="size-6 animate-spin mx-auto mb-2" /> Gerando QR...
           </div>
         )}
+
+        {configMissing && (
+          <div className="border border-warning/40 bg-warning/5 rounded-md p-4 space-y-3">
+            <div className="flex items-center gap-2 text-warning font-semibold text-sm">
+              <AlertTriangle className="size-4" /> PIX ainda não configurado
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Configure em <strong>Configurações → PIX</strong>. O modo padrão <strong>Estático (chave local)</strong>
+              funciona imediatamente — basta informar sua <strong>chave PIX</strong>, <strong>nome</strong> e
+              <strong> cidade</strong>. O QR é gerado no PDV com o valor da venda, sem depender de provedor externo.
+              Você pode conectar um PSP (Mercado Pago, Asaas) depois para confirmação automática.
+            </p>
+            <Button asChild size="sm" className="gap-2 w-full">
+              <Link to="/configuracoes" search={{ tab: "pix" }} onClick={onClose}>
+                <Settings2 className="size-4" /> Abrir configurações do PIX
+              </Link>
+            </Button>
+          </div>
+        )}
+
+
 
         {charge && (
           <div className="space-y-3">
