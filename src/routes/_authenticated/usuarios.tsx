@@ -44,12 +44,17 @@ function UsuariosPage() {
   const { data: stores = [], isLoading: storesLoading } = useStores();
   const [storeFilter, setStoreFilter] = useState<string>("__all__");
   const [linkOpen, setLinkOpen] = useState(false);
+  const [linkPrefill, setLinkPrefill] = useState<{ email?: string; storeId?: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [changeRole, setChangeRole] = useState<{ id: string; user_id: string; store_id: string; role: string; email?: string } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState<{ id: string; label: string } | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ userId: string; email: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
   useEffect(() => { supabase.auth.getUser().then((r) => setCurrentUserId(r.data.user?.id ?? null)); }, []);
+  useEffect(() => { setPage(1); }, [search, storeFilter]);
 
   const storeIds = useMemo(() => stores.map((s) => s.id), [stores]);
 
