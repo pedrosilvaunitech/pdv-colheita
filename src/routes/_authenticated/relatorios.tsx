@@ -204,9 +204,17 @@ function buildReport(sales: SaleRow[], items: ItemRow[], payments: PaymentRow[],
   const dailyMap = new Map<string, number>();
   for (const s of filteredSales) dailyMap.set(dayKey(new Date(s.created_at)), (dailyMap.get(dayKey(new Date(s.created_at))) || 0) + Number(s.total || 0));
   const daily = Array.from(dailyMap.entries()).map(([date, value]) => ({ label: date.slice(5).split("-").reverse().join("/"), total: value }));
-  const paymentMap = new Map<string, number>();
-  for (const p of filteredPayments) paymentMap.set(paymentLabel(p.method), (paymentMap.get(paymentLabel(p.method)) || 0) + Number(p.amount || 0));
-  const paymentsChart = Array.from(paymentMap.entries()).map(([method, amount]) => ({ method, amount })).sort((a, b) => b.amount - a.amount);
+  const paymentMap = new Map<string, { amount: number; count: number }>();
+  for (const p of filteredPayments) {
+    const key = paymentDetailedLabel(p.method, p.installments);
+    const curr = paymentMap.get(key) ?? { amount: 0, count: 0 };
+    curr.amount += Number(p.amount || 0);
+    curr.count += 1;
+    paymentMap.set(key, curr);
+  }
+  const paymentsChart = Array.from(paymentMap.entries())
+    .map(([method, v]) => ({ method, amount: v.amount, count: v.count }))
+    .sort((a, b) => b.amount - a.amount);
   const itemMap = new Map<string, { productId: string; name: string; category: string; quantity: number; total: number }>();
   for (const item of filteredItems) {
     const prod = productMap.get(item.product_id);
