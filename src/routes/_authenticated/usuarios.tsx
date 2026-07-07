@@ -405,44 +405,16 @@ function UsuariosPage() {
                       <div className="font-mono text-[10px] text-muted-foreground">{p?.email || g.user_id}</div>
                     </TableCell>
                     <TableCell className="align-top">
-                      <div className="flex flex-wrap gap-1.5 py-0.5 items-center">
-                        {g.links.map((r) => {
-                          const s = storeMap[r.store_id];
-                          const isDefault = p?.default_store_id === r.store_id;
-                          const storeLabel = s?.fantasy_name || s?.name || r.store_id.slice(0, 6);
-                          return (
-                            <div key={r.id}
-                              className={`inline-flex items-center gap-1.5 rounded-sm border pl-2 pr-1 py-0.5 text-[11px] transition-colors ${isDefault ? "border-primary/50 bg-primary/10" : "border-border bg-muted/40"}`}
-                              title={`${storeLabel} · ${r.role}`}>
-                              <button type="button" title={isDefault ? "Loja padrão (clique para remover)" : "Definir como padrão"}
-                                className={`p-0.5 rounded ${isDefault ? "text-primary" : "opacity-50 hover:opacity-100 hover:text-primary"}`}
-                                onClick={() => setDefault.mutate({ userId: r.user_id, storeId: isDefault ? "" : r.store_id } as never)}>
-                                <Star className={`size-3 ${isDefault ? "fill-current" : ""}`} />
-                              </button>
-                              <span className="font-medium truncate max-w-[9rem]">{storeLabel}</span>
-                              <span className="text-muted-foreground">·</span>
-                              <RoleBadge role={r.role} compact />
-                              <CodeChip code={getCode(r.store_id, r.user_id)} onRegen={() => regenCode.mutate({ storeId: r.store_id, userId: r.user_id })} />
-                              <button type="button" title="Alterar papel"
-                                className="opacity-60 hover:opacity-100 hover:text-primary p-0.5 rounded"
-                                onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
-                                <UserCog className="size-3" />
-                              </button>
-                              <button type="button" title="Desvincular desta loja"
-                                className="opacity-60 hover:opacity-100 hover:text-destructive p-0.5 rounded"
-                                onClick={() => setConfirmUnlink({ id: r.id, label: `${p?.email ?? r.user_id} — ${storeLabel}` })}>
-                                <Unlink className="size-3" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {canAddMoreStores && p?.email && (
-                          <button type="button" title="Vincular a outra loja"
-                            className="inline-flex items-center gap-1 rounded-sm border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-primary hover:border-primary/40"
-                            onClick={() => { setLinkPrefill({ email: p.email ?? "" }); setLinkOpen(true); }}>
-                            <StoreIcon className="size-3" /> vincular loja
-                          </button>
+                      <div className="text-xs text-muted-foreground truncate max-w-[38rem]">
+                        {g.links.length === 0 ? (
+                          <span className="italic">Nenhuma loja</span>
+                        ) : (
+                          g.links.map((r) => {
+                            const s = storeMap[r.store_id];
+                            return s?.fantasy_name || s?.name || r.store_id.slice(0, 6);
+                          }).join(", ")
                         )}
+                        <span className="ml-2 text-[10px] text-muted-foreground/70">— clique no lápis para gerenciar acessos, códigos e permissões</span>
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-[11px] text-muted-foreground align-top">{new Date(g.earliest).toLocaleDateString("pt-BR")}</TableCell>
