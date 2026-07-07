@@ -118,7 +118,11 @@ export function PixChargeModal({ open, onClose, onPaid, storeId, amount, descrip
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-mono uppercase text-muted-foreground">Copia-e-cola</span>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(charge.brcode); toast.success("Copiado"); }}
+                  onClick={async () => {
+                    const ok = await copyToClipboard(charge.brcode);
+                    if (ok) toast.success("Copiado");
+                    else toast.error("Não foi possível copiar");
+                  }}
                   className="text-xs text-primary hover:underline inline-flex items-center gap-1"
                 >
                   <Copy className="size-3" /> Copiar
