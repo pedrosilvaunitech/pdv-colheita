@@ -7,7 +7,7 @@ import { PageHeader, StoreRequired } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, FileText, Receipt, Printer } from "lucide-react";
+import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, FileText, Receipt, Printer, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
@@ -26,6 +26,19 @@ interface CartItem {
 }
 
 type PayMethod = "dinheiro" | "pix" | "debito" | "credito";
+interface PayEntry {
+  method: PayMethod;
+  amount: number;
+  installments?: number; // credito parcelado
+  label: string; // ex: "PIX", "Crédito 3x"
+}
+
+const METHOD_LABEL: Record<PayMethod, string> = {
+  dinheiro: "Dinheiro",
+  pix: "PIX",
+  debito: "Débito",
+  credito: "Crédito",
+};
 
 function PdvPage() {
   const { store, storeId } = useCurrentStore();
@@ -33,14 +46,18 @@ function PdvPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [scan, setScan] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [method, setMethod] = useState<PayMethod>("dinheiro");
-  const [received, setReceived] = useState("");
   const [docType, setDocType] = useState<"fiscal" | "nao_fiscal">("nao_fiscal");
   const [customerCpf, setCustomerCpf] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [discount, setDiscount] = useState("0");
+
+  // Pagamentos parciais
+  const [payments, setPayments] = useState<PayEntry[]>([]);
+  const [payMethod, setPayMethod] = useState<PayMethod>("dinheiro");
+  const [payAmount, setPayAmount] = useState<string>("");
+  const [payInstallments, setPayInstallments] = useState<number>(1);
   const [pixOpen, setPixOpen] = useState(false);
-  const [pixPaid, setPixPaid] = useState(false);
+  const [pixAmount, setPixAmount] = useState<number>(0);
 
   const settings = useQuery({
     queryKey: ["receipt_settings", storeId],
@@ -70,13 +87,20 @@ function PdvPage() {
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.quantity * i.unit_price, 0), [cart]);
   const disc = Math.min(Number(discount || 0), subtotal);
-  const total = subtotal - disc;
-  const change = Math.max(0, Number(received || 0) - total);
+  const total = Math.max(0, subtotal - disc);
+  const paid = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
+  const remaining = Math.max(0, Number((total - paid).toFixed(2)));
+  const overpaid = Math.max(0, Number((paid - total).toFixed(2))); // troco (só faz sentido em dinheiro)
+  const canFinalize = cart.length > 0 && total > 0 && paid + 1e-9 >= total;
+
+  // Sempre que muda o total ou pagamentos, sugere o restante no input
+  useEffect(() => {
+    setPayAmount(remaining > 0 ? remaining.toFixed(2) : "");
+  }, [remaining, payMethod]);
 
   const addByBarcode = async (raw: string) => {
     const code = raw.trim();
     if (!code || !storeId) return;
-    // Support EAN-13 weighable (starts with "2") — 2 NNNNN PPPPP D (5-digit price in cents)
     let barcode = code;
     let weighablePrice: number | null = null;
     if (code.length === 13 && code.startsWith("2")) {
@@ -100,14 +124,35 @@ function PdvPage() {
     setScan("");
   };
 
+  const addPayment = () => {
+    const value = Number(payAmount || 0);
+    if (value <= 0) { toast.error("Informe o valor do pagamento"); return; }
+    if (payMethod === "pix") {
+      if (!openReg.data) { toast.error("Abra o caixa antes"); return; }
+      setPixAmount(value);
+      setPixOpen(true);
+      return;
+    }
+    const label = payMethod === "credito" && payInstallments > 1
+      ? `Crédito ${payInstallments}x`
+      : METHOD_LABEL[payMethod];
+    setPayments((p) => [...p, { method: payMethod, amount: value, installments: payMethod === "credito" ? payInstallments : undefined, label }]);
+    setPayInstallments(1);
+  };
+
+  const removePayment = (idx: number) => setPayments((p) => p.filter((_, i) => i !== idx));
+
   const finalize = useMutation({
     mutationFn: async () => {
       if (!storeId || cart.length === 0) throw new Error("Carrinho vazio");
       if (!openReg.data) throw new Error("Abra o caixa antes de vender");
-      if (method === "dinheiro" && Number(received || 0) < total) throw new Error("Valor recebido insuficiente");
-      if (method === "pix" && !pixPaid) throw new Error("Aguardando confirmação do PIX");
+      if (paid + 1e-9 < total) throw new Error(`Faltam ${brl(remaining)} para completar o pagamento`);
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error("Não autenticado");
+
+      // Ajusta o último pagamento em dinheiro para absorver o troco (over) no valor recebido total,
+      // mas o "amount" gravado por pagamento reflete o valor efetivamente pago à venda (sem troco)
+      const change = overpaid;
 
       const { data: sale, error } = await supabase.from("sales").insert({
         store_id: storeId, status: "finalizada",
@@ -127,9 +172,20 @@ function PdvPage() {
       const { error: e2 } = await supabase.from("sale_items").insert(items);
       if (e2) throw e2;
 
-      const { error: e3 } = await supabase.from("sale_payments").insert({
-        sale_id: sale.id, store_id: storeId, method, amount: total,
-      });
+      // Rateia o troco: reduz o excedente do último pagamento em dinheiro (se houver);
+      // caso contrário, do último pagamento (raro — só ocorre se todo mundo pagou "demais").
+      const payRows = payments.map((p) => ({ ...p }));
+      if (change > 0) {
+        const lastCashIdx = [...payRows].reverse().findIndex((p) => p.method === "dinheiro");
+        const targetIdx = lastCashIdx === -1 ? payRows.length - 1 : payRows.length - 1 - lastCashIdx;
+        payRows[targetIdx] = { ...payRows[targetIdx], amount: Number((payRows[targetIdx].amount - change).toFixed(2)) };
+      }
+      const { error: e3 } = await supabase.from("sale_payments").insert(
+        payRows.map((p) => ({
+          sale_id: sale.id, store_id: storeId, method: p.method, amount: p.amount,
+          installments: p.installments ?? null,
+        }))
+      );
       if (e3) throw e3;
 
       const movs = cart.map((i) => ({
@@ -146,20 +202,20 @@ function PdvPage() {
       toast.success(docType === "fiscal" ? "Venda finalizada · NFC-e pendente de emissão" : "Venda finalizada");
       const shouldPrint = settings.data?.print_auto ?? true;
       if (shouldPrint && store) {
+        const paymentLabel = payments.map((p) => `${p.label} ${brl(p.amount)}`).join(" + ");
         const r: ReceiptData = {
           store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: [store.city, store.state].filter(Boolean).join(" · ") || null, phone: null },
           header: settings.data?.header_text ?? null, footer: settings.data?.footer_text ?? null,
           paper_width: (settings.data?.paper_width ?? 80) as 58 | 80,
           items: cart.map((i) => ({ name: i.name, quantity: i.quantity, unit_price: i.unit_price, total: i.quantity * i.unit_price, barcode: i.barcode })),
-          subtotal, discount: disc, total, payment_method: method, received: Number(received || total), change,
+          subtotal, discount: disc, total, payment_method: paymentLabel || "—", received: paid, change: overpaid,
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };
-        // 1º tenta ESC/POS direto (Web Serial). Se não estiver configurado/falhar, cai pro HTML térmico.
         const printed = await tryPrintEscPos(r);
         if (!printed) printReceipt(buildReceiptHTML(r));
       }
-      setCart([]); setReceived(""); setDiscount("0"); setCustomerCpf(""); setCustomerName(""); setPixPaid(false);
+      setCart([]); setPayments([]); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["cash_sales"] });
       inputRef.current?.focus();
@@ -254,6 +310,19 @@ function PdvPage() {
             <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Total a pagar</div>
             <div className="text-5xl font-mono font-bold text-primary mt-1">{brl(total)}</div>
             <div className="text-xs text-muted-foreground mt-1">{cart.length} item(ns) · subtotal {brl(subtotal)}</div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <div className="border border-border rounded p-2">
+                <div className="text-[10px] font-mono uppercase text-muted-foreground">Pago</div>
+                <div className="font-mono font-semibold">{brl(paid)}</div>
+              </div>
+              <div className={`border rounded p-2 ${remaining > 0 ? "border-warning/50 bg-warning/5" : "border-primary/50 bg-primary/5"}`}>
+                <div className="text-[10px] font-mono uppercase text-muted-foreground">Restante</div>
+                <div className={`font-mono font-semibold ${remaining > 0 ? "text-warning" : "text-primary"}`}>{brl(remaining)}</div>
+              </div>
+            </div>
+            {overpaid > 0 && (
+              <div className="text-xs mt-2 flex justify-between"><span className="text-muted-foreground">Troco</span><span className="font-mono font-semibold text-primary">{brl(overpaid)}</span></div>
+            )}
           </div>
 
           {docType === "fiscal" && (
@@ -269,35 +338,57 @@ function PdvPage() {
             <Input type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="font-mono" />
           </div>
 
-          <div className="border border-border rounded-md bg-card p-5 space-y-3">
+          <div className="border border-border rounded-md bg-card p-4 space-y-3">
             <div className="text-xs font-medium mb-1">Forma de pagamento</div>
             <div className="grid grid-cols-2 gap-2">
-              <PayBtn active={method === "dinheiro"} onClick={() => setMethod("dinheiro")} icon={Banknote} label="Dinheiro" />
-              <PayBtn active={method === "pix"} onClick={() => setMethod("pix")} icon={Smartphone} label="PIX" />
-              <PayBtn active={method === "debito"} onClick={() => setMethod("debito")} icon={CreditCard} label="Débito" />
-              <PayBtn active={method === "credito"} onClick={() => setMethod("credito")} icon={CreditCard} label="Crédito" />
+              <PayBtn active={payMethod === "dinheiro"} onClick={() => setPayMethod("dinheiro")} icon={Banknote} label="Dinheiro" />
+              <PayBtn active={payMethod === "pix"} onClick={() => setPayMethod("pix")} icon={Smartphone} label="PIX" />
+              <PayBtn active={payMethod === "debito"} onClick={() => setPayMethod("debito")} icon={CreditCard} label="Débito" />
+              <PayBtn active={payMethod === "credito"} onClick={() => setPayMethod("credito")} icon={CreditCard} label="Crédito" />
             </div>
-            {method === "dinheiro" && (
+
+            {payMethod === "credito" && (
               <div>
-                <div className="text-[10px] font-mono uppercase text-muted-foreground">Valor recebido</div>
-                <Input type="number" step="0.01" value={received} onChange={(e) => setReceived(e.target.value)} className="font-mono text-lg" />
-                <div className="text-xs mt-1 flex justify-between"><span>Troco</span><span className="font-mono font-semibold text-primary">{brl(change)}</span></div>
+                <div className="text-[10px] font-mono uppercase text-muted-foreground">Parcelas</div>
+                <Select value={String(payInstallments)} onValueChange={(v) => setPayInstallments(Number(v))}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n === 1 ? "1x à vista" : `${n}x ${brl(Number(payAmount || 0) / n)}`}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
-            {method === "pix" && (
-              <div className="space-y-2">
-                {pixPaid ? (
-                  <div className="text-xs text-primary font-mono uppercase inline-flex items-center gap-1"><Smartphone className="size-3" /> PIX confirmado — finalize a venda</div>
-                ) : (
-                  <Button variant="outline" size="sm" className="w-full gap-2" disabled={total <= 0 || !openReg.data} onClick={() => setPixOpen(true)}>
-                    <Smartphone className="size-4" /> Gerar QR PIX ({brl(total)})
-                  </Button>
-                )}
+
+            <div>
+              <div className="text-[10px] font-mono uppercase text-muted-foreground">Valor deste pagamento</div>
+              <div className="flex gap-2">
+                <Input type="number" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} className="font-mono text-lg" />
+                <Button type="button" variant="outline" size="sm" className="h-10 shrink-0" onClick={() => setPayAmount(remaining.toFixed(2))} disabled={remaining <= 0}>Restante</Button>
+              </div>
+            </div>
+
+            <Button type="button" size="sm" className="w-full gap-2" onClick={addPayment} disabled={!openReg.data || total <= 0}>
+              <Plus className="size-4" /> {payMethod === "pix" ? "Gerar QR PIX" : "Adicionar pagamento"}
+            </Button>
+
+            {payments.length > 0 && (
+              <div className="border-t border-border pt-2 space-y-1">
+                {payments.map((p, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs font-mono py-1">
+                    <span className="text-muted-foreground">{p.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{brl(p.amount)}</span>
+                      <button type="button" onClick={() => removePayment(idx)} className="text-destructive hover:opacity-70"><X className="size-3" /></button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          <Button size="lg" className="h-14 text-base gap-2" disabled={cart.length === 0 || finalize.isPending || !openReg.data} onClick={() => finalize.mutate()}>
+          <Button size="lg" className="h-14 text-base gap-2" disabled={!canFinalize || finalize.isPending || !openReg.data} onClick={() => finalize.mutate()}>
             <Printer className="size-5" />
             {finalize.isPending ? "Finalizando..." : `Finalizar e imprimir · ${docType === "fiscal" ? "NFC-e" : "Recibo"}`}
           </Button>
@@ -313,9 +404,12 @@ function PdvPage() {
         <PixChargeModal
           open={pixOpen}
           onClose={() => setPixOpen(false)}
-          onPaid={() => { setPixPaid(true); setPixOpen(false); }}
+          onPaid={() => {
+            setPayments((p) => [...p, { method: "pix", amount: pixAmount, label: "PIX" }]);
+            setPixOpen(false);
+          }}
           storeId={storeId}
-          amount={total}
+          amount={pixAmount}
           description={`Venda PDV · ${cart.length} item(ns)`}
         />
       )}
