@@ -300,13 +300,27 @@ function PdvPage() {
       if (shouldPrint && store) {
         const change = overpaid;
         // pagamentos "efetivos" (com troco descontado do último dinheiro) para o recibo
-        const receiptPayments = payments.map((p) => ({ ...p }));
+        const effective = payments.map((p) => ({ ...p }));
         if (change > 0) {
-          const lastCashIdx = [...receiptPayments].reverse().findIndex((p) => p.method === "dinheiro");
-          const targetIdx = lastCashIdx === -1 ? receiptPayments.length - 1 : receiptPayments.length - 1 - lastCashIdx;
-          receiptPayments[targetIdx] = { ...receiptPayments[targetIdx], amount: Number((receiptPayments[targetIdx].amount - change).toFixed(2)) };
+          const lastCashIdx = [...effective].reverse().findIndex((p) => p.method === "dinheiro");
+          const targetIdx = lastCashIdx === -1 ? effective.length - 1 : effective.length - 1 - lastCashIdx;
+          effective[targetIdx] = { ...effective[targetIdx], amount: Number((effective[targetIdx].amount - change).toFixed(2)) };
         }
-        const paymentLabel = payments.map((p) => `${p.label} ${brl(p.amount)}`).join(" + ");
+        // Agrega uma linha por método (crédito separa à vista x parcelado por nº de parcelas)
+        const agg = new Map<string, { method: PayMethod; installments?: number; label: string; amount: number }>();
+        for (const p of effective) {
+          const inst = p.method === "credito" ? (p.installments ?? 1) : undefined;
+          const key = `${p.method}:${inst ?? "-"}`;
+          const label =
+            p.method === "credito"
+              ? (inst && inst > 1 ? `Crédito ${inst}x` : "Crédito à vista")
+              : METHOD_LABEL[p.method];
+          const cur = agg.get(key);
+          if (cur) cur.amount = Number((cur.amount + p.amount).toFixed(2));
+          else agg.set(key, { method: p.method, installments: inst, label, amount: Number(p.amount.toFixed(2)) });
+        }
+        const receiptPayments = Array.from(agg.values());
+        const paymentLabel = receiptPayments.map((p) => `${p.label} ${brl(p.amount)}`).join(" + ");
         const r: ReceiptData = {
           store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: [store.city, store.state].filter(Boolean).join(" · ") || null, phone: null },
           header: settings.data?.header_text ?? null, footer: settings.data?.footer_text ?? null,
