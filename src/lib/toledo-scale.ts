@@ -1,3 +1,4 @@
+/// <reference types="w3c-web-serial" />
 /**
  * Driver para balanças Toledo (e compatíveis) via Web Serial API.
  *

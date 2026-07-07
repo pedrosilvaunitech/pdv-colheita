@@ -1,3 +1,4 @@
+/// <reference types="w3c-web-serial" />
 import { useEffect, useState } from "react";
 import { Scale, Plug, PlugZap, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
