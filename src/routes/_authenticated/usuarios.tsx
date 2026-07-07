@@ -297,11 +297,12 @@ function UsuariosPage() {
             <TableHeader><TableRow>
               <TableHead>Usuário</TableHead>
               {isGrouped ? (
-                <TableHead>Acessos (loja · papel)</TableHead>
+                <TableHead>Acessos (loja · papel · código)</TableHead>
               ) : (
                 <>
                   <TableHead>Loja</TableHead>
                   <TableHead className="w-32">Papel</TableHead>
+                  <TableHead className="w-32">Código</TableHead>
                   <TableHead className="w-40">Loja padrão</TableHead>
                 </>
               )}
@@ -310,7 +311,7 @@ function UsuariosPage() {
             </TableRow></TableHeader>
             <TableBody>
               {(isGrouped ? grouped.length === 0 : filtered.length === 0) && (
-                <TableRow><TableCell colSpan={isGrouped ? 4 : 6} className="text-center py-10 text-sm text-muted-foreground">
+                <TableRow><TableCell colSpan={isGrouped ? 4 : 7} className="text-center py-10 text-sm text-muted-foreground">
                   {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : "Sem usuários vinculados para este filtro."}
                 </TableCell></TableRow>
               )}
