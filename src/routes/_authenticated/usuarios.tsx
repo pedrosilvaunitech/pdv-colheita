@@ -31,6 +31,14 @@ const linkSchema = z.object({
   role: z.enum(["admin_dev", "admin", "gerente", "caixa", "estoquista"]),
 });
 
+const createSchema = z.object({
+  storeId: z.string().uuid("Selecione uma loja"),
+  email: z.string().trim().email("Email inválido").max(255),
+  password: z.string().min(6, "Senha mínima de 6 caracteres").max(100),
+  fullName: z.string().trim().min(1, "Nome obrigatório").max(200),
+  role: z.enum(["admin_dev", "admin", "gerente", "caixa", "estoquista"]),
+});
+
 function UsuariosPage() {
   const qc = useQueryClient();
   const { data: stores = [], isLoading: storesLoading } = useStores();
