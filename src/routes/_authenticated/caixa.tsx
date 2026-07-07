@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentStore } from "@/lib/current-store";
@@ -83,6 +83,40 @@ function CaixaPage() {
     qc.invalidateQueries({ queryKey: ["cash_sales"] });
   };
 
+  const operatorIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (openReg.data?.opened_by) ids.add(openReg.data.opened_by);
+    if (openReg.data?.closed_by) ids.add(openReg.data.closed_by);
+    for (const h of history.data ?? []) {
+      if (h.opened_by) ids.add(h.opened_by);
+      if (h.closed_by) ids.add(h.closed_by);
+    }
+    for (const m of movements.data ?? []) {
+      if (m.created_by) ids.add(m.created_by);
+    }
+    return Array.from(ids);
+  }, [history.data, movements.data, openReg.data]);
+
+  const profiles = useQuery({
+    queryKey: ["cash_operator_profiles", operatorIds],
+    enabled: operatorIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", operatorIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const profileMap = useMemo(() => Object.fromEntries((profiles.data ?? []).map((p) => [p.id, p])), [profiles.data]);
+  const userBadge = (id?: string | null) => {
+    if (!id) return "—";
+    const p = profileMap[id];
+    return `${p?.full_name || p?.email || "Usuário"} · ${id.slice(0, 8).toUpperCase()}`;
+  };
+
   if (!store) return <StoreRequired />;
 
   const cashIn =
@@ -127,18 +161,20 @@ function CaixaPage() {
                 <TableRow>
                   <TableHead>Hora</TableHead>
                   <TableHead>Tipo</TableHead>
+                  <TableHead>Operador</TableHead>
                   <TableHead>Motivo</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(movements.data ?? []).length === 0 && (
-                  <TableRow><TableCell colSpan={4} className="text-center py-10 text-sm text-muted-foreground">Nenhuma movimentação.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-10 text-sm text-muted-foreground">Nenhuma movimentação.</TableCell></TableRow>
                 )}
                 {(movements.data ?? []).map((m) => (
                   <TableRow key={m.id}>
                     <TableCell className="font-mono text-xs">{new Date(m.created_at).toLocaleTimeString("pt-BR")}</TableCell>
                     <TableCell><Badge variant="outline" className="uppercase text-[10px]">{m.type}</Badge></TableCell>
+                    <TableCell className="font-mono text-[11px] text-muted-foreground">{userBadge(m.created_by)}</TableCell>
                     <TableCell className="text-sm">{m.reason || "—"}</TableCell>
                     <TableCell className={`text-right font-mono ${m.type === "sangria" || m.type === "retirada" ? "text-destructive" : "text-primary"}`}>
                       {m.type === "sangria" || m.type === "retirada" ? "-" : "+"}{brl(Number(m.amount))}
@@ -158,7 +194,9 @@ function CaixaPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Abertura</TableHead>
+                  <TableHead>Aberto por</TableHead>
                   <TableHead>Fechamento</TableHead>
+                  <TableHead>Fechado por</TableHead>
                   <TableHead>Terminal</TableHead>
                   <TableHead className="text-right">Abertura</TableHead>
                   <TableHead className="text-right">Esperado</TableHead>
@@ -170,7 +208,9 @@ function CaixaPage() {
                 {(history.data ?? []).map((h) => (
                   <TableRow key={h.id}>
                     <TableCell className="font-mono text-xs">{new Date(h.opened_at).toLocaleString("pt-BR")}</TableCell>
+                    <TableCell className="font-mono text-[11px] text-muted-foreground">{userBadge(h.opened_by)}</TableCell>
                     <TableCell className="font-mono text-xs">{h.closed_at ? new Date(h.closed_at).toLocaleString("pt-BR") : <Badge className="bg-primary/10 text-primary border-primary/30">ABERTO</Badge>}</TableCell>
+                    <TableCell className="font-mono text-[11px] text-muted-foreground">{userBadge(h.closed_by)}</TableCell>
                     <TableCell className="font-mono text-xs">{h.terminal}</TableCell>
                     <TableCell className="text-right font-mono">{brl(Number(h.opening_amount))}</TableCell>
                     <TableCell className="text-right font-mono">{h.expected_amount != null ? brl(Number(h.expected_amount)) : "—"}</TableCell>

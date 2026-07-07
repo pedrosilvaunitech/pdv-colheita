@@ -50,12 +50,15 @@ export const emitInvoice = createServerFn({ method: "POST" })
     const { supabase } = context;
 
     // Só admin/gerente/admin_dev da loja pode emitir.
-    const { data: canManage, error: roleErr } = await supabase.rpc("can_manage_store", {
-      _user_id: context.userId,
-      _store_id: data.storeId,
-    });
+    const { data: managerRole, error: roleErr } = await supabase
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", context.userId)
+      .eq("store_id", data.storeId)
+      .in("role", ["admin_dev", "admin", "gerente"])
+      .maybeSingle();
     if (roleErr) throw new Error(roleErr.message);
-    if (!canManage) throw new Error("Sem permissão para emitir nota nesta loja.");
+    if (!managerRole) throw new Error("Sem permissão para emitir nota nesta loja.");
 
     const { data: config, error: cfgErr } = await supabase
       .from("fiscal_configs")
