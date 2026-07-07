@@ -86,25 +86,26 @@ function UsuariosPage() {
     },
   });
 
-  // Códigos de administrador (5 dígitos) por (loja, usuário)
+  // Códigos de administrador (5 dígitos) e permissões por (loja, usuário)
   const { data: codes = [] } = useQuery({
     queryKey: ["user-store-codes", storeIds],
     enabled: storeIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_store_codes")
-        .select("store_id,user_id,admin_code")
+        .select("store_id,user_id,admin_code,can_all,can_sangria,can_open_close_cash")
         .in("store_id", storeIds);
       if (error) throw error;
       return data ?? [];
     },
   });
   const codeMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const c of codes) m[`${c.store_id}:${c.user_id}`] = c.admin_code;
+    const m: Record<string, { admin_code: string; can_all: boolean; can_sangria: boolean; can_open_close_cash: boolean }> = {};
+    for (const c of codes) m[`${c.store_id}:${c.user_id}`] = { admin_code: c.admin_code, can_all: c.can_all ?? false, can_sangria: c.can_sangria ?? false, can_open_close_cash: c.can_open_close_cash ?? false };
     return m;
   }, [codes]);
-  const getCode = (storeId: string, userId: string) => codeMap[`${storeId}:${userId}`];
+  const getCode = (storeId: string, userId: string) => codeMap[`${storeId}:${userId}`]?.admin_code;
+  const getPerms = (storeId: string, userId: string) => codeMap[`${storeId}:${userId}`] ?? { admin_code: "", can_all: false, can_sangria: false, can_open_close_cash: false };
 
   const profileMap = useMemo(() => Object.fromEntries(profiles.map((p) => [p.id, p])), [profiles]);
   const storeMap = useMemo(() => Object.fromEntries(stores.map((s) => [s.id, s])), [stores]);
