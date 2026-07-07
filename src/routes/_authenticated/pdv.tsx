@@ -11,6 +11,7 @@ import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, F
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
+import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled, tryPrintEscPos } from "@/lib/escpos";
 
 export const Route = createFileRoute("/_authenticated/pdv")({ component: PdvPage });
 
@@ -150,7 +151,9 @@ function PdvPage() {
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };
-        printReceipt(buildReceiptHTML(r));
+        // 1º tenta ESC/POS direto (Web Serial). Se não estiver configurado/falhar, cai pro HTML térmico.
+        const printed = await tryPrintEscPos(r);
+        if (!printed) printReceipt(buildReceiptHTML(r));
       }
       setCart([]); setReceived(""); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
