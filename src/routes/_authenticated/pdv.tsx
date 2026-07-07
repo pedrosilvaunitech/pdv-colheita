@@ -105,6 +105,7 @@ function PdvPage() {
       if (!storeId || cart.length === 0) throw new Error("Carrinho vazio");
       if (!openReg.data) throw new Error("Abra o caixa antes de vender");
       if (method === "dinheiro" && Number(received || 0) < total) throw new Error("Valor recebido insuficiente");
+      if (method === "pix" && !pixPaid) throw new Error("Aguardando confirmação do PIX");
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error("Não autenticado");
 
@@ -158,7 +159,7 @@ function PdvPage() {
         const printed = await tryPrintEscPos(r);
         if (!printed) printReceipt(buildReceiptHTML(r));
       }
-      setCart([]); setReceived(""); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
+      setCart([]); setReceived(""); setDiscount("0"); setCustomerCpf(""); setCustomerName(""); setPixPaid(false);
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["cash_sales"] });
       inputRef.current?.focus();
