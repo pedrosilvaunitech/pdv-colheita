@@ -650,14 +650,16 @@ function AuditPanel({ roles, profiles, stores, loading }: {
 function LinkUserDialog({
   stores,
   loading,
+  prefill,
   onSubmit,
 }: {
   stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
   loading: boolean;
+  prefill?: { email?: string; storeId?: string };
   onSubmit: (payload: z.infer<typeof linkSchema>) => void;
 }) {
-  const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
-  const [email, setEmail] = useState("");
+  const [storeId, setStoreId] = useState(prefill?.storeId ?? stores[0]?.id ?? "");
+  const [email, setEmail] = useState(prefill?.email ?? "");
   const [role, setRole] = useState<AppRole>("caixa");
 
   const submit = (event: React.FormEvent) => {
