@@ -472,6 +472,14 @@ function UsuariosPage() {
           </AlertDialogContent>
         </AlertDialog>
 
+        {masterOpen && (
+          <MasterPasswordDialog
+            storeId={masterOpen.storeId}
+            storeName={masterOpen.storeName}
+            onClose={() => setMasterOpen(null)}
+          />
+        )}
+
           </TabsContent>
 
           <TabsContent value="auditoria" className="mt-4">
