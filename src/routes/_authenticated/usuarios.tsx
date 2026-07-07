@@ -100,11 +100,59 @@ function UsuariosPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const createUser = useMutation({
+    mutationFn: async (payload: z.infer<typeof createSchema>) => createUserByAdmin({ data: payload }),
+    onSuccess: async () => {
+      toast.success("Usuário criado e vinculado");
+      setCreateOpen(false);
+      await qc.invalidateQueries({ queryKey: ["roles-all"] });
+      await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateRole = useMutation({
+    mutationFn: async (payload: { id: string; role: AppRole }) => {
+      const { error } = await supabase.from("user_roles").update({ role: payload.role }).eq("id", payload.id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Papel atualizado");
+      setChangeRole(null);
+      await qc.invalidateQueries({ queryKey: ["roles-all"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const unlink = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("user_roles").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Vínculo removido");
+      setConfirmUnlink(null);
+      await qc.invalidateQueries({ queryKey: ["roles-all"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: async (userId: string) => deleteUserAccount({ data: { userId } }),
+    onSuccess: async () => {
+      toast.success("Conta de usuário excluída");
+      setConfirmDeleteUser(null);
+      await qc.invalidateQueries({ queryKey: ["roles-all"] });
+      await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <div>
       <PageHeader
         title="Usuários & papéis"
-        description="Todos os usuários e papéis de todas as lojas às quais você tem acesso."
+        description="Criar, editar papel, desvincular ou excluir usuários — inclusive em várias lojas."
         actions={
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" className="gap-2" onClick={() => { qc.invalidateQueries({ queryKey: ["roles-all"] }); qc.invalidateQueries({ queryKey: ["profiles-of-roles"] }); qc.invalidateQueries({ queryKey: ["stores"] }); toast.success("Atualizado"); }}>
@@ -112,8 +160,8 @@ function UsuariosPage() {
             </Button>
             <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="gap-2" disabled={stores.length === 0}>
-                  <UserPlus className="size-4" /> Vincular usuário
+                <Button size="sm" variant="outline" className="gap-2" disabled={stores.length === 0}>
+                  <UserPlus className="size-4" /> Vincular existente
                 </Button>
               </DialogTrigger>
               <LinkUserDialog
@@ -122,9 +170,22 @@ function UsuariosPage() {
                 onSubmit={(payload) => linkUser.mutate(payload)}
               />
             </Dialog>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2" disabled={stores.length === 0}>
+                  <UserPlus className="size-4" /> Criar usuário
+                </Button>
+              </DialogTrigger>
+              <CreateUserDialog
+                stores={stores}
+                loading={createUser.isPending}
+                onSubmit={(payload) => createUser.mutate(payload)}
+              />
+            </Dialog>
           </div>
         }
       />
+
       <div className="p-6 space-y-4">
         <Tabs defaultValue="lista">
           <TabsList>
