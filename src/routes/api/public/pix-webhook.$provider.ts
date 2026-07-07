@@ -44,7 +44,7 @@ export const Route = createFileRoute("/api/public/pix-webhook/$provider")({
         if (externalId && paid) {
           await supabaseAdmin
             .from("pix_charges")
-            .update({ status: "pago", paid_at: new Date().toISOString(), raw_response: body })
+            .update({ status: "pago", paid_at: new Date().toISOString(), raw_response: body as never })
             .eq("external_id", externalId)
             .eq("status", "pendente");
         }
