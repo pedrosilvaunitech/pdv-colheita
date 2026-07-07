@@ -86,6 +86,26 @@ function UsuariosPage() {
 
   const filtered = storeFilter === "__all__" ? roles : roles.filter((r) => r.store_id === storeFilter);
   const loading = storesLoading || rolesLoading || profilesLoading;
+  const isGrouped = storeFilter === "__all__";
+
+  // Agrupamento por usuário para o modo "Todas as lojas"
+  type GroupedUser = {
+    user_id: string;
+    profile: typeof profiles[number] | undefined;
+    links: typeof roles;
+    earliest: string;
+  };
+  const grouped: GroupedUser[] = useMemo(() => {
+    if (!isGrouped) return [];
+    const map = new Map<string, GroupedUser>();
+    for (const r of filtered) {
+      const g = map.get(r.user_id) ?? { user_id: r.user_id, profile: profileMap[r.user_id], links: [], earliest: r.created_at };
+      g.links.push(r);
+      if (r.created_at < g.earliest) g.earliest = r.created_at;
+      map.set(r.user_id, g);
+    }
+    return Array.from(map.values()).sort((a, b) => (a.profile?.full_name || a.profile?.email || "").localeCompare(b.profile?.full_name || b.profile?.email || ""));
+  }, [filtered, profileMap, isGrouped]);
 
   const linkUser = useMutation({
     mutationFn: async (payload: z.infer<typeof linkSchema>) => linkUserToStore({ data: payload }),
