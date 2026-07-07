@@ -380,15 +380,17 @@ function UsuariosPage() {
               <TableHead className="w-40 text-right">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {(isGrouped ? grouped.length === 0 : filtered.length === 0) && (
+              {(isGrouped ? grouped.length === 0 : filteredSearched.length === 0) && (
                 <TableRow><TableCell colSpan={isGrouped ? 4 : 7} className="text-center py-10 text-sm text-muted-foreground">
-                  {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : "Sem usuários vinculados para este filtro."}
+                  {loading ? "Carregando usuários e vínculos..." : stores.length === 0 ? "Nenhuma loja cadastrada. Cadastre uma loja primeiro." : search ? `Nenhum usuário encontrado para "${search}".` : "Sem usuários vinculados para este filtro."}
                 </TableCell></TableRow>
               )}
 
-              {isGrouped && grouped.map((g) => {
+              {isGrouped && groupedPage.map((g) => {
                 const p = g.profile;
                 const isMe = currentUserId === g.user_id;
+                const linkedStoreIds = new Set(g.links.map((l) => l.store_id));
+                const canAddMoreStores = stores.some((s) => !linkedStoreIds.has(s.id));
                 return (
                   <TableRow key={g.user_id}>
                     <TableCell className="align-top">
@@ -400,7 +402,7 @@ function UsuariosPage() {
                       <div className="font-mono text-[10px] text-muted-foreground">{p?.email || g.user_id}</div>
                     </TableCell>
                     <TableCell className="align-top">
-                      <div className="flex flex-wrap gap-1.5 py-0.5">
+                      <div className="flex flex-wrap gap-1.5 py-0.5 items-center">
                         {g.links.map((r) => {
                           const s = storeMap[r.store_id];
                           const isDefault = p?.default_store_id === r.store_id;
@@ -409,7 +411,11 @@ function UsuariosPage() {
                             <div key={r.id}
                               className={`inline-flex items-center gap-1.5 rounded-sm border pl-2 pr-1 py-0.5 text-[11px] transition-colors ${isDefault ? "border-primary/50 bg-primary/10" : "border-border bg-muted/40"}`}
                               title={`${storeLabel} · ${r.role}`}>
-                              {isDefault && <Star className="size-3 text-primary shrink-0" />}
+                              <button type="button" title={isDefault ? "Loja padrão (clique para remover)" : "Definir como padrão"}
+                                className={`p-0.5 rounded ${isDefault ? "text-primary" : "opacity-50 hover:opacity-100 hover:text-primary"}`}
+                                onClick={() => setDefault.mutate({ userId: r.user_id, storeId: isDefault ? "" : r.store_id } as never)}>
+                                <Star className={`size-3 ${isDefault ? "fill-current" : ""}`} />
+                              </button>
                               <span className="font-medium truncate max-w-[9rem]">{storeLabel}</span>
                               <span className="text-muted-foreground">·</span>
                               <RoleBadge role={r.role} compact />
@@ -419,13 +425,6 @@ function UsuariosPage() {
                                 onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
                                 <UserCog className="size-3" />
                               </button>
-                              {isMe && !isDefault && (
-                                <button type="button" title="Definir como padrão"
-                                  className="opacity-60 hover:opacity-100 hover:text-primary p-0.5 rounded"
-                                  onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
-                                  <Star className="size-3" />
-                                </button>
-                              )}
                               <button type="button" title="Desvincular desta loja"
                                 className="opacity-60 hover:opacity-100 hover:text-destructive p-0.5 rounded"
                                 onClick={() => setConfirmUnlink({ id: r.id, label: `${p?.email ?? r.user_id} — ${storeLabel}` })}>
@@ -434,6 +433,13 @@ function UsuariosPage() {
                             </div>
                           );
                         })}
+                        {canAddMoreStores && p?.email && (
+                          <button type="button" title="Vincular a outra loja"
+                            className="inline-flex items-center gap-1 rounded-sm border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-primary hover:border-primary/40"
+                            onClick={() => { setLinkPrefill({ email: p.email ?? "" }); setLinkOpen(true); }}>
+                            <StoreIcon className="size-3" /> vincular loja
+                          </button>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-[11px] text-muted-foreground align-top">{new Date(g.earliest).toLocaleDateString("pt-BR")}</TableCell>
@@ -448,7 +454,7 @@ function UsuariosPage() {
                 );
               })}
 
-              {!isGrouped && filtered.map((r) => {
+              {!isGrouped && filteredPage.map((r) => {
                 const p = profileMap[r.user_id];
                 const s = storeMap[r.store_id];
                 const isDefault = p?.default_store_id === r.store_id;
@@ -467,18 +473,26 @@ function UsuariosPage() {
                     <TableCell><CodeChip code={getCode(r.store_id, r.user_id)} onRegen={() => regenCode.mutate({ storeId: r.store_id, userId: r.user_id })} /></TableCell>
                     <TableCell>
                       {isDefault ? (
-                        <Badge variant="outline" className="border-primary/40 text-primary gap-1"><Star className="size-3" /> Padrão</Badge>
-                      ) : isMe ? (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
-                          <Star className="size-3" /> Definir
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-primary"
+                          title="Clique para remover como padrão"
+                          onClick={() => setDefault.mutate({ userId: r.user_id, storeId: "" } as never)}>
+                          <Star className="size-3 fill-current" /> Padrão
                         </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
+                          onClick={() => setDefault.mutate({ userId: r.user_id, storeId: r.store_id })}>
+                          <Star className="size-3" /> Definir
+                        </Button>
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex gap-1">
+                        <Button size="icon" variant="ghost" className="size-8" title="Vincular a outra loja"
+                          disabled={!p?.email}
+                          onClick={() => { setLinkPrefill({ email: p?.email ?? "" }); setLinkOpen(true); }}>
+                          <StoreIcon className="size-3.5" />
+                        </Button>
                         <Button size="icon" variant="ghost" className="size-8" title="Alterar papel"
                           onClick={() => setChangeRole({ id: r.id, user_id: r.user_id, store_id: r.store_id, role: r.role, email: p?.email ?? undefined })}>
                           <UserCog className="size-3.5" />
