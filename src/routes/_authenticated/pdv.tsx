@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
 import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled, tryPrintEscPos } from "@/lib/escpos";
+import { PixChargeModal } from "@/components/pix-charge-modal";
 
 export const Route = createFileRoute("/_authenticated/pdv")({ component: PdvPage });
 
@@ -38,6 +39,8 @@ function PdvPage() {
   const [customerCpf, setCustomerCpf] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [discount, setDiscount] = useState("0");
+  const [pixOpen, setPixOpen] = useState(false);
+  const [pixPaid, setPixPaid] = useState(false);
 
   const settings = useQuery({
     queryKey: ["receipt_settings", storeId],
@@ -281,7 +284,15 @@ function PdvPage() {
               </div>
             )}
             {method === "pix" && (
-              <div className="text-[10px] font-mono uppercase text-muted-foreground">Pix real (QR dinâmico) na Fase 3</div>
+              <div className="space-y-2">
+                {pixPaid ? (
+                  <div className="text-xs text-primary font-mono uppercase inline-flex items-center gap-1"><Smartphone className="size-3" /> PIX confirmado — finalize a venda</div>
+                ) : (
+                  <Button variant="outline" size="sm" className="w-full gap-2" disabled={total <= 0 || !openReg.data} onClick={() => setPixOpen(true)}>
+                    <Smartphone className="size-4" /> Gerar QR PIX ({brl(total)})
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 
