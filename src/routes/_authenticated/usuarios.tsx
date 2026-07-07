@@ -130,6 +130,13 @@ function UsuariosPage() {
   const loading = storesLoading || rolesLoading || profilesLoading;
   const isGrouped = storeFilter === "__all__";
 
+  const matchesSearch = (userId: string) => {
+    if (!search.trim()) return true;
+    const p = profileMap[userId];
+    const q = search.trim().toLowerCase();
+    return (p?.full_name || "").toLowerCase().includes(q) || (p?.email || "").toLowerCase().includes(q) || userId.toLowerCase().includes(q);
+  };
+
   // Agrupamento por usuário para o modo "Todas as lojas"
   type GroupedUser = {
     user_id: string;
@@ -146,8 +153,54 @@ function UsuariosPage() {
       if (r.created_at < g.earliest) g.earliest = r.created_at;
       map.set(r.user_id, g);
     }
-    return Array.from(map.values()).sort((a, b) => (a.profile?.full_name || a.profile?.email || "").localeCompare(b.profile?.full_name || b.profile?.email || ""));
-  }, [filtered, profileMap, isGrouped]);
+    return Array.from(map.values())
+      .filter((g) => matchesSearch(g.user_id))
+      .sort((a, b) => (a.profile?.full_name || a.profile?.email || "").localeCompare(b.profile?.full_name || b.profile?.email || ""));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, profileMap, isGrouped, search]);
+
+  const filteredSearched = useMemo(() => isGrouped ? filtered : filtered.filter((r) => matchesSearch(r.user_id)),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [filtered, isGrouped, search, profileMap]);
+
+  const totalRows = isGrouped ? grouped.length : filteredSearched.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageEnd = pageStart + pageSize;
+  const groupedPage = grouped.slice(pageStart, pageEnd);
+  const filteredPage = filteredSearched.slice(pageStart, pageEnd);
+
+  const exportCsv = () => {
+    const header = ["usuario_nome", "usuario_email", "user_id", "loja", "store_id", "papel", "codigo", "loja_padrao", "criado_em"];
+    const rows = filtered
+      .filter((r) => matchesSearch(r.user_id))
+      .map((r) => {
+        const p = profileMap[r.user_id];
+        const s = storeMap[r.store_id];
+        return [
+          p?.full_name ?? "",
+          p?.email ?? "",
+          r.user_id,
+          s?.fantasy_name ?? s?.name ?? "",
+          r.store_id,
+          r.role,
+          getCode(r.store_id, r.user_id) ?? "",
+          p?.default_store_id === r.store_id ? "sim" : "nao",
+          new Date(r.created_at).toISOString(),
+        ];
+      });
+    const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [header, ...rows].map((row) => row.map(esc).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vinculos-usuarios-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${rows.length} vínculo(s) exportado(s)`);
+  };
 
   const linkUser = useMutation({
     mutationFn: async (payload: z.infer<typeof linkSchema>) => linkUserToStore({ data: payload }),
