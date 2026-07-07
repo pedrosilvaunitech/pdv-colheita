@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { createPixCharge, checkPixCharge, confirmPixManually } from "@/lib/pix.functions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Copy, CheckCircle2, Loader2, QrCode, RefreshCw } from "lucide-react";
+import { Copy, CheckCircle2, Loader2, QrCode, RefreshCw, Settings2, AlertTriangle } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -25,15 +26,21 @@ export function PixChargeModal({ open, onClose, onPaid, storeId, amount, descrip
 
   const [charge, setCharge] = useState<{ id: string; brcode: string; qr_image: string | null; provider: string; status: string } | null>(null);
 
+  const [configMissing, setConfigMissing] = useState(false);
+
   const create = useMutation({
     mutationFn: async () => createFn({ data: { storeId, amount, description } }),
-    onSuccess: (data) => setCharge(data as never),
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: (data) => { setCharge(data as never); setConfigMissing(false); },
+    onError: (e: Error) => {
+      const msg = e.message || "";
+      if (/PIX não configurado|Configure chave PIX/i.test(msg)) { setConfigMissing(true); return; }
+      toast.error(msg);
+    },
   });
 
   useEffect(() => {
-    if (open && !charge && !create.isPending) create.mutate();
-    if (!open) setCharge(null);
+    if (open && !charge && !create.isPending && !configMissing) create.mutate();
+    if (!open) { setCharge(null); setConfigMissing(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
