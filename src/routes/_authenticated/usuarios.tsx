@@ -497,6 +497,10 @@ function UsuariosPage() {
                     <TableCell className="font-mono text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex gap-1">
+                        <Button size="icon" variant="ghost" className="size-8" title="Editar usuário"
+                          onClick={() => setEditUser({ userId: r.user_id, email: p?.email ?? r.user_id, fullName: p?.full_name ?? "" })}>
+                          <Pencil className="size-3.5" />
+                        </Button>
                         <Button size="icon" variant="ghost" className="size-8" title="Vincular a outra loja"
                           disabled={!p?.email}
                           onClick={() => { setLinkPrefill({ email: p?.email ?? "" }); setLinkOpen(true); }}>
@@ -523,6 +527,7 @@ function UsuariosPage() {
             </TableBody>
           </Table>
         </div>
+
 
         {totalRows > pageSize && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
