@@ -339,8 +339,8 @@ function PdvPage() {
           <form onSubmit={(e) => { e.preventDefault(); addByBarcode(scan); }} className="border border-border rounded-md bg-card p-4 flex items-center gap-3">
             <ScanBarcode className="size-8 text-primary" />
             <div className="flex-1">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Leitor de código de barras</div>
-              <Input ref={inputRef} value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Bipe ou digite o código EAN e Enter" className="border-0 shadow-none text-2xl font-mono h-12 focus-visible:ring-0 px-0" autoFocus disabled={!openReg.data} />
+              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Leitor · use <span className="text-primary">N*</span> antes do código para quantidade (ex.: 3*789… ou apenas 5* para multiplicar o último item)</div>
+              <Input ref={inputRef} value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Bipe ou digite EAN — prefixo N* multiplica" className="border-0 shadow-none text-2xl font-mono h-12 focus-visible:ring-0 px-0" autoFocus disabled={!openReg.data} />
             </div>
             <Button type="submit" size="lg" className="h-12" disabled={!openReg.data}>Adicionar</Button>
           </form>
