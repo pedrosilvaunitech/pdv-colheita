@@ -81,8 +81,45 @@ function UsuariosPage() {
     },
   });
 
+  // Códigos de administrador (5 dígitos) por (loja, usuário)
+  const { data: codes = [] } = useQuery({
+    queryKey: ["user-store-codes", storeIds],
+    enabled: storeIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_store_codes")
+        .select("store_id,user_id,admin_code")
+        .in("store_id", storeIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const codeMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const c of codes) m[`${c.store_id}:${c.user_id}`] = c.admin_code;
+    return m;
+  }, [codes]);
+  const getCode = (storeId: string, userId: string) => codeMap[`${storeId}:${userId}`];
+
   const profileMap = useMemo(() => Object.fromEntries(profiles.map((p) => [p.id, p])), [profiles]);
   const storeMap = useMemo(() => Object.fromEntries(stores.map((s) => [s.id, s])), [stores]);
+
+  const regenCode = useMutation({
+    mutationFn: async (payload: { storeId: string; userId: string }) => {
+      const { data, error } = await supabase.rpc("regenerate_admin_code", {
+        _store_id: payload.storeId, _user_id: payload.userId,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: async (code) => {
+      toast.success(`Novo código: ${code}`);
+      await qc.invalidateQueries({ queryKey: ["user-store-codes"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const [masterOpen, setMasterOpen] = useState<{ storeId: string; storeName: string } | null>(null);
 
   const filtered = storeFilter === "__all__" ? roles : roles.filter((r) => r.store_id === storeFilter);
   const loading = storesLoading || rolesLoading || profilesLoading;
