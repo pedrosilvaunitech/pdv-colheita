@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Copy, CheckCircle2, Loader2, QrCode, RefreshCw, Settings2, AlertTriangle } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface Props {
   open: boolean;

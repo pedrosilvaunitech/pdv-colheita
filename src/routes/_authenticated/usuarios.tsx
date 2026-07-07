@@ -18,6 +18,7 @@ import { Loader2, UserPlus, Star, RefreshCw, ShieldAlert, CheckCircle2, UserCog,
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
   component: UsuariosPage,
