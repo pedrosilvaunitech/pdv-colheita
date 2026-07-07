@@ -14,7 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { buildReceiptHTML, printReceipt } from "@/lib/receipt";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock } from "lucide-react";
+import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode } from "lucide-react";
+import { PixSettingsTab } from "@/components/pix-settings-tab";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({ component: SettingsPage });
 
@@ -228,6 +229,7 @@ function SettingsPage() {
             <TabsTrigger value="recibo">Cupom / Nota</TabsTrigger>
             <TabsTrigger value="fiscal">Fiscal & Certificado A1</TabsTrigger>
             <TabsTrigger value="numeracao">Numeração NFC-e/NF-e</TabsTrigger>
+            <TabsTrigger value="pix" className="gap-1"><QrCode className="size-3" /> PIX</TabsTrigger>
           </TabsList>
 
           <TabsContent value="recibo" className="mt-4">
@@ -447,6 +449,10 @@ function SettingsPage() {
                 <div><Label>Próximo número</Label><Input type="number" value={fiscal.nfe_next_number} onChange={(e) => setFiscal({ ...fiscal, nfe_next_number: Number(e.target.value) })} /></div>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="pix" className="mt-4">
+            <PixSettingsTab storeId={storeId!} />
           </TabsContent>
         </Tabs>
       </div>
