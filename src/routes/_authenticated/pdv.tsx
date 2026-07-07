@@ -172,6 +172,7 @@ function PdvPage() {
         description={`Loja ${store.fantasy_name || store.name}${openReg.data ? ` · caixa ${openReg.data.terminal} aberto` : " · CAIXA FECHADO"}`}
         actions={
           <div className="flex items-center gap-2">
+            <EscPosButton />
             <Select value={docType} onValueChange={(v) => setDocType(v as "fiscal" | "nao_fiscal")}>
               <SelectTrigger className="w-56 h-9">
                 <SelectValue />
@@ -309,3 +310,30 @@ function PayBtn({ active, onClick, icon: Icon, label }: { active: boolean; onCli
 }
 
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+
+function EscPosButton() {
+  const [enabled, setEnabled] = useState<boolean>(() => isEscPosEnabled());
+  const supported = isEscPosSupported();
+  const onConnect = async () => {
+    try {
+      await requestEscPosPort();
+      setEnabled(true);
+      toast.success("Impressora térmica conectada · impressão ESC/POS ativa");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao conectar impressora");
+    }
+  };
+  const onDisconnect = () => { setEscPosEnabled(false); setEnabled(false); toast.info("Impressão ESC/POS desativada · voltando ao HTML"); };
+  if (!supported) {
+    return <span className="text-[10px] font-mono uppercase text-muted-foreground border border-dashed border-border rounded px-2 py-1">Web Serial n/d</span>;
+  }
+  return enabled ? (
+    <Button variant="outline" size="sm" className="gap-2 h-9" onClick={onDisconnect}>
+      <Printer className="size-4 text-primary" /><span className="text-xs">ESC/POS ativo</span>
+    </Button>
+  ) : (
+    <Button variant="outline" size="sm" className="gap-2 h-9" onClick={onConnect}>
+      <Printer className="size-4" /><span className="text-xs">Conectar impressora</span>
+    </Button>
+  );
+}
