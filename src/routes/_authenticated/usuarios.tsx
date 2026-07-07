@@ -207,6 +207,7 @@ function UsuariosPage() {
     onSuccess: async () => {
       toast.success("Usuário vinculado à loja");
       setLinkOpen(false);
+      setLinkPrefill(null);
       await qc.invalidateQueries({ queryKey: ["roles-all"] });
       await qc.invalidateQueries({ queryKey: ["profiles-of-roles"] });
       await qc.invalidateQueries({ queryKey: ["stores"] });
