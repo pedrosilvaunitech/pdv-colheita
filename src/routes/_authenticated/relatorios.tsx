@@ -20,7 +20,7 @@ type SaleRow = { id: string; total: number; created_at: string; finalized_at: st
 type ItemRow = { sale_id: string; product_id: string; product_name: string; quantity: number; total: number };
 type ProductRow = { id: string; name: string; category: string | null; min_stock: number; max_stock: number | null; reorder_qty: number | null };
 type StockRow = { product_id: string; quantity: number; min_quantity: number };
-type PaymentRow = { method: string; amount: number; sale_id: string };
+type PaymentRow = { method: string; amount: number; sale_id: string; installments: number | null };
 
 function RelatoriosPage() {
   const { store, storeId } = useCurrentStore();
