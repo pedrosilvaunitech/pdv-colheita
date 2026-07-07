@@ -512,9 +512,10 @@ function PdvPage() {
           )}
 
           <div className="border border-border rounded-md bg-card p-4 space-y-2">
-            <div className="text-xs font-medium">Desconto (R$)</div>
-            <Input type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="font-mono" />
+            <div className="text-xs font-medium">Desconto (R$) <span className="text-[10px] font-mono text-muted-foreground ml-1">F7</span></div>
+            <Input ref={discountRef} type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="font-mono" />
           </div>
+
 
           <div className="border border-border rounded-md bg-card p-4 space-y-3">
             <div className="text-xs font-medium mb-1">Forma de pagamento</div>
