@@ -20,7 +20,7 @@ type SaleRow = { id: string; total: number; created_at: string; finalized_at: st
 type ItemRow = { sale_id: string; product_id: string; product_name: string; quantity: number; total: number };
 type ProductRow = { id: string; name: string; category: string | null; min_stock: number; max_stock: number | null; reorder_qty: number | null };
 type StockRow = { product_id: string; quantity: number; min_quantity: number };
-type PaymentRow = { method: string; amount: number; sale_id: string };
+type PaymentRow = { method: string; amount: number; sale_id: string; installments: number | null };
 
 function RelatoriosPage() {
   const { store, storeId } = useCurrentStore();
@@ -60,7 +60,7 @@ function RelatoriosPage() {
 
       const [itemsRes, paymentsRes] = await Promise.all([
         supabase.from("sale_items").select("sale_id,product_id,product_name,quantity,total").eq("store_id", storeId!).in("sale_id", saleIds),
-        supabase.from("sale_payments").select("method,amount,sale_id").eq("store_id", storeId!).in("sale_id", saleIds),
+        supabase.from("sale_payments").select("method,amount,sale_id,installments").eq("store_id", storeId!).in("sale_id", saleIds),
       ]);
       if (itemsRes.error) throw itemsRes.error;
       if (paymentsRes.error) throw paymentsRes.error;
@@ -154,6 +154,39 @@ function RelatoriosPage() {
           </div>
         </section>
 
+        <section className="border border-border rounded-md bg-card p-4">
+          <h2 className="text-sm font-semibold mb-3">Detalhamento de pagamentos parciais</h2>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Forma</TableHead>
+                <TableHead className="text-right">Nº de recebimentos</TableHead>
+                <TableHead className="text-right">Ticket médio</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">% do total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.payments.length === 0 && (
+                <TableRow><TableCell colSpan={5} className="text-center py-6 text-sm text-muted-foreground">Sem pagamentos no período.</TableCell></TableRow>
+              )}
+              {data.payments.map((p) => {
+                const paymentsTotal = data.payments.reduce((s, x) => s + x.amount, 0);
+                const share = paymentsTotal > 0 ? (p.amount / paymentsTotal) * 100 : 0;
+                return (
+                  <TableRow key={p.method}>
+                    <TableCell className="font-medium">{p.method}</TableCell>
+                    <TableCell className="text-right font-mono">{p.count}</TableCell>
+                    <TableCell className="text-right font-mono">{brl(p.count > 0 ? p.amount / p.count : 0)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{brl(p.amount)}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{share.toFixed(1)}%</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </section>
+
         <section className="grid gap-4 xl:grid-cols-3">
           <Ranking title="Mais vendidos" rows={data.topSelling} icon={TrendingUp} empty="Sem vendas no período." />
           <Ranking title="Menos vendidos" rows={data.lowSelling} icon={TrendingDown} empty="Sem itens suficientes para ranking." />
@@ -204,9 +237,17 @@ function buildReport(sales: SaleRow[], items: ItemRow[], payments: PaymentRow[],
   const dailyMap = new Map<string, number>();
   for (const s of filteredSales) dailyMap.set(dayKey(new Date(s.created_at)), (dailyMap.get(dayKey(new Date(s.created_at))) || 0) + Number(s.total || 0));
   const daily = Array.from(dailyMap.entries()).map(([date, value]) => ({ label: date.slice(5).split("-").reverse().join("/"), total: value }));
-  const paymentMap = new Map<string, number>();
-  for (const p of filteredPayments) paymentMap.set(paymentLabel(p.method), (paymentMap.get(paymentLabel(p.method)) || 0) + Number(p.amount || 0));
-  const paymentsChart = Array.from(paymentMap.entries()).map(([method, amount]) => ({ method, amount })).sort((a, b) => b.amount - a.amount);
+  const paymentMap = new Map<string, { amount: number; count: number }>();
+  for (const p of filteredPayments) {
+    const key = paymentDetailedLabel(p.method, p.installments);
+    const curr = paymentMap.get(key) ?? { amount: 0, count: 0 };
+    curr.amount += Number(p.amount || 0);
+    curr.count += 1;
+    paymentMap.set(key, curr);
+  }
+  const paymentsChart = Array.from(paymentMap.entries())
+    .map(([method, v]) => ({ method, amount: v.amount, count: v.count }))
+    .sort((a, b) => b.amount - a.amount);
   const itemMap = new Map<string, { productId: string; name: string; category: string; quantity: number; total: number }>();
   for (const item of filteredItems) {
     const prod = productMap.get(item.product_id);
@@ -290,4 +331,10 @@ function monthInput(d: Date) { return d.toISOString().slice(0, 7); }
 function paymentLabel(method: string) {
   const labels: Record<string, string> = { dinheiro: "Dinheiro", pix: "PIX", debito: "Débito", credito: "Crédito", credito_avista: "Crédito à vista", credito_parcelado: "Crédito parcelado" };
   return labels[method] ?? method;
+}
+function paymentDetailedLabel(method: string, installments: number | null) {
+  const base = paymentLabel(method);
+  if (method === "credito" && installments && installments > 1) return `${base} ${installments}x`;
+  if (method === "credito" && (!installments || installments === 1)) return `${base} à vista`;
+  return base;
 }

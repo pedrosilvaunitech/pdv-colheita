@@ -199,19 +199,38 @@ function PdvPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart.length]);
 
+  const MIN_PARCEL_VALUE = 5; // R$ mínimo por parcela (regra usual de adquirente)
+  const MAX_INSTALLMENTS = 12;
+
   const addPayment = () => {
     const value = Number(payAmount || 0);
-    if (value <= 0) { toast.error("Informe o valor do pagamento"); return; }
+    if (!Number.isFinite(value) || value <= 0) { toast.error("Informe um valor válido de pagamento"); return; }
+    // Validação de parcelas — só permite parcelamento em crédito
+    let installments: number | undefined;
+    if (payMethod === "credito") {
+      const n = Math.trunc(Number(payInstallments || 1));
+      if (!Number.isInteger(n) || n < 1 || n > MAX_INSTALLMENTS) {
+        toast.error(`Parcelas devem ser um número inteiro entre 1 e ${MAX_INSTALLMENTS}`); return;
+      }
+      if (n > 1 && value / n < MIN_PARCEL_VALUE) {
+        toast.error(`Cada parcela precisa ser ≥ ${brl(MIN_PARCEL_VALUE)} (parcela atual: ${brl(value / n)})`); return;
+      }
+      installments = n;
+    } else if (payInstallments !== 1) {
+      // reset silencioso: parcelas só existem para crédito
+      setPayInstallments(1);
+    }
     if (payMethod === "pix") {
       if (!openReg.data) { toast.error("Abra o caixa antes"); return; }
       setPixAmount(value);
       setPixOpen(true);
       return;
     }
-    const label = payMethod === "credito" && payInstallments > 1
-      ? `Crédito ${payInstallments}x`
+    const label = installments && installments > 1
+      ? `Crédito ${installments}x de ${brl(value / installments)}`
       : METHOD_LABEL[payMethod];
-    setPayments((p) => [...p, { method: payMethod, amount: value, installments: payMethod === "credito" ? payInstallments : undefined, label }]);
+    setPayments((p) => [...p, { method: payMethod, amount: value, installments, label }]);
+    setPayAmount("");
     setPayInstallments(1);
   };
 
@@ -277,13 +296,21 @@ function PdvPage() {
       toast.success(docType === "fiscal" ? "Venda finalizada · NFC-e pendente de emissão" : "Venda finalizada");
       const shouldPrint = settings.data?.print_auto ?? true;
       if (shouldPrint && store) {
+        const change = overpaid;
+        // pagamentos "efetivos" (com troco descontado do último dinheiro) para o recibo
+        const receiptPayments = payments.map((p) => ({ ...p }));
+        if (change > 0) {
+          const lastCashIdx = [...receiptPayments].reverse().findIndex((p) => p.method === "dinheiro");
+          const targetIdx = lastCashIdx === -1 ? receiptPayments.length - 1 : receiptPayments.length - 1 - lastCashIdx;
+          receiptPayments[targetIdx] = { ...receiptPayments[targetIdx], amount: Number((receiptPayments[targetIdx].amount - change).toFixed(2)) };
+        }
         const paymentLabel = payments.map((p) => `${p.label} ${brl(p.amount)}`).join(" + ");
         const r: ReceiptData = {
           store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: [store.city, store.state].filter(Boolean).join(" · ") || null, phone: null },
           header: settings.data?.header_text ?? null, footer: settings.data?.footer_text ?? null,
           paper_width: (settings.data?.paper_width ?? 80) as 58 | 80,
           items: cart.map((i) => ({ name: i.name, quantity: i.quantity, unit_price: i.unit_price, total: i.quantity * i.unit_price, barcode: i.barcode })),
-          subtotal, discount: disc, total, payment_method: paymentLabel || "—", received: paid, change: overpaid,
+          subtotal, discount: disc, total, payment_method: paymentLabel || "—", payments: receiptPayments, received: paid, change: overpaid,
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };

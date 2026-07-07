@@ -127,7 +127,18 @@ export function buildEscPosPayload(r: ReceiptData): Uint8Array {
   chunks.push(bytes(ESC, 0x21, 0x08));
   chunks.push(enc(line(cols, "TOTAL", brl(r.total)) + "\n"));
   chunks.push(bytes(ESC, 0x21, 0x00));
-  chunks.push(enc(line(cols, r.payment_method.toUpperCase(), brl(r.received ?? r.total)) + "\n"));
+  if (r.payments && r.payments.length > 0) {
+    chunks.push(enc("PAGAMENTOS\n"));
+    for (const p of r.payments) {
+      chunks.push(enc(line(cols, p.label.toUpperCase(), brl(p.amount)) + "\n"));
+      if (p.installments && p.installments > 1) {
+        chunks.push(enc(line(cols, `  ${p.installments}x de ${brl(p.amount / p.installments)}`, "") + "\n"));
+      }
+    }
+    chunks.push(enc(line(cols, "RECEBIDO", brl(r.received ?? r.total)) + "\n"));
+  } else {
+    chunks.push(enc(line(cols, r.payment_method.toUpperCase(), brl(r.received ?? r.total)) + "\n"));
+  }
   if (r.change && r.change > 0) chunks.push(enc(line(cols, "TROCO", brl(r.change)) + "\n"));
   chunks.push(enc(sep(cols) + "\n"));
   chunks.push(bytes(ESC, 0x61, 0x01));
