@@ -1,0 +1,8 @@
+// Exemplo de configuração — copie como `config.json` ao lado do executável.
+// Windows: C:\Program Files\Bastion POS\config.json
+// macOS:   /Applications/BastionPOSAgent.app/Contents/config.json
+{
+  "url": "https://SEU-PROJETO.lovable.app/pdv?kiosk=1",
+  "kiosk": true,
+  "startMinimized": false
+}

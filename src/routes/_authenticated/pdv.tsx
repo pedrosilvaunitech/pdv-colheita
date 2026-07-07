@@ -11,7 +11,8 @@ import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, F
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
-import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled, tryPrintEscPos } from "@/lib/escpos";
+import { tryPrintEscPos } from "@/lib/escpos";
+import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
 import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 import { ScaleWidget } from "@/components/pdv/scale-widget";
@@ -473,29 +474,4 @@ function PayBtn({ active, onClick, icon: Icon, label }: { active: boolean; onCli
 
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 
-function EscPosButton() {
-  const [enabled, setEnabled] = useState<boolean>(() => isEscPosEnabled());
-  const supported = isEscPosSupported();
-  const onConnect = async () => {
-    try {
-      await requestEscPosPort();
-      setEnabled(true);
-      toast.success("Impressora térmica conectada · impressão ESC/POS ativa");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao conectar impressora");
-    }
-  };
-  const onDisconnect = () => { setEscPosEnabled(false); setEnabled(false); toast.info("Impressão ESC/POS desativada · voltando ao HTML"); };
-  if (!supported) {
-    return <span className="text-[10px] font-mono uppercase text-muted-foreground border border-dashed border-border rounded px-2 py-1">Web Serial n/d</span>;
-  }
-  return enabled ? (
-    <Button variant="outline" size="sm" className="gap-2 h-9" onClick={onDisconnect}>
-      <Printer className="size-4 text-primary" /><span className="text-xs">ESC/POS ativo</span>
-    </Button>
-  ) : (
-    <Button variant="outline" size="sm" className="gap-2 h-9" onClick={onConnect}>
-      <Printer className="size-4" /><span className="text-xs">Conectar impressora</span>
-    </Button>
-  );
-}
+function EscPosButton() { return <EscPosPrinterButton />; }

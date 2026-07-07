@@ -138,8 +138,39 @@ export function buildEscPosPayload(r: ReceiptData): Uint8Array {
   return bytes(...chunks);
 }
 
-/** Tenta imprimir via ESC/POS. Retorna false se não foi possível (chamador imprime HTML). */
+import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw } from "./escpos-usb";
+import { isPrintAgentEnabled, pingPrintAgent, printViaAgent } from "./print-agent";
+
+/**
+ * Tenta imprimir usando (nesta ordem, para máxima compatibilidade):
+ *   1. Agente de Impressão Local (executável .exe/.msi/.pkg em 127.0.0.1:9100)
+ *   2. WebUSB (impressora USB direta — melhor em Linux/macOS)
+ *   3. Web Serial (impressora serial ou USB-to-Serial)
+ * Retorna `false` se nenhum caminho funcionou — o chamador imprime HTML.
+ */
 export async function tryPrintEscPos(r: ReceiptData): Promise<boolean> {
+  const payload = buildEscPosPayload(r);
+
+  // 1) Agente local
+  if (isPrintAgentEnabled()) {
+    try {
+      const st = await pingPrintAgent();
+      if (st.online) {
+        await printViaAgent(payload);
+        return true;
+      }
+    } catch (err) { console.warn("[escpos] agente falhou:", err); }
+  }
+
+  // 2) WebUSB direto
+  if (isWebUsbSupported()) {
+    try {
+      const dev = await getGrantedUsbPrinter();
+      if (dev) { await printUsbRaw(dev, payload); return true; }
+    } catch (err) { console.warn("[escpos] webusb falhou:", err); }
+  }
+
+  // 3) Web Serial (fallback histórico)
   if (!isEscPosEnabled()) return false;
   const port = await getGrantedPort();
   if (!port) return false;
@@ -147,12 +178,12 @@ export async function tryPrintEscPos(r: ReceiptData): Promise<boolean> {
     await port.open({ baudRate: 9600 });
     const writer = port.writable?.getWriter();
     if (!writer) { await port.close(); return false; }
-    await writer.write(buildEscPosPayload(r));
+    await writer.write(payload);
     await writer.close();
     await port.close();
     return true;
   } catch (err) {
-    console.warn("[escpos] falha:", err);
+    console.warn("[escpos] serial falhou:", err);
     try { await port.close(); } catch { /* ignore */ }
     return false;
   }
