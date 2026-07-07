@@ -394,6 +394,7 @@ function UsuariosPage() {
                     </TableCell>
                     <TableCell className="text-sm">{s?.fantasy_name || s?.name || <span className="text-muted-foreground font-mono text-[10px]">{r.store_id}</span>}</TableCell>
                     <TableCell><RoleBadge role={r.role} /></TableCell>
+                    <TableCell><CodeChip code={getCode(r.store_id, r.user_id)} onRegen={() => regenCode.mutate({ storeId: r.store_id, userId: r.user_id })} /></TableCell>
                     <TableCell>
                       {isDefault ? (
                         <Badge variant="outline" className="border-primary/40 text-primary gap-1"><Star className="size-3" /> Padrão</Badge>
