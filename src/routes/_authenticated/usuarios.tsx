@@ -600,7 +600,7 @@ function LinkUserDialog({
   );
 }
 
-function RoleBadge({ role }: { role: string }) {
+function RoleBadge({ role, compact = false }: { role: string; compact?: boolean }) {
   const map: Record<string, string> = {
     admin_dev: "border-destructive/40 text-destructive",
     admin: "border-primary/40 text-primary",
@@ -608,7 +608,7 @@ function RoleBadge({ role }: { role: string }) {
     caixa: "border-warning/40 text-warning",
     estoquista: "border-muted-foreground/40 text-muted-foreground",
   };
-  return <Badge variant="outline" className={map[role] || ""}>{role.replace("_", " ")}</Badge>;
+  return <Badge variant="outline" className={`${map[role] || ""} ${compact ? "px-1.5 py-0 text-[10px] leading-tight font-mono uppercase" : ""}`}>{role.replace("_", " ")}</Badge>;
 }
 
 function CreateUserDialog({
