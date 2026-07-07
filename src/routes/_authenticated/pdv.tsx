@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
 import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled, tryPrintEscPos } from "@/lib/escpos";
+import { PixChargeModal } from "@/components/pix-charge-modal";
 
 export const Route = createFileRoute("/_authenticated/pdv")({ component: PdvPage });
 
@@ -38,6 +39,8 @@ function PdvPage() {
   const [customerCpf, setCustomerCpf] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [discount, setDiscount] = useState("0");
+  const [pixOpen, setPixOpen] = useState(false);
+  const [pixPaid, setPixPaid] = useState(false);
 
   const settings = useQuery({
     queryKey: ["receipt_settings", storeId],
@@ -102,6 +105,7 @@ function PdvPage() {
       if (!storeId || cart.length === 0) throw new Error("Carrinho vazio");
       if (!openReg.data) throw new Error("Abra o caixa antes de vender");
       if (method === "dinheiro" && Number(received || 0) < total) throw new Error("Valor recebido insuficiente");
+      if (method === "pix" && !pixPaid) throw new Error("Aguardando confirmação do PIX");
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error("Não autenticado");
 
@@ -155,7 +159,7 @@ function PdvPage() {
         const printed = await tryPrintEscPos(r);
         if (!printed) printReceipt(buildReceiptHTML(r));
       }
-      setCart([]); setReceived(""); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
+      setCart([]); setReceived(""); setDiscount("0"); setCustomerCpf(""); setCustomerName(""); setPixPaid(false);
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["cash_sales"] });
       inputRef.current?.focus();
@@ -281,7 +285,15 @@ function PdvPage() {
               </div>
             )}
             {method === "pix" && (
-              <div className="text-[10px] font-mono uppercase text-muted-foreground">Pix real (QR dinâmico) na Fase 3</div>
+              <div className="space-y-2">
+                {pixPaid ? (
+                  <div className="text-xs text-primary font-mono uppercase inline-flex items-center gap-1"><Smartphone className="size-3" /> PIX confirmado — finalize a venda</div>
+                ) : (
+                  <Button variant="outline" size="sm" className="w-full gap-2" disabled={total <= 0 || !openReg.data} onClick={() => setPixOpen(true)}>
+                    <Smartphone className="size-4" /> Gerar QR PIX ({brl(total)})
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 
@@ -296,6 +308,17 @@ function PdvPage() {
           )}
         </div>
       </div>
+
+      {storeId && (
+        <PixChargeModal
+          open={pixOpen}
+          onClose={() => setPixOpen(false)}
+          onPaid={() => { setPixPaid(true); setPixOpen(false); }}
+          storeId={storeId}
+          amount={total}
+          description={`Venda PDV · ${cart.length} item(ns)`}
+        />
+      )}
     </div>
   );
 }

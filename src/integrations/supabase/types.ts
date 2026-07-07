@@ -397,6 +397,170 @@ export type Database = {
           },
         ]
       }
+      pix_charges: {
+        Row: {
+          amount: number
+          brcode: string
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          expires_at: string | null
+          external_id: string | null
+          id: string
+          paid_at: string | null
+          payer_doc: string | null
+          payer_name: string | null
+          provider: string
+          qr_image: string | null
+          raw_response: Json | null
+          sale_id: string | null
+          status: string
+          store_id: string
+          txid: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          brcode: string
+          created_at?: string
+          created_by?: string | null
+          end_to_end_id?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          id?: string
+          paid_at?: string | null
+          payer_doc?: string | null
+          payer_name?: string | null
+          provider: string
+          qr_image?: string | null
+          raw_response?: Json | null
+          sale_id?: string | null
+          status?: string
+          store_id: string
+          txid: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          brcode?: string
+          created_at?: string
+          created_by?: string | null
+          end_to_end_id?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          id?: string
+          paid_at?: string | null
+          payer_doc?: string | null
+          payer_name?: string | null
+          provider?: string
+          qr_image?: string | null
+          raw_response?: Json | null
+          sale_id?: string | null
+          status?: string
+          store_id?: string
+          txid?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pix_charges_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pix_charges_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pix_configs: {
+        Row: {
+          asaas_api_key_set: boolean
+          bank_certificate_path: string | null
+          bank_certificate_uploaded: boolean
+          bank_client_id: string | null
+          bank_client_secret_set: boolean
+          created_at: string
+          efi_certificate_path: string | null
+          efi_certificate_uploaded: boolean
+          efi_client_id: string | null
+          efi_client_secret_set: boolean
+          environment: string
+          merchant_city: string | null
+          merchant_name: string | null
+          mode: string
+          mp_access_token_set: boolean
+          mp_client_id: string | null
+          notes: string | null
+          pix_key: string | null
+          pix_key_type: string | null
+          store_id: string
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          asaas_api_key_set?: boolean
+          bank_certificate_path?: string | null
+          bank_certificate_uploaded?: boolean
+          bank_client_id?: string | null
+          bank_client_secret_set?: boolean
+          created_at?: string
+          efi_certificate_path?: string | null
+          efi_certificate_uploaded?: boolean
+          efi_client_id?: string | null
+          efi_client_secret_set?: boolean
+          environment?: string
+          merchant_city?: string | null
+          merchant_name?: string | null
+          mode?: string
+          mp_access_token_set?: boolean
+          mp_client_id?: string | null
+          notes?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
+          store_id: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          asaas_api_key_set?: boolean
+          bank_certificate_path?: string | null
+          bank_certificate_uploaded?: boolean
+          bank_client_id?: string | null
+          bank_client_secret_set?: boolean
+          created_at?: string
+          efi_certificate_path?: string | null
+          efi_certificate_uploaded?: boolean
+          efi_client_id?: string | null
+          efi_client_secret_set?: boolean
+          environment?: string
+          merchant_city?: string | null
+          merchant_name?: string | null
+          mode?: string
+          mp_access_token_set?: boolean
+          mp_client_id?: string | null
+          notes?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
+          store_id?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pix_configs_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_stocks: {
         Row: {
           id: string

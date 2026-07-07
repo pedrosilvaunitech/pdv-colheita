@@ -26,6 +26,7 @@ import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authen
 import { Route as AuthenticatedComprasRouteImport } from './routes/_authenticated/compras'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 import { Route as AuthenticatedCaixaRouteImport } from './routes/_authenticated/caixa'
+import { Route as ApiPublicPixWebhookProviderRouteImport } from './routes/api/public/pix-webhook.$provider'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -113,6 +114,12 @@ const AuthenticatedCaixaRoute = AuthenticatedCaixaRouteImport.update({
   path: '/caixa',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicPixWebhookProviderRoute =
+  ApiPublicPixWebhookProviderRouteImport.update({
+    id: '/api/public/pix-webhook/$provider',
+    path: '/api/public/pix-webhook/$provider',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/relatorios': typeof AuthenticatedRelatoriosRoute
   '/reposicao': typeof AuthenticatedReposicaoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
+  '/api/public/pix-webhook/$provider': typeof ApiPublicPixWebhookProviderRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -149,6 +157,7 @@ export interface FileRoutesByTo {
   '/relatorios': typeof AuthenticatedRelatoriosRoute
   '/reposicao': typeof AuthenticatedReposicaoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
+  '/api/public/pix-webhook/$provider': typeof ApiPublicPixWebhookProviderRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -169,6 +178,7 @@ export interface FileRoutesById {
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRoute
   '/_authenticated/reposicao': typeof AuthenticatedReposicaoRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
+  '/api/public/pix-webhook/$provider': typeof ApiPublicPixWebhookProviderRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/reposicao'
     | '/usuarios'
+    | '/api/public/pix-webhook/$provider'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/reposicao'
     | '/usuarios'
+    | '/api/public/pix-webhook/$provider'
   id:
     | '__root__'
     | '/'
@@ -226,12 +238,14 @@ export interface FileRouteTypes {
     | '/_authenticated/relatorios'
     | '/_authenticated/reposicao'
     | '/_authenticated/usuarios'
+    | '/api/public/pix-webhook/$provider'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicPixWebhookProviderRoute: typeof ApiPublicPixWebhookProviderRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -355,6 +369,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCaixaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/pix-webhook/$provider': {
+      id: '/api/public/pix-webhook/$provider'
+      path: '/api/public/pix-webhook/$provider'
+      fullPath: '/api/public/pix-webhook/$provider'
+      preLoaderRoute: typeof ApiPublicPixWebhookProviderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -399,6 +420,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicPixWebhookProviderRoute: ApiPublicPixWebhookProviderRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
