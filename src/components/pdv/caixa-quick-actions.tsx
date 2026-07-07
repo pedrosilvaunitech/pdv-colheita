@@ -193,7 +193,7 @@ function OpenButton({ storeId, onDone }: { storeId: string; onDone: () => void }
       <DialogContent>
         <DialogHeader><DialogTitle>Abrir caixa</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <AdminCodeField code={code} setCode={setCode} admin={admin} setAdmin={setAdmin} storeId={storeId} perm={PERM_PLACEHOLDER} />
+          <AdminCodeField code={code} setCode={setCode} admin={admin} setAdmin={setAdmin} storeId={storeId} perm="can_open_close_cash" />
           <div><Label>Terminal</Label><Input value={terminal} onChange={(e) => setTerminal(e.target.value)} /></div>
           <div><Label>Fundo de troco (R$)</Label><Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="font-mono" /></div>
         </div>
@@ -235,7 +235,7 @@ function CloseButton({ storeId, regId, onDone }: { storeId: string; regId: strin
       <DialogContent>
         <DialogHeader><DialogTitle>Fechar caixa</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <AdminCodeField code={code} setCode={setCode} admin={admin} setAdmin={setAdmin} storeId={storeId} perm={PERM_PLACEHOLDER} />
+          <AdminCodeField code={code} setCode={setCode} admin={admin} setAdmin={setAdmin} storeId={storeId} perm="can_open_close_cash" />
           <div><Label>Valor contado em dinheiro (R$)</Label><Input type="number" step="0.01" value={counted} onChange={(e) => setCounted(e.target.value)} className="font-mono text-lg" /></div>
           <div className="text-xs text-muted-foreground">Confira o valor contado antes de confirmar. O relatório completo com diferença fica em <b>Caixa</b>.</div>
         </div>
@@ -288,7 +288,7 @@ function MovementButton({ storeId, regId, type, label, icon: Icon, tone, onDone 
       <DialogContent>
         <DialogHeader><DialogTitle>{label}</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <AdminCodeField code={code} setCode={setCode} admin={admin} setAdmin={setAdmin} storeId={storeId} perm={PERM_PLACEHOLDER} />
+          <AdminCodeField code={code} setCode={setCode} admin={admin} setAdmin={setAdmin} storeId={storeId} perm={movType === "sangria" || movType === "retirada" ? "can_sangria" : "can_open_close_cash"} />
           <div>
             <Label>Tipo</Label>
             <Select value={movType} onValueChange={(v) => setMovType(v as typeof movType)}>
