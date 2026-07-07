@@ -522,3 +522,123 @@ function RoleBadge({ role }: { role: string }) {
   };
   return <Badge variant="outline" className={map[role] || ""}>{role.replace("_", " ")}</Badge>;
 }
+
+function CreateUserDialog({
+  stores, loading, onSubmit,
+}: {
+  stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
+  loading: boolean;
+  onSubmit: (payload: z.infer<typeof createSchema>) => void;
+}) {
+  const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState<AppRole>("caixa");
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = createSchema.safeParse({ storeId, email, password, fullName, role });
+    if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
+    onSubmit(parsed.data);
+  };
+
+  const gen = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#";
+    let p = "";
+    const arr = new Uint32Array(14);
+    crypto.getRandomValues(arr);
+    for (const v of arr) p += chars[v % chars.length];
+    setPassword(p);
+  };
+
+  return (
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Criar nova conta de usuário</DialogTitle></DialogHeader>
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="new-name">Nome completo</Label>
+          <Input id="new-name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="new-email">Email</Label>
+          <Input id="new-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="off" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="new-pass">Senha inicial</Label>
+          <div className="flex gap-2">
+            <Input id="new-pass" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="font-mono" autoComplete="new-password" />
+            <Button type="button" variant="outline" onClick={gen}>Gerar</Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Envie ao usuário. Ele pode trocar depois em Configurações.</p>
+        </div>
+        <div className="space-y-2">
+          <Label>Loja</Label>
+          <Select value={storeId} onValueChange={setStoreId}>
+            <SelectTrigger><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
+            <SelectContent>
+              {stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.fantasy_name || s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Papel</Label>
+          <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="admin_dev">Admin Dev</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="gerente">Gerente</SelectItem>
+              <SelectItem value="caixa">Caixa</SelectItem>
+              <SelectItem value="estoquista">Estoquista</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button type="submit" disabled={loading || !storeId}>
+            {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Criar e vincular
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  );
+}
+
+function ChangeRoleDialog({
+  current, loading, onSubmit,
+}: {
+  current: { role: string; email?: string };
+  loading: boolean;
+  onSubmit: (role: AppRole) => void;
+}) {
+  const [role, setRole] = useState<AppRole>(current.role as AppRole);
+  return (
+    <DialogContent className="max-w-sm">
+      <DialogHeader><DialogTitle>Alterar papel</DialogTitle></DialogHeader>
+      <div className="space-y-3">
+        <div className="text-xs text-muted-foreground">Usuário: <span className="font-mono">{current.email}</span></div>
+        <div>
+          <Label>Novo papel</Label>
+          <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="admin_dev">Admin Dev</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="gerente">Gerente</SelectItem>
+              <SelectItem value="caixa">Caixa</SelectItem>
+              <SelectItem value="estoquista">Estoquista</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button disabled={loading || role === current.role} onClick={() => onSubmit(role)}>
+          {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
+          Salvar
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
