@@ -127,7 +127,7 @@ function ProdutosPage() {
       const CHUNK = 25;
       for (let i = 0; i < updates.length; i += CHUNK) {
         const slice = updates.slice(i, i + CHUNK);
-        await Promise.all(slice.map((u) => supabase.from("products").update({ [field]: u.next }).eq("id", u.id)));
+        await Promise.all(slice.map((u) => supabase.from("products").update(field === "price_sell" ? { price_sell: u.next } : { price_cost: u.next }).eq("id", u.id)));
       }
     },
     onSuccess: (_d, v) => { toast.success(`Preços atualizados em ${v.ids.length} produto(s)`); setBulkPriceOpen(false); invalidate(); },
