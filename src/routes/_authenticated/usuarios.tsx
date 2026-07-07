@@ -327,7 +327,7 @@ function UsuariosPage() {
             </div>
 
 
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-3 flex-wrap">
           <div className="w-72">
             <Label className="text-xs">Filtrar por loja</Label>
             <Select value={storeFilter} onValueChange={setStoreFilter}>
@@ -340,8 +340,15 @@ function UsuariosPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="w-72">
+            <Label className="text-xs">Buscar usuário</Label>
+            <div className="relative mt-1">
+              <Search className="size-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nome ou email..." className="pl-7 h-9" />
+            </div>
+          </div>
           <div className="text-xs text-muted-foreground pb-2">
-            {filtered.length} vínculo(s) · {new Set(filtered.map((r) => r.user_id)).size} usuário(s)
+            {filteredSearched.length} vínculo(s) · {new Set(filteredSearched.map((r) => r.user_id)).size} usuário(s)
           </div>
           {storeFilter !== "__all__" && (() => {
             const s = storeMap[storeFilter];
