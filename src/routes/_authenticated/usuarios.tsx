@@ -280,6 +280,16 @@ function UsuariosPage() {
           <div className="text-xs text-muted-foreground pb-2">
             {filtered.length} vínculo(s) · {new Set(filtered.map((r) => r.user_id)).size} usuário(s)
           </div>
+          {storeFilter !== "__all__" && (() => {
+            const s = storeMap[storeFilter];
+            return s ? (
+              <div className="ml-auto pb-1">
+                <Button size="sm" variant="outline" className="gap-2" onClick={() => setMasterOpen({ storeId: s.id, storeName: s.fantasy_name || s.name })}>
+                  <Shield className="size-4" /> Senha mestra
+                </Button>
+              </div>
+            ) : null;
+          })()}
         </div>
 
         <div className="border border-border rounded-md bg-card overflow-hidden">
