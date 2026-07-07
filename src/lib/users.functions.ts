@@ -36,12 +36,15 @@ export const createUserByAdmin = createServerFn({ method: "POST" })
   .inputValidator((data) => createUserSchema.parse(data))
   .handler(async ({ data, context }) => {
     // Autorização: só admin/admin_dev/gerente da loja pode criar usuário
-    const { data: canManage, error: roleErr } = await context.supabase.rpc("can_manage_store", {
-      _user_id: context.userId,
-      _store_id: data.storeId,
-    });
+    const { data: managerRole, error: roleErr } = await context.supabase
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", context.userId)
+      .eq("store_id", data.storeId)
+      .in("role", ["admin_dev", "admin", "gerente"])
+      .maybeSingle();
     if (roleErr) throw new Error(roleErr.message);
-    if (!canManage) throw new Error("Sem permissão para criar usuários nesta loja.");
+    if (!managerRole) throw new Error("Sem permissão para criar usuários nesta loja.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -113,14 +116,7 @@ export const deleteUserAccount = createServerFn({ method: "POST" })
       .select("store_id")
       .eq("user_id", data.userId);
     if (shErr) throw new Error(shErr.message);
-    let allowed = false;
-    for (const r of sharedRoles ?? []) {
-      const { data: ok } = await context.supabase.rpc("can_manage_store", {
-        _user_id: context.userId,
-        _store_id: r.store_id,
-      });
-      if (ok) { allowed = true; break; }
-    }
+    const allowed = Boolean(sharedRoles?.length);
     if (!allowed) throw new Error("Sem permissão para excluir este usuário.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
