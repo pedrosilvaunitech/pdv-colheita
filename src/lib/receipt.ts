@@ -88,7 +88,11 @@ export function buildReceiptHTML(r: ReceiptData): string {
       <tr><td class="lbl">SUBTOTAL</td><td style="text-align:right">${brl(r.subtotal)}</td></tr>
       ${r.discount > 0 ? `<tr><td class="lbl">DESCONTO</td><td style="text-align:right">-${brl(r.discount)}</td></tr>` : ""}
       <tr><td class="lbl"><b>TOTAL</b></td><td style="text-align:right"><b>${brl(r.total)}</b></td></tr>
-      <tr><td class="lbl">${r.payment_method.toUpperCase()}</td><td style="text-align:right">${brl(r.received ?? r.total)}</td></tr>
+      ${(r.payments && r.payments.length > 0
+        ? `<tr><td colspan="2" class="lbl" style="text-align:left;padding-top:4px"><b>PAGAMENTOS</b></td></tr>` +
+          r.payments.map((p) => `<tr><td class="lbl">${escape(p.label.toUpperCase())}</td><td style="text-align:right">${brl(p.amount)}</td></tr>${p.installments && p.installments > 1 ? `<tr><td colspan="2" style="text-align:right;font-size:9px;opacity:.7">${p.installments}x de ${brl(p.amount / p.installments)}</td></tr>` : ""}`).join("") +
+          `<tr><td class="lbl">RECEBIDO</td><td style="text-align:right">${brl(r.received ?? r.total)}</td></tr>`
+        : `<tr><td class="lbl">${escape(r.payment_method.toUpperCase())}</td><td style="text-align:right">${brl(r.received ?? r.total)}</td></tr>`)}
       ${r.change && r.change > 0 ? `<tr><td class="lbl">TROCO</td><td style="text-align:right">${brl(r.change)}</td></tr>` : ""}
     </table>
     <div class="sep"></div>
