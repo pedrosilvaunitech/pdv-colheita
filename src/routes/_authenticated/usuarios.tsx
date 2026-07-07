@@ -1019,4 +1019,199 @@ function MasterPasswordDialog({ storeId, storeName, onClose }: { storeId: string
   );
 }
 
+type PermRow = { admin_code: string; can_all: boolean; can_sangria: boolean; can_open_close_cash: boolean };
+
+function EditUserDialog({
+  user, roles, stores, codeMap, onClose, onRegen, onSaved,
+}: {
+  user: { userId: string; email: string; fullName: string };
+  roles: Array<{ id: string; user_id: string; store_id: string; role: string; created_at: string }>;
+  stores: Array<{ id: string; name: string; fantasy_name: string | null }>;
+  codeMap: Record<string, PermRow>;
+  onClose: () => void;
+  onRegen: (storeId: string) => void;
+  onSaved: () => Promise<void>;
+}) {
+  const storeMap = Object.fromEntries(stores.map((s) => [s.id, s]));
+  // draft per store
+  type Draft = { can_all: boolean; can_sangria: boolean; can_open_close_cash: boolean };
+  const initial = () => {
+    const d: Record<string, Draft> = {};
+    for (const r of roles) {
+      const key = `${r.store_id}:${r.user_id}`;
+      const cur = codeMap[key];
+      d[r.store_id] = {
+        can_all: cur?.can_all ?? false,
+        can_sangria: cur?.can_sangria ?? false,
+        can_open_close_cash: cur?.can_open_close_cash ?? false,
+      };
+    }
+    return d;
+  };
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(initial);
+  useEffect(() => { setDrafts(initial()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user.userId, codeMap]);
+
+  const setField = (storeId: string, field: keyof Draft, value: boolean) => {
+    setDrafts((d) => {
+      const cur = d[storeId] ?? { can_all: false, can_sangria: false, can_open_close_cash: false };
+      const next: Draft = { ...cur, [field]: value };
+      // "can_all" ativa as demais (visual)
+      if (field === "can_all" && value) { next.can_sangria = true; next.can_open_close_cash = true; }
+      return { ...d, [storeId]: next };
+    });
+  };
+
+  const save = useMutation({
+    mutationFn: async () => {
+      for (const r of roles) {
+        const d = drafts[r.store_id];
+        if (!d) continue;
+        const { error } = await supabase.rpc("set_user_store_permissions", {
+          _store_id: r.store_id,
+          _user_id: user.userId,
+          _can_all: d.can_all,
+          _can_sangria: d.can_sangria,
+          _can_open_close_cash: d.can_open_close_cash,
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: async () => {
+      toast.success("Permissões atualizadas");
+      await onSaved();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const copyCode = async (code: string) => {
+    try { await navigator.clipboard.writeText(code); toast.success(`Código ${code} copiado`); }
+    catch { toast.error("Não foi possível copiar"); }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserCog className="size-4 text-primary" /> Editar usuário
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="border border-border rounded-md bg-card p-3">
+            <div className="text-sm font-medium">{user.fullName || <span className="text-muted-foreground">sem nome</span>}</div>
+            <div className="font-mono text-[11px] text-muted-foreground">{user.email}</div>
+          </div>
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Lojas vinculadas ({roles.length})</div>
+            {roles.length === 0 && (
+              <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-4 text-center">
+                Nenhuma loja vinculada.
+              </div>
+            )}
+            <div className="space-y-3">
+              {roles.map((r) => {
+                const s = storeMap[r.store_id];
+                const perm = codeMap[`${r.store_id}:${user.userId}`];
+                const d = drafts[r.store_id] ?? { can_all: false, can_sangria: false, can_open_close_cash: false };
+                const isManager = r.role === "admin_dev" || r.role === "admin" || r.role === "gerente";
+                return (
+                  <div key={r.id} className="border border-border rounded-md p-3 bg-card space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <StoreIcon className="size-4 text-muted-foreground" />
+                        <div className="text-sm font-medium">{s?.fantasy_name || s?.name || r.store_id.slice(0, 8)}</div>
+                        <RoleBadge role={r.role} compact />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">código</span>
+                        {perm?.admin_code ? (
+                          <>
+                            <span className="font-mono text-sm tracking-widest tabular-nums px-2 py-0.5 rounded border border-info/40 bg-info/10 text-info font-semibold">
+                              {perm.admin_code}
+                            </span>
+                            <Button size="icon" variant="ghost" className="size-7" title="Copiar" onClick={() => copyCode(perm.admin_code)}>
+                              <Copy className="size-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="size-7" title="Regenerar" onClick={() => onRegen(r.store_id)}>
+                              <RefreshCw className="size-3" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => onRegen(r.store_id)}>
+                            <KeyRound className="size-3" /> Gerar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <PermToggle
+                        label="Permissão de tudo"
+                        description="Substitui o papel — libera todas as operações"
+                        checked={d.can_all || isManager}
+                        disabled={isManager}
+                        onChange={(v) => setField(r.store_id, "can_all", v)}
+                      />
+                      <PermToggle
+                        label="Sangria"
+                        description="Retirar dinheiro do caixa"
+                        checked={d.can_sangria || d.can_all || isManager}
+                        disabled={isManager || d.can_all}
+                        onChange={(v) => setField(r.store_id, "can_sangria", v)}
+                      />
+                      <PermToggle
+                        label="Abrir/fechar caixa"
+                        description="Abertura e fechamento de caixa"
+                        checked={d.can_open_close_cash || d.can_all || isManager}
+                        disabled={isManager || d.can_all}
+                        onChange={(v) => setField(r.store_id, "can_open_close_cash", v)}
+                      />
+                    </div>
+                    {isManager && (
+                      <div className="text-[11px] text-muted-foreground">
+                        Papel <span className="font-mono">{r.role}</span> já autoriza todas as operações; overrides não se aplicam.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+          <Button onClick={() => save.mutate()} disabled={save.isPending || roles.length === 0}>
+            {save.isPending && <Loader2 className="mr-2 size-4 animate-spin" />} Salvar permissões
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PermToggle({ label, description, checked, disabled, onChange }: {
+  label: string; description: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className={`flex items-start gap-2 border rounded-md p-2 cursor-pointer transition-colors ${checked ? "border-primary/50 bg-primary/5" : "border-border bg-muted/20"} ${disabled ? "opacity-60 cursor-not-allowed" : "hover:border-primary/30"}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 accent-primary size-4 shrink-0"
+      />
+      <div className="min-w-0">
+        <div className="text-xs font-medium leading-tight">{label}</div>
+        <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">{description}</div>
+      </div>
+    </label>
+  );
+}
+
+
 
