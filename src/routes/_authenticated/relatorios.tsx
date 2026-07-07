@@ -299,3 +299,9 @@ function paymentLabel(method: string) {
   const labels: Record<string, string> = { dinheiro: "Dinheiro", pix: "PIX", debito: "Débito", credito: "Crédito", credito_avista: "Crédito à vista", credito_parcelado: "Crédito parcelado" };
   return labels[method] ?? method;
 }
+function paymentDetailedLabel(method: string, installments: number | null) {
+  const base = paymentLabel(method);
+  if (method === "credito" && installments && installments > 1) return `${base} ${installments}x`;
+  if (method === "credito" && (!installments || installments === 1)) return `${base} à vista`;
+  return base;
+}
