@@ -1,0 +1,1 @@
+ALTER TABLE public.sale_payments ADD COLUMN IF NOT EXISTS installments SMALLINT;

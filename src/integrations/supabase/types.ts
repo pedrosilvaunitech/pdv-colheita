@@ -1025,6 +1025,7 @@ export type Database = {
           amount: number
           created_at: string
           id: string
+          installments: number | null
           method: Database["public"]["Enums"]["payment_method"]
           sale_id: string
           store_id: string
@@ -1033,6 +1034,7 @@ export type Database = {
           amount: number
           created_at?: string
           id?: string
+          installments?: number | null
           method: Database["public"]["Enums"]["payment_method"]
           sale_id: string
           store_id: string
@@ -1041,6 +1043,7 @@ export type Database = {
           amount?: number
           created_at?: string
           id?: string
+          installments?: number | null
           method?: Database["public"]["Enums"]["payment_method"]
           sale_id?: string
           store_id?: string
