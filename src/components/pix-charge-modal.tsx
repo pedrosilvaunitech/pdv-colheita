@@ -81,6 +81,27 @@ export function PixChargeModal({ open, onClose, onPaid, storeId, amount, descrip
           </div>
         )}
 
+        {configMissing && (
+          <div className="border border-warning/40 bg-warning/5 rounded-md p-4 space-y-3">
+            <div className="flex items-center gap-2 text-warning font-semibold text-sm">
+              <AlertTriangle className="size-4" /> PIX ainda não configurado
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Configure em <strong>Configurações → PIX</strong>. O modo padrão <strong>Estático (chave local)</strong>
+              funciona imediatamente — basta informar sua <strong>chave PIX</strong>, <strong>nome</strong> e
+              <strong> cidade</strong>. O QR é gerado no PDV com o valor da venda, sem depender de provedor externo.
+              Você pode conectar um PSP (Mercado Pago, Asaas) depois para confirmação automática.
+            </p>
+            <Button asChild size="sm" className="gap-2 w-full">
+              <Link to="/configuracoes" search={{ tab: "pix" }} onClick={onClose}>
+                <Settings2 className="size-4" /> Abrir configurações do PIX
+              </Link>
+            </Button>
+          </div>
+        )}
+
+
+
         {charge && (
           <div className="space-y-3">
             <div className="flex justify-center">
