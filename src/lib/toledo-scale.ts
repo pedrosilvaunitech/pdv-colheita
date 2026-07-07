@@ -1,4 +1,10 @@
 /// <reference types="w3c-web-serial" />
+import {
+  describeBrowserDeviceError,
+  getBrowserDeviceFeatureState,
+  isBrowserDeviceFeatureAllowed,
+} from "./browser-device-permissions";
+
 /**
  * Driver para balanças Toledo (e compatíveis) via Web Serial API.
  *
@@ -58,7 +64,7 @@ const ETX = 0x03;
 const ENQ = 0x05;
 
 export function isWebSerialSupported(): boolean {
-  return typeof navigator !== "undefined" && "serial" in navigator;
+  return typeof navigator !== "undefined" && "serial" in navigator && isBrowserDeviceFeatureAllowed("serial");
 }
 
 /** Extrai um bloco de 5 dígitos ASCII e converte para kg. */
@@ -145,17 +151,28 @@ export class ToledoScale {
 
   /** Solicita ao usuário que escolha a porta (gesto de usuário obrigatório). */
   async requestPort(): Promise<void> {
-    if (!isWebSerialSupported()) throw new Error("Este navegador não suporta Web Serial (use Chrome/Edge).");
-    const port = await (navigator as Navigator & { serial: { requestPort: () => Promise<SerialPort> } })
-      .serial.requestPort();
+    const state = getBrowserDeviceFeatureState("serial");
+    if (!state.available) throw new Error(state.message);
+    let port: SerialPort;
+    try {
+      port = await (navigator as Navigator & { serial: { requestPort: () => Promise<SerialPort> } })
+        .serial.requestPort();
+    } catch (error) {
+      throw new Error(describeBrowserDeviceError(error, "serial"));
+    }
     await this.openPort(port);
   }
 
   /** Tenta reabrir a última porta autorizada (sem prompt). */
   async tryReopenLast(): Promise<boolean> {
     if (!isWebSerialSupported()) return false;
-    const ports = await (navigator as Navigator & { serial: { getPorts: () => Promise<SerialPort[]> } })
-      .serial.getPorts();
+    let ports: SerialPort[];
+    try {
+      ports = await (navigator as Navigator & { serial: { getPorts: () => Promise<SerialPort[]> } })
+        .serial.getPorts();
+    } catch {
+      return false;
+    }
     if (!ports.length) return false;
     try { await this.openPort(ports[0]); return true; } catch { return false; }
   }

@@ -1,3 +1,4 @@
+import { getHardwareErrorMessage } from "@/lib/hardware-errors";
 import { useEffect, useState, useCallback } from "react";
 import {
   getToledoScale,
@@ -39,7 +40,7 @@ export function useToledoScale() {
       await scale.requestPort();
       setConnected(true);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = getHardwareErrorMessage(e, "serial");
       setError(msg);
     }
   }, []);

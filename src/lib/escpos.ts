@@ -1,8 +1,14 @@
 // ESC/POS raw printing via Web Serial API.
 // Fallback: quando não suportado, o chamador deve imprimir o HTML térmico.
 // Perfis 58mm (32 col) e 80mm (48 col).
+import { getHardwareErrorMessage } from "./hardware-errors";
 
 import type { ReceiptData } from "./receipt";
+import {
+  describeBrowserDeviceError,
+  getBrowserDeviceFeatureState,
+  isBrowserDeviceFeatureAllowed,
+} from "./browser-device-permissions";
 
 const STORAGE_FLAG = "escpos.enabled";
 
@@ -22,7 +28,7 @@ function getSerial(): SerialLike | null {
 }
 
 export function isEscPosSupported(): boolean {
-  return !!getSerial();
+  return !!getSerial() && isBrowserDeviceFeatureAllowed("serial");
 }
 
 export function isEscPosEnabled(): boolean {
@@ -40,7 +46,13 @@ export function setEscPosEnabled(v: boolean) {
 export async function requestEscPosPort(): Promise<boolean> {
   const s = getSerial();
   if (!s) throw new Error("Web Serial não suportado neste navegador (use Chrome/Edge desktop).");
-  const port = await s.requestPort();
+  if (!getBrowserDeviceFeatureState("serial").available) throw new Error(getBrowserDeviceFeatureState("serial").message);
+  let port: SerialPortLike;
+  try {
+    port = await s.requestPort();
+  } catch (error) {
+    throw new Error(describeBrowserDeviceError(error, "serial"));
+  }
   // apenas testar abertura rápida para validar
   await port.open({ baudRate: 9600 });
   await port.close();
@@ -51,8 +63,14 @@ export async function requestEscPosPort(): Promise<boolean> {
 async function getGrantedPort(): Promise<SerialPortLike | null> {
   const s = getSerial();
   if (!s) return null;
-  const ports = await s.getPorts();
-  return ports[0] ?? null;
+  if (!isBrowserDeviceFeatureAllowed("serial")) return null;
+  try {
+    const ports = await s.getPorts();
+    return ports[0] ?? null;
+  } catch (error) {
+    if (error instanceof Error) console.warn("[escpos] serial indisponível:", describeBrowserDeviceError(error, "serial"));
+    return null;
+  }
 }
 
 // ESC/POS opcodes
