@@ -1,4 +1,10 @@
 /// <reference types="w3c-web-usb" />
+import {
+  describeBrowserDeviceError,
+  getBrowserDeviceFeatureState,
+  isBrowserDeviceFeatureAllowed,
+} from "./browser-device-permissions";
+
 /**
  * Impressão ESC/POS direta via WebUSB (Chrome/Edge desktop e Android).
  *
@@ -39,23 +45,33 @@ const VENDOR_FILTERS: USBDeviceFilter[] = [
 ];
 
 export function isWebUsbSupported(): boolean {
-  return typeof navigator !== "undefined" && "usb" in navigator;
+  return typeof navigator !== "undefined" && "usb" in navigator && isBrowserDeviceFeatureAllowed("usb");
 }
 
 /** Solicita permissão para uma impressora USB. Gesto de usuário obrigatório. */
 export async function requestUsbPrinter(includeAll = false): Promise<USBDevice> {
-  if (!isWebUsbSupported()) throw new Error("Este navegador não suporta WebUSB (use Chrome/Edge).");
+  const state = getBrowserDeviceFeatureState("usb");
+  if (!state.available) throw new Error(state.message);
   const filters: USBDeviceFilter[] = includeAll
     ? [...VENDOR_FILTERS, { classCode: 7 }] // 7 = Printer class
     : VENDOR_FILTERS;
-  return await navigator.usb.requestDevice({ filters });
+  try {
+    return await navigator.usb.requestDevice({ filters });
+  } catch (error) {
+    throw new Error(describeBrowserDeviceError(error, "usb"));
+  }
 }
 
 /** Retorna a primeira impressora já autorizada previamente. */
 export async function getGrantedUsbPrinter(): Promise<USBDevice | null> {
   if (!isWebUsbSupported()) return null;
-  const list = await navigator.usb.getDevices();
-  return list[0] ?? null;
+  try {
+    const list = await navigator.usb.getDevices();
+    return list[0] ?? null;
+  } catch (error) {
+    if (error instanceof Error) console.warn("[escpos] webusb indisponível:", describeBrowserDeviceError(error, "usb"));
+    return null;
+  }
 }
 
 /**

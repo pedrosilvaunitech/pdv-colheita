@@ -1,6 +1,7 @@
 /// <reference types="w3c-web-serial" />
 import { useEffect, useState } from "react";
 import { Scale, Plug, PlugZap, Settings2 } from "lucide-react";
+import { getHardwareErrorMessage } from "@/lib/hardware-errors";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useToledoScale } from "@/hooks/use-toledo-scale";
 import type { ToledoProtocol } from "@/lib/toledo-scale";
+import { getBrowserDeviceFeatureState } from "@/lib/browser-device-permissions";
 
 /**
  * Widget compacto para o cabeçalho do PDV.
@@ -20,6 +22,7 @@ export function ScaleWidget({ onWeight }: { onWeight?: (kg: number) => void }) {
   const { supported, connected, reading, config, error, connect, disconnect, requestWeight, updateConfig } = useToledoScale();
   const [busy, setBusy] = useState(false);
   const [cfgOpen, setCfgOpen] = useState(false);
+  const serialState = getBrowserDeviceFeatureState("serial");
 
   useEffect(() => { if (error) toast.error(error); }, [error]);
 
@@ -33,13 +36,13 @@ export function ScaleWidget({ onWeight }: { onWeight?: (kg: number) => void }) {
       onWeight?.(r.weightKg);
       toast.success(`Peso: ${r.weightKg.toFixed(3)} kg`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao ler peso");
+      toast.error(getHardwareErrorMessage(e, "serial"));
     } finally { setBusy(false); }
   };
 
   if (!supported) {
     return (
-      <Button variant="outline" size="sm" disabled title="Web Serial não suportado neste navegador">
+      <Button variant="outline" size="sm" disabled title={serialState.message}>
         <Scale className="size-4" /> Balança
       </Button>
     );

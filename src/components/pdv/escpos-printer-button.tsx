@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { getHardwareErrorMessage } from "@/lib/hardware-errors";
 import { Printer, Usb, Cable, Server, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { isEscPosEnabled, isEscPosSupported, requestEscPosPort, setEscPosEnabled } from "@/lib/escpos";
 import { isWebUsbSupported, requestUsbPrinter, getGrantedUsbPrinter } from "@/lib/escpos-usb";
 import { isPrintAgentEnabled, pingPrintAgent, setPrintAgentEnabled, type AgentStatus } from "@/lib/print-agent";
+import { getBrowserDeviceFeatureState } from "@/lib/browser-device-permissions";
 
 /**
  * Botão unificado de configuração de impressora térmica.
@@ -19,6 +21,8 @@ export function EscPosPrinterButton() {
   const [usbAuthorized, setUsbAuthorized] = useState(false);
   const [agent, setAgent] = useState<AgentStatus>({ online: false });
   const [agentEnabled, setAgentEnabled] = useState(() => isPrintAgentEnabled());
+  const usbState = getBrowserDeviceFeatureState("usb");
+  const serialState = getBrowserDeviceFeatureState("serial");
 
   useEffect(() => {
     if (isWebUsbSupported()) getGrantedUsbPrinter().then((d) => setUsbAuthorized(!!d)).catch(() => { /* noop */ });
@@ -30,13 +34,13 @@ export function EscPosPrinterButton() {
 
   const connectSerial = async () => {
     try { await requestEscPosPort(); setSerialEnabled(true); toast.success("Impressora serial conectada"); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "Falha ao conectar"); }
+    catch (e) { toast.error(getHardwareErrorMessage(e, "serial")); }
   };
   const disconnectSerial = () => { setEscPosEnabled(false); setSerialEnabled(false); toast.info("Serial desativada"); };
 
   const connectUsb = async () => {
     try { const d = await requestUsbPrinter(); setUsbAuthorized(true); toast.success(`USB autorizada: ${d.productName ?? "impressora"}`); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "Nenhuma impressora selecionada"); }
+    catch (e) { toast.error(getHardwareErrorMessage(e, "usb")); }
   };
 
   const toggleAgent = async () => {
@@ -84,7 +88,7 @@ export function EscPosPrinterButton() {
             <StatusBadge ok={usbAuthorized} />
           </div>
           <div className="text-[10px] text-muted-foreground pl-6">
-            {isWebUsbSupported() ? (usbAuthorized ? "Autorizada" : "Clique para escolher a impressora USB") : "Navegador sem suporte"}
+            {isWebUsbSupported() ? (usbAuthorized ? "Autorizada" : "Clique para escolher a impressora USB") : usbState.message}
           </div>
         </DropdownMenuItem>
 
@@ -95,7 +99,7 @@ export function EscPosPrinterButton() {
             <StatusBadge ok={serialEnabled} />
           </div>
           <div className="text-[10px] text-muted-foreground pl-6">
-            {isEscPosSupported() ? (serialEnabled ? "Clique para desativar" : "Clique para escolher a porta serial") : "Navegador sem suporte"}
+            {isEscPosSupported() ? (serialEnabled ? "Clique para desativar" : "Clique para escolher a porta serial") : serialState.message}
           </div>
         </DropdownMenuItem>
 
