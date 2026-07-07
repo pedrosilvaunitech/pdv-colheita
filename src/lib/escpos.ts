@@ -7,7 +7,6 @@ import type { ReceiptData } from "./receipt";
 import {
   describeBrowserDeviceError,
   getBrowserDeviceFeatureState,
-  isBrowserDeviceFeatureAllowed,
 } from "./browser-device-permissions";
 
 const STORAGE_FLAG = "escpos.enabled";
@@ -28,7 +27,7 @@ function getSerial(): SerialLike | null {
 }
 
 export function isEscPosSupported(): boolean {
-  return !!getSerial() && isBrowserDeviceFeatureAllowed("serial");
+  return getBrowserDeviceFeatureState("serial").available;
 }
 
 export function isEscPosEnabled(): boolean {
@@ -46,7 +45,8 @@ export function setEscPosEnabled(v: boolean) {
 export async function requestEscPosPort(): Promise<boolean> {
   const s = getSerial();
   if (!s) throw new Error("Web Serial não suportado neste navegador (use Chrome/Edge desktop).");
-  if (!getBrowserDeviceFeatureState("serial").available) throw new Error(getBrowserDeviceFeatureState("serial").message);
+  const state = getBrowserDeviceFeatureState("serial");
+  if (!state.available) throw new Error(state.message);
   let port: SerialPortLike;
   try {
     port = await s.requestPort();
@@ -63,7 +63,7 @@ export async function requestEscPosPort(): Promise<boolean> {
 async function getGrantedPort(): Promise<SerialPortLike | null> {
   const s = getSerial();
   if (!s) return null;
-  if (!isBrowserDeviceFeatureAllowed("serial")) return null;
+  if (!getBrowserDeviceFeatureState("serial").available) return null;
   try {
     const ports = await s.getPorts();
     return ports[0] ?? null;

@@ -2,7 +2,6 @@
 import {
   describeBrowserDeviceError,
   getBrowserDeviceFeatureState,
-  isBrowserDeviceFeatureAllowed,
 } from "./browser-device-permissions";
 
 /**
@@ -64,7 +63,7 @@ const ETX = 0x03;
 const ENQ = 0x05;
 
 export function isWebSerialSupported(): boolean {
-  return typeof navigator !== "undefined" && "serial" in navigator && isBrowserDeviceFeatureAllowed("serial");
+  return getBrowserDeviceFeatureState("serial").available;
 }
 
 /** Extrai um bloco de 5 dígitos ASCII e converte para kg. */

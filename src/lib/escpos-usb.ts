@@ -2,7 +2,6 @@
 import {
   describeBrowserDeviceError,
   getBrowserDeviceFeatureState,
-  isBrowserDeviceFeatureAllowed,
 } from "./browser-device-permissions";
 
 /**
@@ -45,7 +44,7 @@ const VENDOR_FILTERS: USBDeviceFilter[] = [
 ];
 
 export function isWebUsbSupported(): boolean {
-  return typeof navigator !== "undefined" && "usb" in navigator && isBrowserDeviceFeatureAllowed("usb");
+  return getBrowserDeviceFeatureState("usb").available;
 }
 
 /** Solicita permissão para uma impressora USB. Gesto de usuário obrigatório. */

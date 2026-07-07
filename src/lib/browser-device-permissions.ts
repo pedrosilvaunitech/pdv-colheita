@@ -10,6 +10,13 @@ interface DocumentWithDevicePolicy extends Document {
   featurePolicy?: BrowserDevicePolicy;
 }
 
+interface BrowserDeviceFeatureState {
+  available: boolean;
+  blockedByPolicy: boolean;
+  embeddedFrame: boolean;
+  message: string;
+}
+
 const FEATURE_LABEL: Record<BrowserDeviceFeature, string> = {
   serial: "Web Serial",
   usb: "WebUSB",
@@ -21,7 +28,23 @@ function getPolicy(): BrowserDevicePolicy | null {
   return doc.permissionsPolicy ?? doc.featurePolicy ?? null;
 }
 
+function isEmbeddedFrame(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+export function getBrowserDeviceBlockedMessage(feature: BrowserDeviceFeature): string {
+  const label = FEATURE_LABEL[feature];
+  return `${label} bloqueado pela política de permissões deste ambiente. No preview/editor o app roda em iframe e o navegador não permite abrir Serial/USB. Use o app em janela própria/publicado, Agente Local ou fallback HTML.`;
+}
+
 export function isBrowserDeviceFeatureAllowed(feature: BrowserDeviceFeature): boolean {
+  if (isEmbeddedFrame()) return false;
+
   const policy = getPolicy();
   if (!policy) return true;
 
@@ -40,29 +63,27 @@ export function isBrowserDeviceFeatureAllowed(feature: BrowserDeviceFeature): bo
   return true;
 }
 
-export function getBrowserDeviceFeatureState(feature: BrowserDeviceFeature): {
-  available: boolean;
-  blockedByPolicy: boolean;
-  message: string;
-} {
+export function getBrowserDeviceFeatureState(feature: BrowserDeviceFeature): BrowserDeviceFeatureState {
   const nav = typeof navigator !== "undefined" ? navigator : null;
   const hasApi = !!nav && feature in nav;
+  const embeddedFrame = isEmbeddedFrame();
   const allowed = isBrowserDeviceFeatureAllowed(feature);
   const label = FEATURE_LABEL[feature];
 
   if (!hasApi) {
-    return { available: false, blockedByPolicy: false, message: `${label} não suportado neste navegador.` };
+    return { available: false, blockedByPolicy: false, embeddedFrame, message: `${label} não suportado neste navegador.` };
   }
 
   if (!allowed) {
     return {
       available: false,
       blockedByPolicy: true,
-      message: `${label} bloqueado pela política de permissões deste ambiente. Use o app em janela própria/publicado ou utilize o Agente Local/fallback HTML.`,
+      embeddedFrame,
+      message: getBrowserDeviceBlockedMessage(feature),
     };
   }
 
-  return { available: true, blockedByPolicy: false, message: `${label} disponível.` };
+  return { available: true, blockedByPolicy: false, embeddedFrame, message: `${label} disponível.` };
 }
 
 export function isBrowserDevicePolicyError(error: unknown): boolean {
