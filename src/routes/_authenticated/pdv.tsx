@@ -292,7 +292,7 @@ function PdvPage() {
 
       return sale.id;
     },
-      onSuccess: async (saleId) => {
+    onSuccess: async (saleId) => {
       toast.success(docType === "fiscal" ? "Venda finalizada · NFC-e pendente de emissão" : "Venda finalizada");
       const shouldPrint = settings.data?.print_auto ?? true;
       if (shouldPrint && store) {
