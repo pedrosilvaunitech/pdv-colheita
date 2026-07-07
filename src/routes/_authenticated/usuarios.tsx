@@ -49,6 +49,7 @@ function UsuariosPage() {
   const [changeRole, setChangeRole] = useState<{ id: string; user_id: string; store_id: string; role: string; email?: string } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState<{ id: string; label: string } | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ userId: string; email: string } | null>(null);
+  const [editUser, setEditUser] = useState<{ userId: string; email: string; fullName: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
