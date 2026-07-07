@@ -53,7 +53,8 @@ export async function pingPrintAgent(timeoutMs = 800): Promise<AgentStatus> {
 export async function printViaAgent(payload: Uint8Array, printerName?: string): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
   if (printerName) headers["X-Printer"] = printerName;
-  const r = await fetch(`${AGENT_URL}/print`, { method: "POST", headers, body: payload });
+  const body = new Blob([new Uint8Array(payload)]);
+  const r = await fetch(`${AGENT_URL}/print`, { method: "POST", headers, body });
   if (!r.ok) {
     const msg = await r.text().catch(() => r.statusText);
     throw new Error(`Agente respondeu ${r.status}: ${msg}`);

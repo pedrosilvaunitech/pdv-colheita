@@ -72,7 +72,7 @@ export async function printUsbRaw(device: USBDevice, payload: Uint8Array): Promi
     // Em Linux/macOS o driver genérico usbfs cede a interface sem drama.
     // Em Windows exige WinUSB (via Zadig) ou uso do Agente Local.
     try { await device.claimInterface(iface.interfaceNumber); }
-    catch (e) {
+    catch (e: unknown) {
       throw new Error(
         "Não foi possível reservar a interface USB da impressora. " +
         "No Windows, instale o driver WinUSB (Zadig) ou utilize o Agente de Impressão Local (.exe). " +
