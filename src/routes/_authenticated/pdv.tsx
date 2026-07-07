@@ -11,6 +11,7 @@ import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, F
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
+import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled, tryPrintEscPos } from "@/lib/escpos";
 
 export const Route = createFileRoute("/_authenticated/pdv")({ component: PdvPage });
 
@@ -150,7 +151,9 @@ function PdvPage() {
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };
-        printReceipt(buildReceiptHTML(r));
+        // 1º tenta ESC/POS direto (Web Serial). Se não estiver configurado/falhar, cai pro HTML térmico.
+        const printed = await tryPrintEscPos(r);
+        if (!printed) printReceipt(buildReceiptHTML(r));
       }
       setCart([]); setReceived(""); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -169,6 +172,7 @@ function PdvPage() {
         description={`Loja ${store.fantasy_name || store.name}${openReg.data ? ` · caixa ${openReg.data.terminal} aberto` : " · CAIXA FECHADO"}`}
         actions={
           <div className="flex items-center gap-2">
+            <EscPosButton />
             <Select value={docType} onValueChange={(v) => setDocType(v as "fiscal" | "nao_fiscal")}>
               <SelectTrigger className="w-56 h-9">
                 <SelectValue />
@@ -306,3 +310,30 @@ function PayBtn({ active, onClick, icon: Icon, label }: { active: boolean; onCli
 }
 
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+
+function EscPosButton() {
+  const [enabled, setEnabled] = useState<boolean>(() => isEscPosEnabled());
+  const supported = isEscPosSupported();
+  const onConnect = async () => {
+    try {
+      await requestEscPosPort();
+      setEnabled(true);
+      toast.success("Impressora térmica conectada · impressão ESC/POS ativa");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao conectar impressora");
+    }
+  };
+  const onDisconnect = () => { setEscPosEnabled(false); setEnabled(false); toast.info("Impressão ESC/POS desativada · voltando ao HTML"); };
+  if (!supported) {
+    return <span className="text-[10px] font-mono uppercase text-muted-foreground border border-dashed border-border rounded px-2 py-1">Web Serial n/d</span>;
+  }
+  return enabled ? (
+    <Button variant="outline" size="sm" className="gap-2 h-9" onClick={onDisconnect}>
+      <Printer className="size-4 text-primary" /><span className="text-xs">ESC/POS ativo</span>
+    </Button>
+  ) : (
+    <Button variant="outline" size="sm" className="gap-2 h-9" onClick={onConnect}>
+      <Printer className="size-4" /><span className="text-xs">Conectar impressora</span>
+    </Button>
+  );
+}
