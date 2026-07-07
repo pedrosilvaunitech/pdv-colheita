@@ -1,0 +1,28 @@
+{
+  "name": "bastion-pos-agent",
+  "productName": "Bastion POS Agent",
+  "version": "1.0.0",
+  "description": "Agente de Impressão Local + Wrapper Desktop do Bastion POS. Escuta em 127.0.0.1:9100 e imprime ESC/POS via USB sem tela de diálogo.",
+  "main": "main.cjs",
+  "author": "Bastion POS",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "agent-only": "node agent.cjs",
+    "pack:win": "electron-packager . \"BastionPOSAgent\" --platform=win32 --arch=x64 --out=release --overwrite --icon=assets/icon.ico --asar --win32metadata.CompanyName=\"Bastion POS\" --win32metadata.FileDescription=\"Agente de Impressao Local\" --win32metadata.ProductName=\"Bastion POS Agent\"",
+    "pack:mac": "electron-packager . \"BastionPOSAgent\" --platform=darwin --arch=x64 --out=release --overwrite --icon=assets/icon.icns --asar",
+    "pack:linux": "electron-packager . \"BastionPOSAgent\" --platform=linux --arch=x64 --out=release --overwrite --icon=assets/icon.png --asar",
+    "msi:win": "node build-msi.cjs",
+    "postinstall": "electron-builder install-app-deps || true"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "usb": "^2.14.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "@electron/packager": "^18.3.6",
+    "electron-wix-msi": "^5.1.3"
+  }
+}
