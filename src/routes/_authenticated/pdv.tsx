@@ -292,10 +292,18 @@ function PdvPage() {
 
       return sale.id;
     },
-    onSuccess: async (saleId) => {
+      onSuccess: async (saleId) => {
       toast.success(docType === "fiscal" ? "Venda finalizada · NFC-e pendente de emissão" : "Venda finalizada");
       const shouldPrint = settings.data?.print_auto ?? true;
       if (shouldPrint && store) {
+        const change = overpaid;
+        // pagamentos "efetivos" (com troco descontado do último dinheiro) para o recibo
+        const receiptPayments = payments.map((p) => ({ ...p }));
+        if (change > 0) {
+          const lastCashIdx = [...receiptPayments].reverse().findIndex((p) => p.method === "dinheiro");
+          const targetIdx = lastCashIdx === -1 ? receiptPayments.length - 1 : receiptPayments.length - 1 - lastCashIdx;
+          receiptPayments[targetIdx] = { ...receiptPayments[targetIdx], amount: Number((receiptPayments[targetIdx].amount - change).toFixed(2)) };
+        }
         const paymentLabel = payments.map((p) => `${p.label} ${brl(p.amount)}`).join(" + ");
         const r: ReceiptData = {
           store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: [store.city, store.state].filter(Boolean).join(" · ") || null, phone: null },
