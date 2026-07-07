@@ -62,8 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState<string>("");
 
   const kiosk = (() => {
-    const s = search as Record<string, unknown> | undefined;
-    if (s && (s.kiosk === "1" || s.kiosk === 1 || s.kiosk === true)) return true;
+    if (search && (search.kiosk === "1" || search.kiosk === 1 || search.kiosk === true)) return true;
     if (typeof window !== "undefined") {
       try {
         if (window.matchMedia?.("(display-mode: standalone)").matches) return pathname.startsWith("/pdv");
