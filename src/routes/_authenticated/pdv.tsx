@@ -571,7 +571,7 @@ function PdvPage() {
 
           <Button size="lg" className="h-14 text-base gap-2" disabled={!canFinalize || finalize.isPending || !openReg.data} onClick={() => finalize.mutate()}>
             <Printer className="size-5" />
-            {finalize.isPending ? "Finalizando..." : `Finalizar e imprimir · ${docType === "fiscal" ? "NFC-e" : "Recibo"}`}
+            {finalize.isPending ? "Finalizando..." : `Finalizar · ${docType === "fiscal" ? "NFC-e" : "Recibo"} · F8`}
           </Button>
           {docType === "fiscal" && (
             <p className="text-[10px] font-mono uppercase text-warning text-center">
