@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
 import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled, tryPrintEscPos } from "@/lib/escpos";
 import { PixChargeModal } from "@/components/pix-charge-modal";
+import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 
 export const Route = createFileRoute("/_authenticated/pdv")({ component: PdvPage });
 
