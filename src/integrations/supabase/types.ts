@@ -1419,6 +1419,15 @@ export type Database = {
         }
         Returns: string
       }
+      verify_admin_code: {
+        Args: { _code: string; _store_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "gerente" | "caixa" | "estoquista" | "admin_dev"

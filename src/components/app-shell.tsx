@@ -55,10 +55,22 @@ const NAV = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { store, stores, setStoreId, isLoading, isError } = useCurrentStore();
   const [email, setEmail] = useState<string>("");
+
+  const kiosk = (() => {
+    if (search && (search.kiosk === "1" || search.kiosk === 1 || search.kiosk === true)) return true;
+    if (typeof window !== "undefined") {
+      try {
+        if (window.matchMedia?.("(display-mode: standalone)").matches) return pathname.startsWith("/pdv");
+        if (localStorage.getItem("pdv-kiosk") === "1" && pathname.startsWith("/pdv")) return true;
+      } catch { /* ignore */ }
+    }
+    return false;
+  })();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ""));
@@ -71,6 +83,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     toast.success("Sessão encerrada");
     navigate({ to: "/auth", replace: true });
   };
+
+  if (kiosk) {
+    return (
+      <div className="dark min-h-screen bg-background text-foreground">
+        <main className="h-screen overflow-hidden">{children}</main>
+      </div>
+    );
+  }
+
 
   return (
     <div className="dark min-h-screen flex bg-background text-foreground">

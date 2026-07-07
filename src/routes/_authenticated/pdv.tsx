@@ -13,8 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
 import { isEscPosSupported, isEscPosEnabled, requestEscPosPort, setEscPosEnabled, tryPrintEscPos } from "@/lib/escpos";
 import { PixChargeModal } from "@/components/pix-charge-modal";
+import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 
-export const Route = createFileRoute("/_authenticated/pdv")({ component: PdvPage });
+export const Route = createFileRoute("/_authenticated/pdv")({
+  component: PdvPage,
+  validateSearch: (s: Record<string, unknown>) => ({ kiosk: s.kiosk === "1" || s.kiosk === 1 ? "1" as const : undefined }),
+});
 
 interface CartItem {
   product_id: string;
@@ -231,7 +235,8 @@ function PdvPage() {
         title="PDV · Frente de caixa"
         description={`Loja ${store.fantasy_name || store.name}${openReg.data ? ` · caixa ${openReg.data.terminal} aberto` : " · CAIXA FECHADO"}`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {storeId && <CaixaQuickActions storeId={storeId} />}
             <EscPosButton />
             <Select value={docType} onValueChange={(v) => setDocType(v as "fiscal" | "nao_fiscal")}>
               <SelectTrigger className="w-56 h-9">
