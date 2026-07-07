@@ -596,6 +596,18 @@ function UsuariosPage() {
           />
         )}
 
+        {editUser && (
+          <EditUserDialog
+            user={editUser}
+            roles={roles.filter((r) => r.user_id === editUser.userId)}
+            stores={stores}
+            codeMap={codeMap}
+            onClose={() => setEditUser(null)}
+            onRegen={(storeId) => regenCode.mutate({ storeId, userId: editUser.userId })}
+            onSaved={async () => { await qc.invalidateQueries({ queryKey: ["user-store-codes"] }); }}
+          />
+        )}
+
           </TabsContent>
 
           <TabsContent value="auditoria" className="mt-4">
