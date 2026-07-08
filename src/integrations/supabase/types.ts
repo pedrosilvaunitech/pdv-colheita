@@ -1464,6 +1464,16 @@ export type Database = {
         }
         Returns: string
       }
+      lookup_admin_code: {
+        Args: { _code: string }
+        Returns: {
+          full_name: string
+          role: Database["public"]["Enums"]["app_role"]
+          store_id: string
+          store_name: string
+          user_id: string
+        }[]
+      }
       regenerate_admin_code: {
         Args: { _store_id: string; _user_id: string }
         Returns: string
