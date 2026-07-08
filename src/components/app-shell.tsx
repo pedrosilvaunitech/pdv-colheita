@@ -61,6 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const { store, stores, setStoreId, isLoading, isError } = useCurrentStore();
   const [email, setEmail] = useState<string>("");
+  const branding = useBranding();
 
   const kiosk = (() => {
     if (search && (search.kiosk === "1" || search.kiosk === 1 || search.kiosk === true)) return true;
