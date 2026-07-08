@@ -10,18 +10,28 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Truck } from "lucide-react";
+import { Plus, Truck, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/fornecedores")({
   component: FornecedoresPage,
 });
 
+type SupplierForm = {
+  name: string; cnpj: string; phone: string; email: string;
+  city: string; state: string; address_line: string; notes: string;
+};
+
+const EMPTY: SupplierForm = { name: "", cnpj: "", phone: "", email: "", city: "", state: "", address_line: "", notes: "" };
+
+interface SupplierRow extends SupplierForm { id: string }
+
 function FornecedoresPage() {
   const { store, storeId } = useCurrentStore();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", cnpj: "", phone: "", email: "", city: "", state: "", address_line: "", notes: "" });
+  const [openNew, setOpenNew] = useState(false);
+  const [editing, setEditing] = useState<SupplierRow | null>(null);
+  const [form, setForm] = useState<SupplierForm>(EMPTY);
 
   const { data } = useQuery({
     queryKey: ["suppliers", storeId],
@@ -33,28 +43,77 @@ function FornecedoresPage() {
     },
   });
 
+  const toPayload = (f: SupplierForm) => ({
+    name: f.name.trim(),
+    cnpj: f.cnpj || null, phone: f.phone || null, email: f.email || null,
+    city: f.city || null, state: f.state ? f.state.toUpperCase() : null,
+    address_line: f.address_line || null, notes: f.notes || null,
+  });
+
   const create = useMutation({
     mutationFn: async () => {
       if (!form.name.trim()) throw new Error("Nome do fornecedor obrigatório");
-      const clean = {
-        store_id: storeId!, name: form.name.trim(),
-        cnpj: form.cnpj || null, phone: form.phone || null, email: form.email || null,
-        city: form.city || null, state: form.state ? form.state.toUpperCase() : null,
-        address_line: form.address_line || null, notes: form.notes || null,
-      };
-      const { error } = await supabase.from("suppliers").insert(clean);
+      const { error } = await supabase.from("suppliers").insert({ store_id: storeId!, ...toPayload(form) });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Fornecedor cadastrado");
       qc.invalidateQueries({ queryKey: ["suppliers"] });
-      setOpen(false);
-      setForm({ name: "", cnpj: "", phone: "", email: "", city: "", state: "", address_line: "", notes: "" });
+      setOpenNew(false); setForm(EMPTY);
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const update = useMutation({
+    mutationFn: async () => {
+      if (!editing) throw new Error("Nada para editar");
+      if (!form.name.trim()) throw new Error("Nome do fornecedor obrigatório");
+      const { error } = await supabase.from("suppliers").update(toPayload(form)).eq("id", editing.id).eq("store_id", storeId!);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Fornecedor atualizado");
+      qc.invalidateQueries({ queryKey: ["suppliers"] });
+      setEditing(null); setForm(EMPTY);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("suppliers").delete().eq("id", id).eq("store_id", storeId!);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Fornecedor removido");
+      qc.invalidateQueries({ queryKey: ["suppliers"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const startEdit = (raw: Record<string, unknown>) => {
+    const s: SupplierRow = {
+      id: String(raw.id),
+      name: (raw.name as string | null) ?? "",
+      cnpj: (raw.cnpj as string | null) ?? "",
+      phone: (raw.phone as string | null) ?? "",
+      email: (raw.email as string | null) ?? "",
+      city: (raw.city as string | null) ?? "",
+      state: (raw.state as string | null) ?? "",
+      address_line: (raw.address_line as string | null) ?? "",
+      notes: (raw.notes as string | null) ?? "",
+    };
+    setEditing(s);
+    setForm({
+      name: s.name, cnpj: s.cnpj, phone: s.phone, email: s.email,
+      city: s.city, state: s.state, address_line: s.address_line, notes: s.notes,
+    });
+  };
+
   if (!store) return <StoreRequired />;
+
+  const editorOpen = openNew || !!editing;
+  const closeEditor = () => { setOpenNew(false); setEditing(null); setForm(EMPTY); };
 
   return (
     <div>
@@ -62,25 +121,34 @@ function FornecedoresPage() {
         title="Fornecedores"
         description="Cadastro de fornecedores para compras (notas de entrada) e vínculo com produtos."
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button size="sm" className="gap-2"><Plus className="size-4" /> Novo fornecedor</Button></DialogTrigger>
-            <DialogContent className="max-w-xl">
-              <DialogHeader><DialogTitle>Novo fornecedor</DialogTitle></DialogHeader>
-              <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }} className="grid grid-cols-2 gap-3">
-                <FF label="Razão social / nome" cn="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></FF>
-                <FF label="CNPJ"><Input className="font-mono" value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} /></FF>
-                <FF label="Telefone"><Input className="font-mono" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></FF>
-                <FF label="E-mail" cn="col-span-2"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></FF>
-                <FF label="Endereço" cn="col-span-2"><Input value={form.address_line} onChange={(e) => setForm({ ...form, address_line: e.target.value })} /></FF>
-                <FF label="Cidade"><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></FF>
-                <FF label="UF"><Input maxLength={2} className="uppercase" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })} /></FF>
-                <FF label="Observações" cn="col-span-2"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} /></FF>
-                <DialogFooter className="col-span-2"><Button type="submit" disabled={create.isPending}>{create.isPending ? "Salvando…" : "Cadastrar"}</Button></DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button size="sm" className="gap-2" onClick={() => { setForm(EMPTY); setOpenNew(true); }}>
+            <Plus className="size-4" /> Novo fornecedor
+          </Button>
         }
       />
+
+      <Dialog open={editorOpen} onOpenChange={(o) => !o && closeEditor()}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader><DialogTitle>{editing ? "Editar fornecedor" : "Novo fornecedor"}</DialogTitle></DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); editing ? update.mutate() : create.mutate(); }} className="grid grid-cols-2 gap-3">
+            <FF label="Razão social / nome" cn="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></FF>
+            <FF label="CNPJ"><Input className="font-mono" value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} /></FF>
+            <FF label="Telefone"><Input className="font-mono" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></FF>
+            <FF label="E-mail" cn="col-span-2"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></FF>
+            <FF label="Endereço" cn="col-span-2"><Input value={form.address_line} onChange={(e) => setForm({ ...form, address_line: e.target.value })} /></FF>
+            <FF label="Cidade"><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></FF>
+            <FF label="UF"><Input maxLength={2} className="uppercase" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })} /></FF>
+            <FF label="Observações" cn="col-span-2"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} /></FF>
+            <DialogFooter className="col-span-2 gap-2">
+              <Button type="button" variant="outline" onClick={closeEditor}>Cancelar</Button>
+              <Button type="submit" disabled={create.isPending || update.isPending}>
+                {editing ? (update.isPending ? "Salvando…" : "Salvar alterações") : (create.isPending ? "Salvando…" : "Cadastrar")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div className="p-6">
         <div className="border border-border rounded-md bg-card overflow-hidden">
           <Table>
@@ -90,11 +158,12 @@ function FornecedoresPage() {
                 <TableHead className="w-40 font-mono text-xs">CNPJ</TableHead>
                 <TableHead className="w-40">Contato</TableHead>
                 <TableHead className="w-40">Cidade / UF</TableHead>
+                <TableHead className="w-28 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data?.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="p-0">
+                <TableRow><TableCell colSpan={5} className="p-0">
                   <EmptyState title="Nenhum fornecedor" description="Cadastre fornecedores para registrar notas fiscais de entrada." />
                 </TableCell></TableRow>
               )}
@@ -104,6 +173,18 @@ function FornecedoresPage() {
                   <TableCell className="font-mono text-xs">{s.cnpj || "—"}</TableCell>
                   <TableCell className="text-xs">{[s.phone, s.email].filter(Boolean).join(" · ") || "—"}</TableCell>
                   <TableCell className="text-xs">{[s.city, s.state].filter(Boolean).join(" / ") || "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => startEdit(s as unknown as Record<string, unknown>)} title="Editar">
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => {
+                        if (confirm(`Remover o fornecedor "${s.name}"?`)) remove.mutate(s.id);
+                      }} title="Remover">
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
