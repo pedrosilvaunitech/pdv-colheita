@@ -76,7 +76,7 @@ function AuthPage() {
   };
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-8">
           <div className="size-10 rounded-md bg-primary flex items-center justify-center">

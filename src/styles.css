@@ -77,6 +77,34 @@
 
 .dark { color-scheme: dark; }
 
+/* Modo claro — tokens sobrescritos quando a raiz possui .light */
+:root.light {
+  color-scheme: light;
+  --background: oklch(0.985 0.003 250);
+  --foreground: oklch(0.20 0.02 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.20 0.02 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.20 0.02 250);
+  --primary-foreground: oklch(0.99 0.005 250);
+  --secondary: oklch(0.94 0.01 250);
+  --secondary-foreground: oklch(0.22 0.02 250);
+  --muted: oklch(0.95 0.008 250);
+  --muted-foreground: oklch(0.45 0.02 250);
+  --accent-foreground: oklch(0.99 0.005 250);
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-foreground: oklch(0.99 0.005 250);
+  --border: oklch(0.90 0.01 250);
+  --input: oklch(0.94 0.01 250);
+  --warning: oklch(0.70 0.16 70);
+  --sidebar: oklch(0.97 0.006 250);
+  --sidebar-foreground: oklch(0.25 0.02 250);
+  --sidebar-primary-foreground: oklch(0.99 0.005 250);
+  --sidebar-accent: oklch(0.93 0.01 250);
+  --sidebar-accent-foreground: oklch(0.22 0.02 250);
+  --sidebar-border: oklch(0.90 0.01 250);
+}
+
 @layer base {
   * { border-color: var(--color-border); }
   html, body { background-color: var(--color-background); color: var(--color-foreground); }
