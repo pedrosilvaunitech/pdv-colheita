@@ -13,13 +13,31 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 interface AdminRow { user_id: string; full_name: string | null; email: string | null; role: string }
 type PermCheck = "can_open_close_cash" | "can_sangria" | "can_all";
 
+export class WrongStoreCodeError extends Error {
+  targetStoreId: string;
+  targetStoreName: string;
+  constructor(storeId: string, storeName: string) {
+    super(`Este código pertence à loja "${storeName}". Troque para essa loja para usá-lo.`);
+    this.targetStoreId = storeId;
+    this.targetStoreName = storeName;
+  }
+}
+
 async function verifyAdmin(storeId: string, code: string, perm: PermCheck): Promise<AdminRow> {
   const clean = code.replace(/\D/g, "");
   if (clean.length !== 5) throw new Error("Digite o código de 5 dígitos");
   const { data, error } = await supabase.rpc("verify_admin_code", { _store_id: storeId, _code: clean });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
-  if (!row) throw new Error("Código inválido");
+  if (!row) {
+    // Não achou na loja atual: verifica se pertence a outra loja acessível.
+    const { data: other } = await supabase.rpc("lookup_admin_code", { _code: clean });
+    const hit = Array.isArray(other) ? other[0] : other;
+    if (hit && hit.store_id && hit.store_id !== storeId) {
+      throw new WrongStoreCodeError(hit.store_id, hit.store_name || "outra loja");
+    }
+    throw new Error("Código inválido");
+  }
   // Senha mestra (user_id nulo) autoriza qualquer ação.
   if (!row.user_id) return row as AdminRow;
   const { data: permData, error: permErr } = await supabase.rpc("user_store_permissions", {
@@ -31,6 +49,7 @@ async function verifyAdmin(storeId: string, code: string, perm: PermCheck): Prom
   if (!allowed) throw new Error("Usuário sem permissão para esta ação");
   return row as AdminRow;
 }
+
 
 
 export function CaixaQuickActions({ storeId }: { storeId: string }) {
