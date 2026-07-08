@@ -14,8 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { buildReceiptHTML, printReceipt } from "@/lib/receipt";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode } from "lucide-react";
+import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw } from "lucide-react";
 import { PixSettingsTab } from "@/components/pix-settings-tab";
+import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding } from "@/lib/branding";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({ component: SettingsPage });
 
@@ -226,11 +227,16 @@ function SettingsPage() {
       <div className="p-6 max-w-5xl">
         <Tabs defaultValue="recibo">
           <TabsList>
+            <TabsTrigger value="aparencia" className="gap-1"><Palette className="size-3" /> Aparência</TabsTrigger>
             <TabsTrigger value="recibo">Cupom / Nota</TabsTrigger>
             <TabsTrigger value="fiscal">Fiscal & Certificado A1</TabsTrigger>
             <TabsTrigger value="numeracao">Numeração NFC-e/NF-e</TabsTrigger>
             <TabsTrigger value="pix" className="gap-1"><QrCode className="size-3" /> PIX</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="aparencia" className="mt-4">
+            <BrandingTab />
+          </TabsContent>
 
           <TabsContent value="recibo" className="mt-4">
             <div className="flex justify-end gap-2 mb-4">
@@ -455,6 +461,102 @@ function SettingsPage() {
             <PixSettingsTab storeId={storeId!} />
           </TabsContent>
         </Tabs>
+      </div>
+    </div>
+  );
+}
+
+const COLOR_PRESETS: { name: string; primary: string; accent: string; background: string }[] = [
+  { name: "Terminal (padrão)", primary: "oklch(0.78 0.18 155)", accent: "oklch(0.72 0.16 220)", background: "oklch(0.16 0.015 250)" },
+  { name: "Cyber Blue",        primary: "oklch(0.72 0.18 240)", accent: "oklch(0.78 0.16 180)", background: "oklch(0.15 0.02 260)" },
+  { name: "Sunset Orange",     primary: "oklch(0.75 0.19 55)",  accent: "oklch(0.72 0.16 30)",  background: "oklch(0.16 0.02 30)" },
+  { name: "Royal Purple",      primary: "oklch(0.68 0.22 300)", accent: "oklch(0.75 0.16 340)", background: "oklch(0.15 0.02 290)" },
+  { name: "Crimson Red",       primary: "oklch(0.65 0.24 25)",  accent: "oklch(0.72 0.16 55)",  background: "oklch(0.15 0.02 15)" },
+  { name: "Golden Amber",      primary: "oklch(0.82 0.17 85)",  accent: "oklch(0.72 0.16 55)",  background: "oklch(0.16 0.02 60)" },
+  { name: "Ocean Teal",        primary: "oklch(0.72 0.15 195)", accent: "oklch(0.68 0.14 220)", background: "oklch(0.15 0.02 220)" },
+  { name: "Mono Light",        primary: "oklch(0.55 0 0)",      accent: "oklch(0.65 0 0)",      background: "oklch(0.97 0 0)" },
+];
+
+function BrandingTab() {
+  const [b, setB] = useState<Branding>(() => loadBranding());
+  const persist = (next: Branding) => { setB(next); saveBranding(next); };
+  const reset = () => { setB(DEFAULT_BRANDING); resetBranding(); toast.success("Aparência restaurada ao padrão"); };
+
+  return (
+    <div className="space-y-4">
+      <div className="border border-border rounded-md bg-card p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Palette className="size-4" /> Identidade do sistema</h3>
+          <Button variant="ghost" size="sm" className="gap-2" onClick={reset}><RotateCcw className="size-3" /> Restaurar padrão</Button>
+        </div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div>
+            <Label>Nome do sistema</Label>
+            <Input value={b.appName} onChange={(e) => persist({ ...b, appName: e.target.value })} placeholder="BASTION POS" />
+          </div>
+          <div>
+            <Label>Sub-título / slogan</Label>
+            <Input value={b.appTagline} onChange={(e) => persist({ ...b, appTagline: e.target.value })} placeholder="Operações fiscais" />
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground">Alterações aplicam-se imediatamente à barra lateral e ao cabeçalho.</p>
+      </div>
+
+      <div className="border border-border rounded-md bg-card p-4 space-y-4">
+        <h3 className="text-sm font-semibold">Paletas predefinidas</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {COLOR_PRESETS.map((p) => {
+            const active = p.primary === b.primary && p.accent === b.accent && p.background === b.background;
+            return (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => persist({ ...b, primary: p.primary, accent: p.accent, background: p.background })}
+                className={`border rounded-md p-3 text-left space-y-2 transition-all hover:border-primary/60 ${active ? "border-primary ring-2 ring-primary/30" : "border-border"}`}
+              >
+                <div className="flex gap-1">
+                  <span className="size-6 rounded" style={{ background: p.primary }} />
+                  <span className="size-6 rounded" style={{ background: p.accent }} />
+                  <span className="size-6 rounded border border-border" style={{ background: p.background }} />
+                </div>
+                <div className="text-xs font-medium">{p.name}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border border-border rounded-md bg-card p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Cores personalizadas</h3>
+        <p className="text-[11px] text-muted-foreground">Aceita qualquer formato CSS: <span className="font-mono">#rrggbb</span>, <span className="font-mono">rgb(...)</span>, <span className="font-mono">hsl(...)</span> ou <span className="font-mono">oklch(...)</span>.</p>
+        <div className="grid md:grid-cols-3 gap-3">
+          <ColorField label="Cor primária" value={b.primary} onChange={(v) => persist({ ...b, primary: v })} />
+          <ColorField label="Cor de destaque" value={b.accent} onChange={(v) => persist({ ...b, accent: v })} />
+          <ColorField label="Fundo do sistema" value={b.background} onChange={(v) => persist({ ...b, background: v })} />
+        </div>
+      </div>
+
+      <div className="border border-border rounded-md bg-card p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Prévia</h3>
+        <div className="flex flex-wrap gap-2">
+          <Button>Botão primário</Button>
+          <Button variant="outline">Botão secundário</Button>
+          <Button variant="destructive">Destrutivo</Button>
+          <Badge className="bg-primary text-primary-foreground">Badge primária</Badge>
+          <Badge variant="outline" className="border-primary/40 text-primary">Badge outline</Badge>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex gap-2 items-center">
+        <span className="size-9 rounded border border-border shrink-0" style={{ background: value }} />
+        <Input value={value} onChange={(e) => onChange(e.target.value)} className="font-mono text-xs" />
       </div>
     </div>
   );
