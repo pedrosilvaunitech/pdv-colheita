@@ -129,7 +129,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
-      {mounted && <Toaster richColors theme="dark" position="top-right" />}
+      {mounted && <Toaster richColors theme="system" position="top-right" />}
     </QueryClientProvider>
   );
 }
