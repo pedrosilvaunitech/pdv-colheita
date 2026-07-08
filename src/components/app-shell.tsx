@@ -104,8 +104,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ScanBarcode className="size-4 text-primary-foreground" />
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold tracking-tight">BASTION POS</div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-mono">Operações fiscais</div>
+            <div className="text-sm font-semibold tracking-tight">{branding.appName}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-mono">{branding.appTagline}</div>
           </div>
         </div>
         <nav className="flex-1 p-2 space-y-0.5">
