@@ -502,6 +502,31 @@ function BrandingTab() {
         <p className="text-[11px] text-muted-foreground">Alterações aplicam-se imediatamente à barra lateral e ao cabeçalho.</p>
       </div>
 
+      <div className="border border-border rounded-md bg-card p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Modo de exibição</h3>
+        <p className="text-[11px] text-muted-foreground">Escolha entre tema claro, escuro ou seguir a preferência do sistema operacional.</p>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { key: "light",  label: "Claro",   icon: Sun },
+            { key: "dark",   label: "Escuro",  icon: Moon },
+            { key: "system", label: "Sistema", icon: Monitor },
+          ] as { key: ThemeMode; label: string; icon: typeof Sun }[]).map(({ key, label, icon: Icon }) => {
+            const active = b.mode === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => persist({ ...b, mode: key })}
+                className={`border rounded-md p-3 flex flex-col items-center gap-2 transition-all hover:border-primary/60 ${active ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border"}`}
+              >
+                <Icon className="size-5" />
+                <span className="text-xs font-medium">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="border border-border rounded-md bg-card p-4 space-y-4">
         <h3 className="text-sm font-semibold">Paletas predefinidas</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
