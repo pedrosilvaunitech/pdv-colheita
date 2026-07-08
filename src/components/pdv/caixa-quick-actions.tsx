@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LockOpen, Lock, ArrowDownCircle, ArrowUpCircle, ShieldCheck, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useCurrentStore } from "@/lib/current-store";
 
 interface AdminRow { user_id: string; full_name: string | null; email: string | null; role: string }
 type PermCheck = "can_open_close_cash" | "can_sangria" | "can_all";
