@@ -100,6 +100,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR" className="dark">
+
       <head><HeadContent /></head>
       <body style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }}>
         {children}
