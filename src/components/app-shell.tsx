@@ -88,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (kiosk) {
     return (
-      <div className="dark min-h-screen bg-background text-foreground">
+      <div className="min-h-screen bg-background text-foreground">
         <main className="h-screen overflow-hidden">{children}</main>
       </div>
     );
