@@ -175,7 +175,7 @@ function FornecedoresPage() {
                   <TableCell className="text-xs">{[s.city, s.state].filter(Boolean).join(" / ") || "—"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => startEdit(s as SupplierRow)} title="Editar">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => startEdit(s as unknown as Record<string, unknown>)} title="Editar">
                         <Pencil className="size-4" />
                       </Button>
                       <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => {
