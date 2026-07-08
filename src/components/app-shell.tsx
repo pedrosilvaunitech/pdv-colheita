@@ -96,7 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 
   return (
-    <div className="dark min-h-screen flex bg-background text-foreground">
+    <div className="min-h-screen flex bg-background text-foreground">
       {/* Sidebar */}
       <aside className="w-60 shrink-0 border-r border-sidebar-border bg-sidebar flex flex-col">
         <div className="h-14 flex items-center gap-2 px-4 border-b border-sidebar-border">
