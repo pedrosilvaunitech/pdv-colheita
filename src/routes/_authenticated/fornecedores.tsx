@@ -91,17 +91,22 @@ function FornecedoresPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const startEdit = (s: SupplierRow & Record<string, unknown>) => {
+  const startEdit = (raw: Record<string, unknown>) => {
+    const s: SupplierRow = {
+      id: String(raw.id),
+      name: (raw.name as string | null) ?? "",
+      cnpj: (raw.cnpj as string | null) ?? "",
+      phone: (raw.phone as string | null) ?? "",
+      email: (raw.email as string | null) ?? "",
+      city: (raw.city as string | null) ?? "",
+      state: (raw.state as string | null) ?? "",
+      address_line: (raw.address_line as string | null) ?? "",
+      notes: (raw.notes as string | null) ?? "",
+    };
     setEditing(s);
     setForm({
-      name: s.name ?? "",
-      cnpj: (s.cnpj as string | null) ?? "",
-      phone: (s.phone as string | null) ?? "",
-      email: (s.email as string | null) ?? "",
-      city: (s.city as string | null) ?? "",
-      state: (s.state as string | null) ?? "",
-      address_line: (s.address_line as string | null) ?? "",
-      notes: (s.notes as string | null) ?? "",
+      name: s.name, cnpj: s.cnpj, phone: s.phone, email: s.email,
+      city: s.city, state: s.state, address_line: s.address_line, notes: s.notes,
     });
   };
 
