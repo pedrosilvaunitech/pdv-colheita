@@ -140,10 +140,13 @@ function AdminCodeField({ code, setCode, admin, setAdmin, storeId, perm }: {
 }) {
   const [checking, setChecking] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [wrongStore, setWrongStore] = useState<{ id: string; name: string } | null>(null);
+  const { setStoreId } = useCurrentStore();
   const check = async (raw: string) => {
     const digits = raw.replace(/\D/g, "").slice(0, 5);
     setCode(digits);
     setErrMsg(null);
+    setWrongStore(null);
     if (digits.length < 5) { setAdmin(null); return; }
     setChecking(true);
     try {
@@ -151,7 +154,12 @@ function AdminCodeField({ code, setCode, admin, setAdmin, storeId, perm }: {
       setAdmin(a);
     } catch (e) {
       setAdmin(null);
-      setErrMsg(e instanceof Error ? e.message : "Código inválido");
+      if (e instanceof WrongStoreCodeError) {
+        setWrongStore({ id: e.targetStoreId, name: e.targetStoreName });
+        setErrMsg(e.message);
+      } else {
+        setErrMsg(e instanceof Error ? e.message : "Código inválido");
+      }
     } finally {
       setChecking(false);
     }
@@ -169,18 +177,30 @@ function AdminCodeField({ code, setCode, admin, setAdmin, storeId, perm }: {
         placeholder="_ _ _ _ _"
         className="font-mono text-center text-2xl tracking-[0.6em] tabular-nums"
       />
-      <div className="text-[11px] mt-1 h-4">
+      <div className="text-[11px] mt-1 min-h-4 space-y-1">
         {checking && <span className="text-muted-foreground">Validando…</span>}
         {!checking && admin && (
           <span className="text-primary font-mono uppercase">✓ {admin.full_name || admin.email} · {admin.role}</span>
         )}
         {!checking && !admin && errMsg && code.length === 5 && (
-          <span className="text-destructive">{errMsg}</span>
+          <div className="text-destructive">{errMsg}</div>
+        )}
+        {!checking && wrongStore && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] gap-1 mt-1"
+            onClick={() => { setStoreId(wrongStore.id); toast.success(`Loja alterada para ${wrongStore.name}`); setWrongStore(null); setErrMsg(null); setTimeout(() => check(code), 200); }}
+          >
+            Trocar para {wrongStore.name}
+          </Button>
         )}
       </div>
     </div>
   );
 }
+
 
 
 function OpenButton({ storeId, onDone }: { storeId: string; onDone: () => void }) {
