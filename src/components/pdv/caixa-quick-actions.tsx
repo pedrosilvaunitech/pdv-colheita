@@ -9,9 +9,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LockOpen, Lock, ArrowDownCircle, ArrowUpCircle, ShieldCheck, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useCurrentStore } from "@/lib/current-store";
 
 interface AdminRow { user_id: string; full_name: string | null; email: string | null; role: string }
 type PermCheck = "can_open_close_cash" | "can_sangria" | "can_all";
+
+export class WrongStoreCodeError extends Error {
+  targetStoreId: string;
+  targetStoreName: string;
+  constructor(storeId: string, storeName: string) {
+    super(`Este código pertence à loja "${storeName}". Troque para essa loja para usá-lo.`);
+    this.targetStoreId = storeId;
+    this.targetStoreName = storeName;
+  }
+}
 
 async function verifyAdmin(storeId: string, code: string, perm: PermCheck): Promise<AdminRow> {
   const clean = code.replace(/\D/g, "");
@@ -19,7 +30,15 @@ async function verifyAdmin(storeId: string, code: string, perm: PermCheck): Prom
   const { data, error } = await supabase.rpc("verify_admin_code", { _store_id: storeId, _code: clean });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
-  if (!row) throw new Error("Código inválido");
+  if (!row) {
+    // Não achou na loja atual: verifica se pertence a outra loja acessível.
+    const { data: other } = await supabase.rpc("lookup_admin_code", { _code: clean });
+    const hit = Array.isArray(other) ? other[0] : other;
+    if (hit && hit.store_id && hit.store_id !== storeId) {
+      throw new WrongStoreCodeError(hit.store_id, hit.store_name || "outra loja");
+    }
+    throw new Error("Código inválido");
+  }
   // Senha mestra (user_id nulo) autoriza qualquer ação.
   if (!row.user_id) return row as AdminRow;
   const { data: permData, error: permErr } = await supabase.rpc("user_store_permissions", {
@@ -31,6 +50,7 @@ async function verifyAdmin(storeId: string, code: string, perm: PermCheck): Prom
   if (!allowed) throw new Error("Usuário sem permissão para esta ação");
   return row as AdminRow;
 }
+
 
 
 export function CaixaQuickActions({ storeId }: { storeId: string }) {
@@ -121,10 +141,13 @@ function AdminCodeField({ code, setCode, admin, setAdmin, storeId, perm }: {
 }) {
   const [checking, setChecking] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [wrongStore, setWrongStore] = useState<{ id: string; name: string } | null>(null);
+  const { setStoreId } = useCurrentStore();
   const check = async (raw: string) => {
     const digits = raw.replace(/\D/g, "").slice(0, 5);
     setCode(digits);
     setErrMsg(null);
+    setWrongStore(null);
     if (digits.length < 5) { setAdmin(null); return; }
     setChecking(true);
     try {
@@ -132,7 +155,12 @@ function AdminCodeField({ code, setCode, admin, setAdmin, storeId, perm }: {
       setAdmin(a);
     } catch (e) {
       setAdmin(null);
-      setErrMsg(e instanceof Error ? e.message : "Código inválido");
+      if (e instanceof WrongStoreCodeError) {
+        setWrongStore({ id: e.targetStoreId, name: e.targetStoreName });
+        setErrMsg(e.message);
+      } else {
+        setErrMsg(e instanceof Error ? e.message : "Código inválido");
+      }
     } finally {
       setChecking(false);
     }
@@ -150,18 +178,30 @@ function AdminCodeField({ code, setCode, admin, setAdmin, storeId, perm }: {
         placeholder="_ _ _ _ _"
         className="font-mono text-center text-2xl tracking-[0.6em] tabular-nums"
       />
-      <div className="text-[11px] mt-1 h-4">
+      <div className="text-[11px] mt-1 min-h-4 space-y-1">
         {checking && <span className="text-muted-foreground">Validando…</span>}
         {!checking && admin && (
           <span className="text-primary font-mono uppercase">✓ {admin.full_name || admin.email} · {admin.role}</span>
         )}
         {!checking && !admin && errMsg && code.length === 5 && (
-          <span className="text-destructive">{errMsg}</span>
+          <div className="text-destructive">{errMsg}</div>
+        )}
+        {!checking && wrongStore && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] gap-1 mt-1"
+            onClick={() => { setStoreId(wrongStore.id); toast.success(`Loja alterada para ${wrongStore.name}`); setWrongStore(null); setErrMsg(null); setTimeout(() => check(code), 200); }}
+          >
+            Trocar para {wrongStore.name}
+          </Button>
         )}
       </div>
     </div>
   );
 }
+
 
 
 function OpenButton({ storeId, onDone }: { storeId: string; onDone: () => void }) {
