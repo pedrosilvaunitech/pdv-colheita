@@ -227,11 +227,16 @@ function SettingsPage() {
       <div className="p-6 max-w-5xl">
         <Tabs defaultValue="recibo">
           <TabsList>
+            <TabsTrigger value="aparencia" className="gap-1"><Palette className="size-3" /> Aparência</TabsTrigger>
             <TabsTrigger value="recibo">Cupom / Nota</TabsTrigger>
             <TabsTrigger value="fiscal">Fiscal & Certificado A1</TabsTrigger>
             <TabsTrigger value="numeracao">Numeração NFC-e/NF-e</TabsTrigger>
             <TabsTrigger value="pix" className="gap-1"><QrCode className="size-3" /> PIX</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="aparencia" className="mt-4">
+            <BrandingTab />
+          </TabsContent>
 
           <TabsContent value="recibo" className="mt-4">
             <div className="flex justify-end gap-2 mb-4">
