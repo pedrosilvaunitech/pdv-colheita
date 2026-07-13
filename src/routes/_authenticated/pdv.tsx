@@ -97,6 +97,55 @@ function PdvPage() {
   useEffect(() => { if (settings.data?.default_document) setDocType(settings.data.default_document as "fiscal" | "nao_fiscal"); }, [settings.data?.default_document]);
   useEffect(() => { inputRef.current?.focus(); }, [storeId]);
 
+  // ============================================================
+  // COMANDA (lanchonete) — carrega itens da comanda no carrinho e
+  // ao finalizar a venda marca a comanda como "fechada" + vincula sale_id.
+  // ============================================================
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
+  const navigate = useNavigate();
+  const [linkedComanda, setLinkedComanda] = useState<{ id: string; number: number; label: string | null } | null>(null);
+  const [comandaInput, setComandaInput] = useState("");
+
+  const loadComanda = async (numRaw: string | number) => {
+    const num = Number(String(numRaw).replace(/\D/g, ""));
+    if (!storeId || !Number.isFinite(num) || num <= 0) { toast.error("Número de comanda inválido"); return; }
+    const { data: c, error } = await supabase.from("comandas")
+      .select("id,number,label,status").eq("store_id", storeId).eq("number", num).maybeSingle();
+    if (error) { toast.error(error.message); return; }
+    if (!c) { toast.error(`Comanda #${num} não encontrada`); return; }
+    if (c.status !== "aberta") { toast.error(`Comanda #${num} já está ${c.status}`); return; }
+    const { data: its, error: e2 } = await supabase.from("comanda_items")
+      .select("product_id,product_name,barcode,quantity,unit_price").eq("comanda_id", c.id).order("created_at");
+    if (e2) { toast.error(e2.message); return; }
+    if (!its || its.length === 0) { toast.error("Comanda sem itens"); return; }
+    setCart(its.map((i) => ({
+      product_id: i.product_id ?? "",
+      name: i.product_name,
+      barcode: i.barcode,
+      unit_price: Number(i.unit_price),
+      quantity: Number(i.quantity),
+      is_weighable: false,
+    })));
+    setLinkedComanda({ id: c.id, number: c.number, label: c.label });
+    setComandaInput("");
+    toast.success(`Comanda #${c.number} carregada · ${its.length} item(ns)`);
+  };
+
+  // Se o usuário chega via /pdv?comanda=N, carrega automaticamente uma vez.
+  const autoComandaRef = useRef<number | null>(null);
+  useEffect(() => {
+    const n = search?.comanda as number | undefined;
+    if (!storeId || !n || autoComandaRef.current === n) return;
+    autoComandaRef.current = n;
+    loadComanda(n).finally(() => {
+      // Limpa da URL para não recarregar em navegações internas.
+      navigate({ to: "/pdv", search: {}, replace: true });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, search?.comanda]);
+
+  const clearLinkedComanda = () => { setLinkedComanda(null); setCart([]); };
+
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.quantity * i.unit_price, 0), [cart]);
   const disc = Math.min(Number(discount || 0), subtotal);
   const total = Math.max(0, subtotal - disc);
