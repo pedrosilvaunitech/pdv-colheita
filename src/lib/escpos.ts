@@ -2,6 +2,7 @@
 // Fallback: quando não suportado, o chamador deve imprimir o HTML térmico.
 // Perfis 58mm (32 col) e 80mm (48 col).
 import { getHardwareErrorMessage } from "./hardware-errors";
+import { buildDensityPrefix } from "./print-density";
 
 import type { ReceiptData } from "./receipt";
 import {
@@ -114,6 +115,7 @@ export function buildEscPosPayload(r: ReceiptData): Uint8Array {
   const cols = r.paper_width === 58 ? 32 : 48;
   const chunks: Uint8Array[] = [];
   chunks.push(bytes(ESC, 0x40));                          // init
+  chunks.push(buildDensityPrefix());                       // intensidade (config do usuário)
   chunks.push(bytes(ESC, 0x74, 0x02));                    // charset CP850
   chunks.push(bytes(ESC, 0x61, 0x01));                    // center
   chunks.push(bytes(ESC, 0x21, 0x08));                    // emphasized
