@@ -116,3 +116,7 @@
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
 }
+
+#lovable-badge {
+  display: none !important;
+}
