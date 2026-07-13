@@ -110,10 +110,10 @@ function PdvPage() {
     const num = Number(String(numRaw).replace(/\D/g, ""));
     if (!storeId || !Number.isFinite(num) || num <= 0) { toast.error("Número de comanda inválido"); return; }
     const { data: c, error } = await supabase.from("comandas")
-      .select("id,number,label,status").eq("store_id", storeId).eq("number", num).maybeSingle();
+      .select("id,number,label,status").eq("store_id", storeId).eq("number", num)
+      .eq("status", "aberta").maybeSingle();
     if (error) { toast.error(error.message); return; }
-    if (!c) { toast.error(`Comanda #${num} não encontrada`); return; }
-    if (c.status !== "aberta") { toast.error(`Comanda #${num} já está ${c.status}`); return; }
+    if (!c) { toast.error(`Nenhuma comanda #${num} aberta`); return; }
     const { data: its, error: e2 } = await supabase.from("comanda_items")
       .select("product_id,product_name,barcode,quantity,unit_price").eq("comanda_id", c.id).order("created_at");
     if (e2) { toast.error(e2.message); return; }
