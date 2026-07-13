@@ -126,7 +126,7 @@ function PdvPage() {
       quantity: Number(i.quantity),
       is_weighable: false,
     })));
-    setLinkedComanda({ id: c.id, number: c.number, label: c.label });
+    setLinkedComanda({ id: c.id, number: Number(c.number ?? num), label: c.label });
     setComandaInput("");
     toast.success(`Comanda #${c.number} carregada · ${its.length} item(ns)`);
   };
