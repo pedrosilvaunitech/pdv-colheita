@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,7 @@ import { PageHeader, StoreRequired } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, FileText, Receipt, Printer, Plus, X } from "lucide-react";
+import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, FileText, Receipt, Printer, Plus, X, Utensils } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
@@ -20,7 +20,10 @@ import { getToledoScale } from "@/lib/toledo-scale";
 
 export const Route = createFileRoute("/_authenticated/pdv")({
   component: PdvPage,
-  validateSearch: (s: Record<string, unknown>) => ({ kiosk: s.kiosk === "1" || s.kiosk === 1 ? "1" as const : undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    kiosk: s.kiosk === "1" || s.kiosk === 1 ? "1" as const : undefined,
+    comanda: s.comanda != null && s.comanda !== "" ? Number(s.comanda) : undefined,
+  }),
 });
 
 interface CartItem {
@@ -93,6 +96,55 @@ function PdvPage() {
 
   useEffect(() => { if (settings.data?.default_document) setDocType(settings.data.default_document as "fiscal" | "nao_fiscal"); }, [settings.data?.default_document]);
   useEffect(() => { inputRef.current?.focus(); }, [storeId]);
+
+  // ============================================================
+  // COMANDA (lanchonete) — carrega itens da comanda no carrinho e
+  // ao finalizar a venda marca a comanda como "fechada" + vincula sale_id.
+  // ============================================================
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
+  const navigate = useNavigate();
+  const [linkedComanda, setLinkedComanda] = useState<{ id: string; number: number; label: string | null } | null>(null);
+  const [comandaInput, setComandaInput] = useState("");
+
+  const loadComanda = async (numRaw: string | number) => {
+    const num = Number(String(numRaw).replace(/\D/g, ""));
+    if (!storeId || !Number.isFinite(num) || num <= 0) { toast.error("Número de comanda inválido"); return; }
+    const { data: c, error } = await supabase.from("comandas")
+      .select("id,number,label,status").eq("store_id", storeId).eq("number", num).maybeSingle();
+    if (error) { toast.error(error.message); return; }
+    if (!c) { toast.error(`Comanda #${num} não encontrada`); return; }
+    if (c.status !== "aberta") { toast.error(`Comanda #${num} já está ${c.status}`); return; }
+    const { data: its, error: e2 } = await supabase.from("comanda_items")
+      .select("product_id,product_name,barcode,quantity,unit_price").eq("comanda_id", c.id).order("created_at");
+    if (e2) { toast.error(e2.message); return; }
+    if (!its || its.length === 0) { toast.error("Comanda sem itens"); return; }
+    setCart(its.map((i) => ({
+      product_id: i.product_id ?? "",
+      name: i.product_name,
+      barcode: i.barcode,
+      unit_price: Number(i.unit_price),
+      quantity: Number(i.quantity),
+      is_weighable: false,
+    })));
+    setLinkedComanda({ id: c.id, number: Number(c.number ?? num), label: c.label });
+    setComandaInput("");
+    toast.success(`Comanda #${c.number ?? num} carregada · ${its.length} item(ns)`);
+  };
+
+  // Se o usuário chega via /pdv?comanda=N, carrega automaticamente uma vez.
+  const autoComandaRef = useRef<number | null>(null);
+  useEffect(() => {
+    const n = search?.comanda as number | undefined;
+    if (!storeId || !n || autoComandaRef.current === n) return;
+    autoComandaRef.current = n;
+    loadComanda(n).finally(() => {
+      // Limpa da URL para não recarregar em navegações internas.
+      navigate({ to: "/pdv", search: {}, replace: true });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, search?.comanda]);
+
+  const clearLinkedComanda = () => { setLinkedComanda(null); setCart([]); };
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.quantity * i.unit_price, 0), [cart]);
   const disc = Math.min(Number(discount || 0), subtotal);
@@ -333,6 +385,16 @@ function PdvPage() {
         const printed = await tryPrintEscPos(r);
         if (!printed) printReceipt(buildReceiptHTML(r));
       }
+      // Se a venda saiu de uma comanda aberta, fecha a comanda e vincula o sale_id.
+      if (linkedComanda) {
+        const { error: eC } = await supabase.from("comandas")
+          .update({ status: "fechada", closed_at: new Date().toISOString(), sale_id: saleId })
+          .eq("id", linkedComanda.id);
+        if (eC) toast.error(`Venda ok, mas falhou ao fechar comanda: ${eC.message}`);
+        else toast.success(`Comanda #${linkedComanda.number} fechada`);
+        setLinkedComanda(null);
+        qc.invalidateQueries({ queryKey: ["comandas"] });
+      }
       setCart([]); setPayments([]); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["cash_sales"] });
@@ -422,6 +484,15 @@ function PdvPage() {
         description={`Loja ${store.fantasy_name || store.name}${openReg.data ? ` · caixa ${openReg.data.terminal} aberto` : " · CAIXA FECHADO"}`}
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
+            <form onSubmit={(e) => { e.preventDefault(); if (comandaInput) loadComanda(comandaInput); }} className="flex items-center gap-1">
+              <div className="relative">
+                <Utensils className="size-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input value={comandaInput} onChange={(e) => setComandaInput(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Nº comanda" className="h-9 w-32 pl-7 font-mono text-sm" inputMode="numeric" />
+              </div>
+              <Button type="submit" size="sm" variant="outline" className="h-9" disabled={!comandaInput}>Puxar</Button>
+              <Button asChild size="sm" variant="ghost" className="h-9"><Link to="/comandas">Comandas</Link></Button>
+            </form>
             {storeId && <CaixaQuickActions storeId={storeId} />}
             <ScaleWidget onWeight={(kg) => applyWeightToLastWeighable(kg)} />
             <EscPosButton />
@@ -451,6 +522,17 @@ function PdvPage() {
 
       <div className="flex-1 grid grid-cols-3 gap-4 p-6 overflow-hidden">
         <div className="col-span-2 flex flex-col gap-4 min-h-0">
+          {linkedComanda && (
+            <div className="border border-primary/40 bg-primary/5 rounded-md px-4 py-2 flex items-center gap-3">
+              <Utensils className="size-4 text-primary" />
+              <div className="flex-1 text-sm">
+                <span className="font-mono font-bold text-primary">Comanda #{linkedComanda.number}</span>
+                {linkedComanda.label && <span className="text-muted-foreground"> · {linkedComanda.label}</span>}
+                <span className="text-[11px] text-muted-foreground ml-2">Itens carregados no carrinho. Finalize para fechar a comanda.</span>
+              </div>
+              <Button size="sm" variant="ghost" onClick={clearLinkedComanda}><X className="size-4" /></Button>
+            </div>
+          )}
           <form onSubmit={(e) => { e.preventDefault(); addByBarcode(scan); }} className="border border-border rounded-md bg-card p-4 flex items-center gap-3">
             <ScanBarcode className="size-8 text-primary" />
             <div className="flex-1">
