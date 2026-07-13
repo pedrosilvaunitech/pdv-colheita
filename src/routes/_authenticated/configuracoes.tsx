@@ -82,8 +82,30 @@ function SettingsPage() {
   const [form, setForm] = useState<ReceiptSettings | null>(null);
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null);
   const [certPassword, setCertPassword] = useState("");
+  const [density, setDensityState] = useState<PrintDensity>(() => getPrintDensity());
   const logoInputRef = useRef<HTMLInputElement>(null);
   const certInputRef = useRef<HTMLInputElement>(null);
+
+  const changeDensity = (v: PrintDensity) => { setPrintDensity(v); setDensityState(v); toast.success(`Intensidade: ${DENSITY_LABELS[v]}`); };
+
+  const testPrint = async () => {
+    if (!form || !store) return;
+    const ok = await tryPrintEscPos({
+      store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: null, phone: null },
+      header: `TESTE DE IMPRESSAO\nIntensidade: ${DENSITY_LABELS[density]}\nPapel: ${form.paper_width}mm`,
+      footer: "Se este texto estiver fraco, aumente a intensidade.",
+      paper_width: form.paper_width,
+      items: [
+        { name: "ITEM DE TESTE 1", quantity: 1, unit_price: 10, total: 10 },
+        { name: "ITEM DE TESTE 2 (nome longo para checar corte)", quantity: 2, unit_price: 5.5, total: 11 },
+      ],
+      subtotal: 21, discount: 0, total: 21, payment_method: "dinheiro",
+      received: 21, change: 0,
+      sale_id: "TEST0000", document_type: "nao_fiscal", issued_at: new Date(),
+    });
+    if (!ok) toast.error("Nenhum canal ESC/POS ativo. Conecte via Agente Local, WebUSB ou Serial (botão Impressora no PDV).");
+    else toast.success("Teste enviado à impressora");
+  };
 
   const q = useQuery({
     queryKey: ["receipt_settings", storeId],
