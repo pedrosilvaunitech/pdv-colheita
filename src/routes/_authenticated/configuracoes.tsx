@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor } from "lucide-react";
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
+import { DENSITY_LABELS, getPrintDensity, setPrintDensity, buildDensityPrefix, type PrintDensity } from "@/lib/print-density";
+import { buildEscPosPayload, tryPrintEscPos } from "@/lib/escpos";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({ component: SettingsPage });
 
