@@ -7,7 +7,7 @@ import { PageHeader, StoreRequired } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, FileText, Receipt, Printer, Plus, X } from "lucide-react";
+import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, FileText, Receipt, Printer, Plus, X, Utensils } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
