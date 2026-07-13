@@ -484,6 +484,15 @@ function PdvPage() {
         description={`Loja ${store.fantasy_name || store.name}${openReg.data ? ` · caixa ${openReg.data.terminal} aberto` : " · CAIXA FECHADO"}`}
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
+            <form onSubmit={(e) => { e.preventDefault(); if (comandaInput) loadComanda(comandaInput); }} className="flex items-center gap-1">
+              <div className="relative">
+                <Utensils className="size-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input value={comandaInput} onChange={(e) => setComandaInput(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Nº comanda" className="h-9 w-32 pl-7 font-mono text-sm" inputMode="numeric" />
+              </div>
+              <Button type="submit" size="sm" variant="outline" className="h-9" disabled={!comandaInput}>Puxar</Button>
+              <Button asChild size="sm" variant="ghost" className="h-9"><Link to="/comandas">Comandas</Link></Button>
+            </form>
             {storeId && <CaixaQuickActions storeId={storeId} />}
             <ScaleWidget onWeight={(kg) => applyWeightToLastWeighable(kg)} />
             <EscPosButton />
