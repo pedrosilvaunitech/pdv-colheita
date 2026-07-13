@@ -64,6 +64,9 @@ function ComandasPage() {
   const abertas = useMemo(() => (comandas.data ?? []).filter(c => c.status === "aberta"), [comandas.data]);
   const outras = useMemo(() => (comandas.data ?? []).filter(c => c.status !== "aberta").slice(0, 30), [comandas.data]);
 
+  useEffect(() => { if (!openId) quickRef.current?.focus(); }, [openId]);
+
+
   // Bipagem rápida: digite/bipe o número da comanda (ex.: "0001") → abre.
   // Se não existir, cria automaticamente com aquele número.
   const openOrCreateByNumber = async (raw: string) => {
