@@ -283,21 +283,43 @@ function SettingsPage() {
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
                 <h3 className="text-sm font-semibold">Papel e comportamento</h3>
-                <Select value={String(form.paper_width)} onValueChange={(v) => setForm({ ...form, paper_width: Number(v) as 58 | 80 })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="80">80mm (padrão)</SelectItem>
-                    <SelectItem value="58">58mm (portátil)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={form.font_size} onValueChange={(v) => setForm({ ...form, font_size: v as ReceiptSettings["font_size"] })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="small">Fonte pequena</SelectItem>
-                    <SelectItem value="medium">Fonte média</SelectItem>
-                    <SelectItem value="large">Fonte grande</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div>
+                  <Label className="text-xs">Largura do papel</Label>
+                  <Select value={String(form.paper_width)} onValueChange={(v) => setForm({ ...form, paper_width: Number(v) as 58 | 80 })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="80">80mm (padrão)</SelectItem>
+                      <SelectItem value="58">58mm (portátil)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Tamanho da fonte</Label>
+                  <Select value={form.font_size} onValueChange={(v) => setForm({ ...form, font_size: v as ReceiptSettings["font_size"] })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="small">Fonte pequena</SelectItem>
+                      <SelectItem value="medium">Fonte média</SelectItem>
+                      <SelectItem value="large">Fonte grande</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="border-t border-border pt-3">
+                  <Label className="text-xs flex items-center gap-1"><Printer className="size-3" /> Intensidade de impressão (escurecimento)</Label>
+                  <Select value={density} onValueChange={(v) => changeDensity(v as PrintDensity)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">{DENSITY_LABELS.light}</SelectItem>
+                      <SelectItem value="medium">{DENSITY_LABELS.medium}</SelectItem>
+                      <SelectItem value="dark">{DENSITY_LABELS.dark}</SelectItem>
+                      <SelectItem value="extra_dark">{DENSITY_LABELS.extra_dark}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">Se o cupom estiver muito claro, use "Escura" ou "Muito escura". Configuração salva neste dispositivo.</p>
+                  <Button variant="outline" size="sm" className="w-full mt-2 gap-2" onClick={testPrint}>
+                    <Printer className="size-4" /> Imprimir teste de intensidade
+                  </Button>
+                </div>
                 <div className="flex items-center justify-between border-t border-border pt-3">
                   <div><Label>Imprimir automaticamente</Label><p className="text-xs text-muted-foreground">Abre a impressão ao finalizar venda</p></div>
                   <Switch checked={form.print_auto} onCheckedChange={(c) => setForm({ ...form, print_auto: c })} />
@@ -307,6 +329,7 @@ function SettingsPage() {
                   <Switch checked={form.ask_customer} onCheckedChange={(c) => setForm({ ...form, ask_customer: c })} />
                 </div>
               </div>
+
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2"><ImageIcon className="size-4" /> Logo da empresa</h3>
