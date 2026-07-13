@@ -124,6 +124,137 @@ export type Database = {
           },
         ]
       }
+      comanda_items: {
+        Row: {
+          barcode: string | null
+          comanda_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          product_id: string | null
+          product_name: string
+          quantity: number
+          store_id: string
+          unit_price: number
+        }
+        Insert: {
+          barcode?: string | null
+          comanda_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          product_id?: string | null
+          product_name: string
+          quantity: number
+          store_id: string
+          unit_price: number
+        }
+        Update: {
+          barcode?: string | null
+          comanda_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          store_id?: string
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comanda_items_comanda_id_fkey"
+            columns: ["comanda_id"]
+            isOneToOne: false
+            referencedRelation: "comandas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comanda_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comanda_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_reorder"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "comanda_items_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comandas: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          id: string
+          label: string | null
+          notes: string | null
+          number: number | null
+          opened_at: string
+          opened_by: string | null
+          sale_id: string | null
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          label?: string | null
+          notes?: string | null
+          number?: number | null
+          opened_at?: string
+          opened_by?: string | null
+          sale_id?: string | null
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          label?: string | null
+          notes?: string | null
+          number?: number | null
+          opened_at?: string
+          opened_by?: string | null
+          sale_id?: string | null
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comandas_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comandas_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address_line: string | null
