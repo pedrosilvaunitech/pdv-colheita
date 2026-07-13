@@ -67,19 +67,22 @@ function ComandasPage() {
   useEffect(() => { if (!openId) quickRef.current?.focus(); }, [openId]);
 
 
-  // Bipagem rápida: digite/bipe o número da comanda (ex.: "0001") → abre.
-  // Se não existir, cria automaticamente com aquele número.
+  // Bipagem rápida (modelo restaurante): digite/bipe o número da comanda (ex.: "0001").
+  // - Se existir uma ABERTA com esse nº → reutiliza (continua o consumo).
+  // - Se existir só fechada/cancelada → abre uma NOVA venda com o mesmo nº (mesa reutilizada).
+  // - Se não existir → cria a primeira.
   const openOrCreateByNumber = async (raw: string) => {
     const num = Number(String(raw).replace(/\D/g, ""));
     if (!storeId || !Number.isFinite(num) || num <= 0) { toast.error("Nº inválido"); return; }
-    const { data: existing, error } = await supabase.from("comandas")
-      .select("id,status,number").eq("store_id", storeId).eq("number", num).maybeSingle();
+    const { data: openRow, error } = await supabase.from("comandas")
+      .select("id,status,number")
+      .eq("store_id", storeId).eq("number", num).eq("status", "aberta")
+      .maybeSingle();
     if (error) { toast.error(error.message); return; }
-    if (existing) {
-      if (existing.status !== "aberta") { toast.error(`Comanda #${num} já está ${existing.status}. Abra outra.`); return; }
-      setOpenId(existing.id);
+    if (openRow) {
+      setOpenId(openRow.id);
       setQuickNumber("");
-      toast.success(`Comanda #${num} aberta`);
+      toast.success(`Comanda #${num} reaberta (consumo em andamento)`);
       return;
     }
     const { data: u } = await supabase.auth.getUser();
@@ -90,7 +93,7 @@ function ComandasPage() {
     setOpenId(created.id);
     setQuickNumber("");
     qc.invalidateQueries({ queryKey: ["comandas"] });
-    toast.success(`Comanda #${num} criada e aberta`);
+    toast.success(`Comanda #${num} aberta (nova venda)`);
   };
 
   if (!store) return <StoreRequired />;
