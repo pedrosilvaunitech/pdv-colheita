@@ -385,6 +385,16 @@ function PdvPage() {
         const printed = await tryPrintEscPos(r);
         if (!printed) printReceipt(buildReceiptHTML(r));
       }
+      // Se a venda saiu de uma comanda aberta, fecha a comanda e vincula o sale_id.
+      if (linkedComanda) {
+        const { error: eC } = await supabase.from("comandas")
+          .update({ status: "fechada", closed_at: new Date().toISOString(), sale_id: saleId })
+          .eq("id", linkedComanda.id);
+        if (eC) toast.error(`Venda ok, mas falhou ao fechar comanda: ${eC.message}`);
+        else toast.success(`Comanda #${linkedComanda.number} fechada`);
+        setLinkedComanda(null);
+        qc.invalidateQueries({ queryKey: ["comandas"] });
+      }
       setCart([]); setPayments([]); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["cash_sales"] });
