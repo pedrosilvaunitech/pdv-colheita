@@ -128,7 +128,7 @@ function PdvPage() {
     })));
     setLinkedComanda({ id: c.id, number: Number(c.number ?? num), label: c.label });
     setComandaInput("");
-    toast.success(`Comanda #${c.number} carregada · ${its.length} item(ns)`);
+    toast.success(`Comanda #${c.number ?? num} carregada · ${its.length} item(ns)`);
   };
 
   // Se o usuário chega via /pdv?comanda=N, carrega automaticamente uma vez.
