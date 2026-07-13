@@ -41,6 +41,7 @@ const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/pdv", label: "PDV / Frente", icon: ScanBarcode },
   { to: "/caixa", label: "Caixa", icon: Wallet },
+  { to: "/comandas", label: "Comandas", icon: Utensils },
   { to: "/relatorios", label: "Relatórios", icon: BarChart3 },
   { to: "/produtos", label: "Produtos", icon: Package },
   { to: "/estoque", label: "Estoque", icon: Boxes },
