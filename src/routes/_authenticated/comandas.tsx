@@ -44,6 +44,8 @@ function ComandasPage() {
   const qc = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [quickNumber, setQuickNumber] = useState("");
+  const quickRef = useRef<HTMLInputElement>(null);
 
   const comandas = useQuery({
     queryKey: ["comandas", storeId],
@@ -62,20 +64,65 @@ function ComandasPage() {
   const abertas = useMemo(() => (comandas.data ?? []).filter(c => c.status === "aberta"), [comandas.data]);
   const outras = useMemo(() => (comandas.data ?? []).filter(c => c.status !== "aberta").slice(0, 30), [comandas.data]);
 
+  useEffect(() => { if (!openId) quickRef.current?.focus(); }, [openId]);
+
+
+  // Bipagem rápida: digite/bipe o número da comanda (ex.: "0001") → abre.
+  // Se não existir, cria automaticamente com aquele número.
+  const openOrCreateByNumber = async (raw: string) => {
+    const num = Number(String(raw).replace(/\D/g, ""));
+    if (!storeId || !Number.isFinite(num) || num <= 0) { toast.error("Nº inválido"); return; }
+    const { data: existing, error } = await supabase.from("comandas")
+      .select("id,status,number").eq("store_id", storeId).eq("number", num).maybeSingle();
+    if (error) { toast.error(error.message); return; }
+    if (existing) {
+      if (existing.status !== "aberta") { toast.error(`Comanda #${num} já está ${existing.status}. Abra outra.`); return; }
+      setOpenId(existing.id);
+      setQuickNumber("");
+      toast.success(`Comanda #${num} aberta`);
+      return;
+    }
+    const { data: u } = await supabase.auth.getUser();
+    const { data: created, error: e2 } = await supabase.from("comandas").insert({
+      store_id: storeId, number: num, label: null, opened_by: u.user?.id ?? null,
+    }).select("id,number").single();
+    if (e2) { toast.error(e2.message); return; }
+    setOpenId(created.id);
+    setQuickNumber("");
+    qc.invalidateQueries({ queryKey: ["comandas"] });
+    toast.success(`Comanda #${num} criada e aberta`);
+  };
+
   if (!store) return <StoreRequired />;
 
   return (
     <div className="h-full flex flex-col">
       <PageHeader
         title="Comandas · Consumo no local"
-        description="Abra comandas por mesa ou cliente, lance itens durante o consumo e feche direto no PDV."
+        description="Bipe o Nº da comanda no topo — abre (ou cria) e já libera a bipagem de produtos."
         actions={
           <div className="flex gap-2">
             <Button asChild variant="outline" size="sm"><Link to="/pdv">Ir para o PDV</Link></Button>
-            <Button size="sm" onClick={() => setNewOpen(true)} className="gap-2"><Plus className="size-4" /> Nova comanda</Button>
+            <Button size="sm" onClick={() => setNewOpen(true)} className="gap-2"><Plus className="size-4" /> Nova comanda (com nome)</Button>
           </div>
         }
       />
+
+      <form onSubmit={(e) => { e.preventDefault(); if (quickNumber) openOrCreateByNumber(quickNumber); }}
+        className="mx-6 mt-4 border border-primary/40 bg-primary/5 rounded-md p-4 flex items-center gap-3">
+        <Utensils className="size-6 text-primary" />
+        <div className="flex-1">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Bipe/Digite o Nº da comanda</div>
+          <Input ref={quickRef} value={quickNumber}
+            onChange={(e) => setQuickNumber(e.target.value.replace(/\D/g, ""))}
+            placeholder="Ex.: 0001"
+            inputMode="numeric"
+            className="border-0 shadow-none text-2xl font-mono h-12 focus-visible:ring-0 px-0 bg-transparent"
+            autoFocus />
+        </div>
+        <Button type="submit" size="lg" className="h-12" disabled={!quickNumber}>Abrir</Button>
+      </form>
+
 
       <div className="flex-1 grid grid-cols-3 gap-4 p-6 overflow-hidden">
         <div className="col-span-1 flex flex-col gap-4 min-h-0">
