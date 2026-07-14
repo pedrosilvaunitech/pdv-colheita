@@ -42,26 +42,30 @@ const GS_E_DENSITY: Record<PrintDensity, number> = {
   extra_dark: 200,
 };
 
-export function getPrintDensity(): PrintDensity {
+function keyFor(printerId?: string | null): string {
+  const p = (printerId ?? "").trim();
+  return p ? `${LS_KEY}::${p}` : LS_KEY;
+}
+
+export function getPrintDensity(printerId?: string | null): PrintDensity {
   try {
-    const v = localStorage.getItem(LS_KEY);
-    if (v === "light" || v === "medium" || v === "dark" || v === "extra_dark") return v;
+    const raw = localStorage.getItem(keyFor(printerId)) ?? (printerId ? localStorage.getItem(LS_KEY) : null);
+    if (raw === "light" || raw === "medium" || raw === "dark" || raw === "extra_dark") return raw;
   } catch { /* noop */ }
   return "dark";
 }
 
-export function setPrintDensity(v: PrintDensity): void {
-  try { localStorage.setItem(LS_KEY, v); } catch { /* noop */ }
+export function setPrintDensity(v: PrintDensity, printerId?: string | null): void {
+  try { localStorage.setItem(keyFor(printerId), v); } catch { /* noop */ }
 }
 
 /** Bytes de configuração a prefixar em cada payload ESC/POS. */
-export function buildDensityPrefix(density: PrintDensity = getPrintDensity()): Uint8Array {
-  const [n1, n2, n3] = ESC7_PROFILES[density];
-  const m = GS_E_DENSITY[density];
+export function buildDensityPrefix(density?: PrintDensity, printerId?: string | null): Uint8Array {
+  const d = density ?? getPrintDensity(printerId);
+  const [n1, n2, n3] = ESC7_PROFILES[d];
+  const m = GS_E_DENSITY[d];
   return new Uint8Array([
-    // ESC 7 n1 n2 n3
     0x1b, 0x37, n1, n2, n3,
-    // GS ( E pL=0x03 pH=0x00 fn=0x05 m
     0x1d, 0x28, 0x45, 0x03, 0x00, 0x05, m,
   ]);
 }
