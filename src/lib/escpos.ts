@@ -261,7 +261,10 @@ export async function tryPrintEscPosDetailed(
   }
 
   // 3) Web Serial
-  if (!isEscPosEnabled()) return record({ channel: "none", ok: false, error: "Nenhum canal ESC/POS conectado" });
+  if (!isEscPosEnabled()) {
+    const err = agentError ? `Agente: ${agentError.msg}` : "Nenhum canal ESC/POS conectado (autorize WebUSB, Web Serial ou instale o Agente Local)";
+    return record({ channel: "none", ok: false, error: err });
+  }
   const port = await getGrantedPort();
   if (!port) return record({ channel: "none", ok: false, error: "Porta serial não autorizada" });
   try {
