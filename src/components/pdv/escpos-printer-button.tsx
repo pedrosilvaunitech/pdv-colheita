@@ -289,8 +289,9 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
   onRefreshAgent: () => void;
   onReprint: () => void;
 }) {
-  const isAccessDenied = /access denied|acesso negado/i.test(message);
-  const isAgentDown = /agente|failed to fetch|127\.0\.0\.1/i.test(message);
+  const isLibusbBlocked = /libusb_error_not_supported|libusb_error_access|not_supported/i.test(message);
+  const isAccessDenied = /access denied|acesso negado/i.test(message) || isLibusbBlocked;
+  const isAgentDown = /failed to fetch|127\.0\.0\.1/i.test(message) && !isLibusbBlocked;
 
   return (
     <div className="p-3 border-t border-border bg-destructive/10 space-y-2">
@@ -304,15 +305,20 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
 
       {isAccessDenied && (
         <div className="text-[10px] text-foreground/80 bg-background/50 rounded p-2 space-y-1.5 leading-relaxed">
-          <div className="font-semibold text-destructive">Windows travou o acesso USB</div>
-          <div>O driver de impressora do Windows reservou a interface — o navegador não consegue abri-la. Reautorizar <strong>não resolve</strong>. Use uma das opções abaixo:</div>
+          <div className="font-semibold text-destructive">
+            {isLibusbBlocked ? "libusb bloqueado pelo driver Windows" : "Windows travou o acesso USB"}
+          </div>
+          <div>
+            O driver de impressora do Windows reservou a interface — o acesso USB bruto (libusb/WebUSB) retorna <code>LIBUSB_ERROR_NOT_SUPPORTED</code>. Soluções, em ordem de preferência:
+          </div>
           <ol className="list-decimal pl-4 space-y-1">
-            <li><strong>Instale o Agente Local</strong> (recomendado): imprime via driver do Windows sem conflito.</li>
-            <li><strong>Zadig → WinUSB</strong>: substitua o driver por WinUSB para liberar o WebUSB.</li>
-            <li><strong>Desinstale o driver</strong> da impressora e conecte-a como dispositivo genérico.</li>
+            <li><strong>Atualize o Agente Local para v1.1+</strong>: a nova versão imprime pelo <strong>spooler do Windows</strong> (canal SPOOLER), usando o próprio driver da impressora — sem WinUSB. Baixe o novo <code>.msi</code> e reinstale.</li>
+            <li><strong>Selecione a impressora do spooler</strong> no seletor acima (nome sem prefixo <code>USB-XXXX:YYYY</code>). Ela usa o driver oficial e não conflita.</li>
+            <li><strong>Zadig → WinUSB</strong>: substitua o driver por WinUSB para liberar o acesso bruto (perde a fila do Windows).</li>
           </ol>
         </div>
       )}
+
 
       {isAgentDown && !isAccessDenied && (
         <div className="text-[10px] text-foreground/80 bg-background/50 rounded p-2 leading-relaxed">
