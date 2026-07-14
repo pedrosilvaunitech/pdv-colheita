@@ -21,9 +21,11 @@ import {
   pingPrintAgent,
   setPrintAgentEnabled,
   setSelectedPrinter,
+  PRINT_AGENT_EVENT,
   type AgentPrinter,
   type AgentStatus,
 } from "@/lib/print-agent";
+import { getLastReceipt } from "@/lib/print-history";
 import { DENSITY_LABELS, getPrintDensity, setPrintDensity, type PrintDensity } from "@/lib/print-density";
 import { getBrowserDeviceFeatureState } from "@/lib/browser-device-permissions";
 
