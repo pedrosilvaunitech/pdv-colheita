@@ -171,7 +171,7 @@ export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string |
 
 import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
 import { getSelectedPrinter, pingPrintAgent, printViaAgent, setLastPrintError } from "./print-agent";
-import { appendPrintHistory } from "./print-history";
+import { appendPrintHistory, setLastReceipt } from "./print-history";
 import { getPrinterPaperWidth } from "./printer-config";
 
 export interface PrintDiagnostic {
