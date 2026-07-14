@@ -692,6 +692,59 @@ export type Database = {
           },
         ]
       }
+      print_logs: {
+        Row: {
+          channel: string
+          created_at: string
+          error: string | null
+          id: string
+          ok: boolean
+          paper_width: number | null
+          printer: string | null
+          sale_id: string | null
+          store_id: string | null
+          ts: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          ok: boolean
+          paper_width?: number | null
+          printer?: string | null
+          sale_id?: string | null
+          store_id?: string | null
+          ts?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          ok?: boolean
+          paper_width?: number | null
+          printer?: string | null
+          sale_id?: string | null
+          store_id?: string | null
+          ts?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_logs_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_stocks: {
         Row: {
           id: string
