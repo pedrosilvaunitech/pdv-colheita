@@ -73,6 +73,20 @@ export async function getGrantedUsbPrinter(): Promise<USBDevice | null> {
   }
 }
 
+/** Revoga a permissão WebUSB previamente concedida (para reautorizar). */
+export async function forgetUsbPrinter(): Promise<void> {
+  if (!isWebUsbSupported()) return;
+  try {
+    const list = await navigator.usb.getDevices();
+    for (const d of list) {
+      const anyDev = d as USBDevice & { forget?: () => Promise<void> };
+      if (typeof anyDev.forget === "function") await anyDev.forget();
+    }
+  } catch (error) {
+    console.warn("[escpos] forgetUsbPrinter falhou:", error);
+  }
+}
+
 /**
  * Envia bytes ESC/POS crus para a impressora USB.
  * Estratégia: abre o device, seleciona a primeira configuração, faz claim
