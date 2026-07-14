@@ -81,15 +81,28 @@ function normalizePrinters(raw: unknown): AgentPrinter[] {
   }).filter((p) => p.name);
 }
 
+export const PRINT_AGENT_EVENT = "print-agent-status";
+
+let lastAgentSignature = "";
+function emitAgentStatus(st: AgentStatus): void {
+  if (typeof window === "undefined") return;
+  const sig = `${st.online ? "1" : "0"}:${st.version ?? ""}:${(st.printers ?? []).map((p) => p.name).join("|")}`;
+  if (sig === lastAgentSignature) return;
+  lastAgentSignature = sig;
+  window.dispatchEvent(new CustomEvent<AgentStatus>(PRINT_AGENT_EVENT, { detail: st }));
+}
+
 export async function pingPrintAgent(timeoutMs = 800): Promise<AgentStatus> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const r = await fetch(`${AGENT_URL}/status`, { signal: ctrl.signal, cache: "no-store" });
-    if (!r.ok) return { online: false };
+    if (!r.ok) { const off: AgentStatus = { online: false }; emitAgentStatus(off); return off; }
     const j = await r.json() as { version?: string; printers?: unknown };
-    return { online: true, version: j.version, printers: normalizePrinters(j.printers) };
-  } catch { return { online: false }; }
+    const st: AgentStatus = { online: true, version: j.version, printers: normalizePrinters(j.printers) };
+    emitAgentStatus(st);
+    return st;
+  } catch { const off: AgentStatus = { online: false }; emitAgentStatus(off); return off; }
   finally { clearTimeout(t); }
 }
 
