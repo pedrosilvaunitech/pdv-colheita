@@ -226,21 +226,13 @@ export function EscPosPrinterButton() {
           />
         </div>
 
-        {lastErr && (
-          <div className="p-3 border-t border-border bg-destructive/10">
-            <div className="flex items-start gap-2 text-[11px] text-destructive">
-              <AlertCircle className="size-3 mt-0.5 shrink-0" />
-              <div className="flex-1">
-                <div className="font-semibold mb-0.5">Último erro de impressão</div>
-                <div className="opacity-90 break-words">{lastErr}</div>
-                <button className="mt-1 underline opacity-70" onClick={() => setLastErr(null)}>Limpar</button>
-              </div>
-            </div>
-          </div>
-        )}
+        {lastErr && <PrintErrorPanel message={lastErr} onClear={() => setLastErr(null)} onReauthUsb={reauthorizeUsb} onRefreshAgent={refreshAgent} />}
 
-        <div className="px-3 py-2 border-t border-border text-[10px] text-muted-foreground">
-          Ordem: <strong>Agente → USB → Serial</strong>. Sem diálogo do navegador.
+        <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
+          <span>Ordem: <strong>Agente → USB → Serial</strong></span>
+          <button onClick={refreshAgent} className="flex items-center gap-1 hover:text-foreground">
+            <RefreshCw className="size-3" /> Atualizar
+          </button>
         </div>
       </PopoverContent>
     </Popover>
