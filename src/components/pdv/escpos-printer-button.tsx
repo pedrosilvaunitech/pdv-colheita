@@ -74,6 +74,25 @@ export function EscPosPrinterButton() {
     } catch (e) { toast.error(getHardwareErrorMessage(e, "usb")); }
   };
 
+  const reauthorizeUsb = async () => {
+    try {
+      await forgetUsbPrinter();
+      setUsbAuthorized(false);
+      setUsbName(null);
+      const d = await requestUsbPrinter();
+      setUsbAuthorized(true);
+      setUsbName(d.productName ?? null);
+      toast.success(`USB reautorizada: ${d.productName ?? "impressora"}`);
+    } catch (e) { toast.error(getHardwareErrorMessage(e, "usb")); }
+  };
+
+  const refreshAgent = async () => {
+    const st = await pingPrintAgent();
+    setAgent(st);
+    if (st.online) toast.success(`Agente online · ${st.printers?.length ?? 0} impressora(s)`);
+    else toast.error("Agente offline em 127.0.0.1:9100");
+  };
+
   const toggleAgent = async () => {
     if (agentEnabled) { setPrintAgentEnabled(false); setAgentEnabled(false); toast.info("Agente desativado"); return; }
     const st = await pingPrintAgent();
