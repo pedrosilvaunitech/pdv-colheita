@@ -258,3 +258,68 @@ function ChannelRow({ icon, title, subtitle, ok, onClick, disabled }: {
     </button>
   );
 }
+
+/**
+ * Painel de erro com remediação inteligente. Detecta "Access denied" (WebUSB
+ * bloqueado pelo driver do Windows) e oferece as três saídas possíveis:
+ * instalar Agente Local, trocar driver via Zadig, ou reautorizar USB.
+ */
+function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent }: {
+  message: string;
+  onClear: () => void;
+  onReauthUsb: () => void;
+  onRefreshAgent: () => void;
+}) {
+  const isAccessDenied = /access denied|acesso negado/i.test(message);
+  const isAgentDown = /agente|failed to fetch|127\.0\.0\.1/i.test(message);
+
+  return (
+    <div className="p-3 border-t border-border bg-destructive/10 space-y-2">
+      <div className="flex items-start gap-2 text-[11px] text-destructive">
+        <AlertCircle className="size-3 mt-0.5 shrink-0" />
+        <div className="flex-1">
+          <div className="font-semibold mb-0.5">Último erro de impressão</div>
+          <div className="opacity-90 break-words">{message}</div>
+        </div>
+      </div>
+
+      {isAccessDenied && (
+        <div className="text-[10px] text-foreground/80 bg-background/50 rounded p-2 space-y-1.5 leading-relaxed">
+          <div className="font-semibold text-destructive">Windows travou o acesso USB</div>
+          <div>O driver de impressora do Windows reservou a interface — o navegador não consegue abri-la. Reautorizar <strong>não resolve</strong>. Use uma das opções abaixo:</div>
+          <ol className="list-decimal pl-4 space-y-1">
+            <li><strong>Instale o Agente Local</strong> (recomendado): imprime via driver do Windows sem conflito.</li>
+            <li><strong>Zadig → WinUSB</strong>: substitua o driver por WinUSB para liberar o WebUSB.</li>
+            <li><strong>Desinstale o driver</strong> da impressora e conecte-a como dispositivo genérico.</li>
+          </ol>
+        </div>
+      )}
+
+      {isAgentDown && !isAccessDenied && (
+        <div className="text-[10px] text-foreground/80 bg-background/50 rounded p-2 leading-relaxed">
+          O Agente Local não respondeu em <code>127.0.0.1:9100</code>. Verifique se o executável está rodando (bandeja do sistema) e clique em <strong>Atualizar</strong>.
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        {isAccessDenied && (
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-[10px]" onClick={onRefreshAgent}>
+            <Server className="size-3" /> Tentar Agente Local
+          </Button>
+        )}
+        <Button size="sm" variant="outline" className="h-7 gap-1 text-[10px]" onClick={onReauthUsb}>
+          <RotateCcw className="size-3" /> Reautorizar USB
+        </Button>
+        <a
+          href="https://zadig.akeo.ie/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[10px] px-2 h-7 rounded border border-input hover:bg-accent"
+        >
+          <ExternalLink className="size-3" /> Baixar Zadig
+        </a>
+        <Button size="sm" variant="ghost" className="h-7 text-[10px] ml-auto" onClick={onClear}>Limpar</Button>
+      </div>
+    </div>
+  );
+}
