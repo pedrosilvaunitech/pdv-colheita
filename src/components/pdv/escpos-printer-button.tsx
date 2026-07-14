@@ -312,8 +312,8 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
             O driver de impressora do Windows reservou a interface — o acesso USB bruto (libusb/WebUSB) retorna <code>LIBUSB_ERROR_NOT_SUPPORTED</code>. Soluções, em ordem de preferência:
           </div>
           <ol className="list-decimal pl-4 space-y-1">
-            <li><strong>Atualize o Agente Local para v1.1+</strong>: a nova versão imprime pelo <strong>spooler do Windows</strong> (canal SPOOLER), usando o próprio driver da impressora — sem WinUSB. Baixe o novo <code>.msi</code> e reinstale.</li>
-            <li><strong>Selecione a impressora do spooler</strong> no seletor acima (nome sem prefixo <code>USB-XXXX:YYYY</code>). Ela usa o driver oficial e não conflita.</li>
+            <li><strong>Atualize o Agente Local para v1.2+</strong>: a nova versão imprime pelo <strong>spooler do Windows</strong> mesmo se o seletor estiver em <code>USB-XXXX:YYYY</code>, usando o próprio driver da impressora — sem WinUSB.</li>
+            <li><strong>Se houver mais de uma impressora</strong>, defina a EPSON como padrão no Windows ou selecione o nome dela no seletor acima.</li>
             <li><strong>Zadig → WinUSB</strong>: substitua o driver por WinUSB para liberar o acesso bruto (perde a fila do Windows).</li>
           </ol>
         </div>
