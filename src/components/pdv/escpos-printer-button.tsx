@@ -150,6 +150,14 @@ export function EscPosPrinterButton() {
     } finally { setTesting(false); }
   };
 
+  const reprintLast = async () => {
+    const r = getLastReceipt();
+    if (!r) { toast.error("Nenhum recibo anterior salvo"); return; }
+    const d = await tryPrintEscPosDetailed(r, false);
+    if (d.ok) { toast.success(`Reimpresso via ${d.channel.toUpperCase()}`); setLastErr(null); }
+    else toast.error(`Falhou (${d.channel}): ${d.error ?? "erro"}`);
+  };
+
   const anyActive = agentEnabled || usbAuthorized || serialEnabled;
   const printers: AgentPrinter[] = agent.printers ?? [];
   const activePrinter = printers.find((p) => p.name === (selected ?? printers[0]?.name));
