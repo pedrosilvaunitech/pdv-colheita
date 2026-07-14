@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getHardwareErrorMessage } from "@/lib/hardware-errors";
-import { Printer, Usb, Cable, Server, CheckCircle2, XCircle, TestTube2, AlertCircle, Ruler, RefreshCw, RotateCcw, ExternalLink } from "lucide-react";
+import { Printer, Usb, Cable, Server, CheckCircle2, XCircle, TestTube2, AlertCircle, Ruler, RefreshCw, RotateCcw, ExternalLink, Activity } from "lucide-react";
+import { PrintDiagnosticsDialog } from "./print-diagnostics-dialog";
 import { toast } from "sonner";
 import {
   isEscPosEnabled,
