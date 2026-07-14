@@ -111,11 +111,11 @@ function sep(cols: number): string { return "-".repeat(cols); }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export function buildEscPosPayload(r: ReceiptData): Uint8Array {
+export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string | null }): Uint8Array {
   const cols = r.paper_width === 58 ? 32 : 48;
   const chunks: Uint8Array[] = [];
   chunks.push(bytes(ESC, 0x40));                          // init
-  chunks.push(buildDensityPrefix());                       // intensidade (config do usuário)
+  chunks.push(buildDensityPrefix(undefined, opts?.printerId ?? null)); // intensidade por impressora
   chunks.push(bytes(ESC, 0x74, 0x02));                    // charset CP850
   chunks.push(bytes(ESC, 0x61, 0x01));                    // center
   chunks.push(bytes(ESC, 0x21, 0x08));                    // emphasized
