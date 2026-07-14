@@ -170,7 +170,7 @@ export function buildEscPosPayload(r: ReceiptData): Uint8Array {
 }
 
 import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
-import { isPrintAgentEnabled, pingPrintAgent, printViaAgent } from "./print-agent";
+import { pingPrintAgent, printViaAgent } from "./print-agent";
 
 
 
