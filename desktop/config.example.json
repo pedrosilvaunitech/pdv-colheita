@@ -1,5 +1,6 @@
 {
   "url": "https://pdv-colheita.lovable.app/pdv?kiosk=1",
-  "kiosk": false,
+  "fallbackUrl": "https://pdv-colheita.lovable.app/pdv?kiosk=1",
+  "kiosk": true,
   "startMinimized": false
 }
