@@ -20,11 +20,19 @@
 
 const AGENT_URL = "http://127.0.0.1:9100";
 const LS_KEY = "print_agent_enabled_v1";
+const LS_PRINTER = "print_agent_selected_printer_v1";
+const LS_LAST_ERR = "print_agent_last_error_v1";
+
+export interface AgentPrinter {
+  name: string;
+  paperWidth?: 58 | 80;
+  status?: string;
+}
 
 export interface AgentStatus {
   online: boolean;
   version?: string;
-  printers?: string[];
+  printers?: AgentPrinter[];
 }
 
 export function isPrintAgentEnabled(): boolean {
@@ -38,25 +46,69 @@ export function setPrintAgentEnabled(v: boolean): void {
   } catch { /* noop */ }
 }
 
+export function getSelectedPrinter(): string | null {
+  try { return localStorage.getItem(LS_PRINTER); } catch { return null; }
+}
+export function setSelectedPrinter(name: string | null): void {
+  try {
+    if (name) localStorage.setItem(LS_PRINTER, name);
+    else localStorage.removeItem(LS_PRINTER);
+  } catch { /* noop */ }
+}
+
+export function getLastPrintError(): string | null {
+  try { return localStorage.getItem(LS_LAST_ERR); } catch { return null; }
+}
+export function setLastPrintError(msg: string | null): void {
+  try {
+    if (msg) localStorage.setItem(LS_LAST_ERR, msg);
+    else localStorage.removeItem(LS_LAST_ERR);
+  } catch { /* noop */ }
+}
+
+function normalizePrinters(raw: unknown): AgentPrinter[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((p) => {
+    if (typeof p === "string") return { name: p };
+    if (p && typeof p === "object") {
+      const o = p as Record<string, unknown>;
+      const name = typeof o.name === "string" ? o.name : "";
+      const pw = o.paperWidth === 58 || o.paperWidth === 80 ? (o.paperWidth as 58 | 80) : undefined;
+      const status = typeof o.status === "string" ? o.status : undefined;
+      return { name, paperWidth: pw, status };
+    }
+    return { name: String(p) };
+  }).filter((p) => p.name);
+}
+
 export async function pingPrintAgent(timeoutMs = 800): Promise<AgentStatus> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const r = await fetch(`${AGENT_URL}/status`, { signal: ctrl.signal, cache: "no-store" });
     if (!r.ok) return { online: false };
-    const j = await r.json() as { version?: string; printers?: string[] };
-    return { online: true, version: j.version, printers: j.printers };
+    const j = await r.json() as { version?: string; printers?: unknown };
+    return { online: true, version: j.version, printers: normalizePrinters(j.printers) };
   } catch { return { online: false }; }
   finally { clearTimeout(t); }
 }
 
-export async function printViaAgent(payload: Uint8Array, printerName?: string): Promise<void> {
+export async function printViaAgent(payload: Uint8Array, printerName?: string | null): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
-  if (printerName) headers["X-Printer"] = printerName;
+  const target = printerName ?? getSelectedPrinter();
+  if (target) headers["X-Printer"] = target;
   const body = new Blob([new Uint8Array(payload)]);
-  const r = await fetch(`${AGENT_URL}/print`, { method: "POST", headers, body });
-  if (!r.ok) {
-    const msg = await r.text().catch(() => r.statusText);
-    throw new Error(`Agente respondeu ${r.status}: ${msg}`);
+  try {
+    const r = await fetch(`${AGENT_URL}/print`, { method: "POST", headers, body });
+    if (!r.ok) {
+      const msg = await r.text().catch(() => r.statusText);
+      const err = `Agente ${r.status}: ${msg}`;
+      setLastPrintError(err);
+      throw new Error(err);
+    }
+    setLastPrintError(null);
+  } catch (e) {
+    if (e instanceof Error && !e.message.startsWith("Agente ")) setLastPrintError(e.message);
+    throw e;
   }
 }

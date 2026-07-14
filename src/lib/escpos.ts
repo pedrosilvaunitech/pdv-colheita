@@ -111,11 +111,11 @@ function sep(cols: number): string { return "-".repeat(cols); }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export function buildEscPosPayload(r: ReceiptData): Uint8Array {
+export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string | null }): Uint8Array {
   const cols = r.paper_width === 58 ? 32 : 48;
   const chunks: Uint8Array[] = [];
   chunks.push(bytes(ESC, 0x40));                          // init
-  chunks.push(buildDensityPrefix());                       // intensidade (config do usuário)
+  chunks.push(buildDensityPrefix(undefined, opts?.printerId ?? null)); // intensidade por impressora
   chunks.push(bytes(ESC, 0x74, 0x02));                    // charset CP850
   chunks.push(bytes(ESC, 0x61, 0x01));                    // center
   chunks.push(bytes(ESC, 0x21, 0x08));                    // emphasized
@@ -170,34 +170,54 @@ export function buildEscPosPayload(r: ReceiptData): Uint8Array {
 }
 
 import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
-import { pingPrintAgent, printViaAgent } from "./print-agent";
+import { getSelectedPrinter, pingPrintAgent, printViaAgent, setLastPrintError } from "./print-agent";
 
-
+export interface PrintDiagnostic {
+  channel: "agent" | "usb" | "serial" | "none";
+  ok: boolean;
+  printer?: string;
+  paperWidth?: 58 | 80;
+  error?: string;
+}
 
 /**
  * Tenta imprimir SEM diálogo do navegador, na ordem:
- *   1. Agente de Impressão Local (127.0.0.1:9100) — mesmo sem "enable" salvo
- *   2. WebUSB já autorizada anteriormente pelo botão Impressora
+ *   1. Agente de Impressão Local (127.0.0.1:9100)
+ *   2. WebUSB já autorizada
  *   3. Web Serial (fallback histórico)
- * Só retorna `false` quando NADA funciona — aí o chamador imprime HTML.
  *
- * `interactiveFallback=true` permite abrir o seletor WebUSB apenas em ações
- * explícitas de configuração. No PDV/PWA o padrão é `false` para nunca pedir
- * seleção de impressora durante a venda.
+ * Retorna diagnóstico completo do canal escolhido e erros de cada tentativa.
  */
-export async function tryPrintEscPos(r: ReceiptData, interactiveFallback = false): Promise<boolean> {
-  const payload = buildEscPosPayload(r);
+export async function tryPrintEscPosDetailed(
+  r: ReceiptData,
+  interactiveFallback = false,
+): Promise<PrintDiagnostic> {
+  const selected = getSelectedPrinter();
 
-  // 1) Agente local — testa sempre, mesmo sem flag salva
+  // 1) Agente local
   try {
     const st = await pingPrintAgent();
     if (st.online && (st.printers?.length ?? 0) > 0) {
-      await printViaAgent(payload);
-      return true;
+      const target = selected && st.printers!.some((p) => p.name === selected)
+        ? st.printers!.find((p) => p.name === selected)!
+        : st.printers![0];
+      // Detecta tamanho do papel se a impressora reportar
+      const effectivePaper = target.paperWidth ?? r.paper_width;
+      const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
+      try {
+        await printViaAgent(payload, target.name);
+        return { channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[escpos] agente falhou:", msg);
+        return { channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg };
+      }
     }
   } catch (err) { console.warn("[escpos] agente indisponível:", err); }
 
-  // 2) WebUSB direto — auto-solicita permissão no 1º uso (aproveita gesto do clique)
+  const payload = buildEscPosPayload(r);
+
+  // 2) WebUSB direto
   if (isWebUsbSupported()) {
     try {
       let dev = await getGrantedUsbPrinter();
@@ -205,25 +225,42 @@ export async function tryPrintEscPos(r: ReceiptData, interactiveFallback = false
         try { dev = await requestUsbPrinter(); }
         catch (e) { console.warn("[escpos] usuário não autorizou USB:", e); }
       }
-      if (dev) { await printUsbRaw(dev, payload); return true; }
+      if (dev) {
+        try {
+          await printUsbRaw(dev, payload);
+          return { channel: "usb", ok: true, printer: dev.productName ?? "USB", paperWidth: r.paper_width };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setLastPrintError(msg);
+          return { channel: "usb", ok: false, error: msg };
+        }
+      }
     } catch (err) { console.warn("[escpos] webusb falhou:", err); }
   }
 
-  // 3) Web Serial (fallback histórico)
-  if (!isEscPosEnabled()) return false;
+  // 3) Web Serial
+  if (!isEscPosEnabled()) return { channel: "none", ok: false, error: "Nenhum canal ESC/POS conectado" };
   const port = await getGrantedPort();
-  if (!port) return false;
+  if (!port) return { channel: "none", ok: false, error: "Porta serial não autorizada" };
   try {
     await port.open({ baudRate: 9600 });
     const writer = port.writable?.getWriter();
-    if (!writer) { await port.close(); return false; }
+    if (!writer) { await port.close(); return { channel: "serial", ok: false, error: "Sem writer serial" }; }
     await writer.write(payload);
     await writer.close();
     await port.close();
-    return true;
+    return { channel: "serial", ok: true, paperWidth: r.paper_width };
   } catch (err) {
     console.warn("[escpos] serial falhou:", err);
     try { await port.close(); } catch { /* ignore */ }
-    return false;
+    const msg = err instanceof Error ? err.message : String(err);
+    setLastPrintError(msg);
+    return { channel: "serial", ok: false, error: msg };
   }
+}
+
+/** Wrapper retro-compatível: retorna apenas boolean. */
+export async function tryPrintEscPos(r: ReceiptData, interactiveFallback = false): Promise<boolean> {
+  const d = await tryPrintEscPosDetailed(r, interactiveFallback);
+  return d.ok;
 }
