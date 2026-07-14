@@ -282,11 +282,12 @@ function ChannelRow({ icon, title, subtitle, ok, onClick, disabled }: {
  * bloqueado pelo driver do Windows) e oferece as três saídas possíveis:
  * instalar Agente Local, trocar driver via Zadig, ou reautorizar USB.
  */
-function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent }: {
+function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onReprint }: {
   message: string;
   onClear: () => void;
   onReauthUsb: () => void;
   onRefreshAgent: () => void;
+  onReprint: () => void;
 }) {
   const isAccessDenied = /access denied|acesso negado/i.test(message);
   const isAgentDown = /agente|failed to fetch|127\.0\.0\.1/i.test(message);
