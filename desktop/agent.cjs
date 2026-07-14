@@ -178,15 +178,28 @@ function printViaSpooler(printerName, payload) {
       try { return resolve(printViaWindowsSpooler(printerName, payload)); }
       catch (e) { return reject(e); }
     }
-    const target = printerName || (nodePrinter.getDefaultPrinterName && nodePrinter.getDefaultPrinterName())
-      || (listSpoolerPrinters()[0] && listSpoolerPrinters()[0].name);
+    const spoolerPrinters = listSpoolerPrinters();
+    const hasExactTarget = printerName && spoolerPrinters.some((p) => p.name === printerName);
+    const target = (hasExactTarget ? printerName : null)
+      || (nodePrinter.getDefaultPrinterName && nodePrinter.getDefaultPrinterName())
+      || (spoolerPrinters[0] && spoolerPrinters[0].name);
     if (!target) return reject(new Error("Nenhuma impressora cadastrada no spooler do sistema"));
     nodePrinter.printDirect({
       data: Buffer.from(payload),
       printer: target,
       type: "RAW",
       success: () => resolve(target),
-      error: (err) => reject(err instanceof Error ? err : new Error(String(err))),
+      error: (err) => {
+        if (process.platform === "win32") {
+          try { return resolve(printViaWindowsSpooler(target, payload)); }
+          catch (fallbackErr) {
+            const original = err instanceof Error ? err.message : String(err);
+            const fallback = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+            return reject(new Error(`${original} | windows-spooler: ${fallback}`));
+          }
+        }
+        return reject(err instanceof Error ? err : new Error(String(err)));
+      },
     });
   });
 }
