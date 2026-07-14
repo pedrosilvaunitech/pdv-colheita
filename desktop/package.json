@@ -12,8 +12,7 @@
     "pack:win": "electron-packager . \"BastionPOSAgent\" --platform=win32 --arch=x64 --out=release --overwrite --icon=assets/icon.ico --asar --win32metadata.CompanyName=\"Bastion POS\" --win32metadata.FileDescription=\"Agente de Impressao Local\" --win32metadata.ProductName=\"Bastion POS Agent\"",
     "pack:mac": "electron-packager . \"BastionPOSAgent\" --platform=darwin --arch=x64 --out=release --overwrite --icon=assets/icon.icns --asar",
     "pack:linux": "electron-packager . \"BastionPOSAgent\" --platform=linux --arch=x64 --out=release --overwrite --icon=assets/icon.png --asar",
-    "msi:win": "node build-msi.cjs",
-    "postinstall": "electron-builder install-app-deps || true"
+    "msi:win": "node build-msi.cjs"
   },
   "dependencies": {
     "express": "^4.19.2",
