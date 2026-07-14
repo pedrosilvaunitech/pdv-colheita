@@ -172,31 +172,38 @@ export function buildEscPosPayload(r: ReceiptData): Uint8Array {
 import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw } from "./escpos-usb";
 import { isPrintAgentEnabled, pingPrintAgent, printViaAgent } from "./print-agent";
 
+import { requestUsbPrinter } from "./escpos-usb";
+
 /**
- * Tenta imprimir usando (nesta ordem, para máxima compatibilidade):
- *   1. Agente de Impressão Local (executável .exe/.msi/.pkg em 127.0.0.1:9100)
- *   2. WebUSB (impressora USB direta — melhor em Linux/macOS)
- *   3. Web Serial (impressora serial ou USB-to-Serial)
- * Retorna `false` se nenhum caminho funcionou — o chamador imprime HTML.
+ * Tenta imprimir SEM diálogo do navegador, na ordem:
+ *   1. Agente de Impressão Local (127.0.0.1:9100) — mesmo sem "enable" salvo
+ *   2. WebUSB (autoriza sozinho na 1ª venda usando o gesto do clique)
+ *   3. Web Serial (fallback histórico)
+ * Só retorna `false` quando NADA funciona — aí o chamador imprime HTML.
+ *
+ * `interactiveFallback=false` desativa o prompt WebUSB (útil em jobs
+ * automáticos onde não há gesto de usuário).
  */
-export async function tryPrintEscPos(r: ReceiptData): Promise<boolean> {
+export async function tryPrintEscPos(r: ReceiptData, interactiveFallback = true): Promise<boolean> {
   const payload = buildEscPosPayload(r);
 
-  // 1) Agente local
-  if (isPrintAgentEnabled()) {
-    try {
-      const st = await pingPrintAgent();
-      if (st.online) {
-        await printViaAgent(payload);
-        return true;
-      }
-    } catch (err) { console.warn("[escpos] agente falhou:", err); }
-  }
+  // 1) Agente local — testa sempre, mesmo sem flag salva
+  try {
+    const st = await pingPrintAgent();
+    if (st.online && (st.printers?.length ?? 0) > 0) {
+      await printViaAgent(payload);
+      return true;
+    }
+  } catch (err) { console.warn("[escpos] agente indisponível:", err); }
 
-  // 2) WebUSB direto
+  // 2) WebUSB direto — auto-solicita permissão no 1º uso (aproveita gesto do clique)
   if (isWebUsbSupported()) {
     try {
-      const dev = await getGrantedUsbPrinter();
+      let dev = await getGrantedUsbPrinter();
+      if (!dev && interactiveFallback) {
+        try { dev = await requestUsbPrinter(); }
+        catch (e) { console.warn("[escpos] usuário não autorizou USB:", e); }
+      }
       if (dev) { await printUsbRaw(dev, payload); return true; }
     } catch (err) { console.warn("[escpos] webusb falhou:", err); }
   }
