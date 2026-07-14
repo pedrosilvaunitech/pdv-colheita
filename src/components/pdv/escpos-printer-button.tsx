@@ -241,7 +241,7 @@ export function EscPosPrinterButton() {
           />
         </div>
 
-        {lastErr && <PrintErrorPanel message={lastErr} onClear={() => setLastErr(null)} onReauthUsb={reauthorizeUsb} onRefreshAgent={refreshAgent} />}
+        {lastErr && <PrintErrorPanel message={lastErr} onClear={() => setLastErr(null)} onReauthUsb={reauthorizeUsb} onRefreshAgent={refreshAgent} onReprint={reprintLast} />}
 
         <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
           <button onClick={() => setDiagOpen(true)} className="flex items-center gap-1 hover:text-foreground">
