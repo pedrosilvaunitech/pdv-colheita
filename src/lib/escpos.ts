@@ -195,6 +195,9 @@ export async function tryPrintEscPosDetailed(
   interactiveFallback = false,
 ): Promise<PrintDiagnostic> {
   const selected = getSelectedPrinter();
+  // Guarda o último recibo para permitir reimpressão após falha.
+  try { setLastReceipt(r); } catch { /* noop */ }
+
 
   const record = (d: PrintDiagnostic) => {
     appendPrintHistory({
