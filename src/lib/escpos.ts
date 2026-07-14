@@ -169,10 +169,10 @@ export function buildEscPosPayload(r: ReceiptData): Uint8Array {
   return bytes(...chunks);
 }
 
-import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw } from "./escpos-usb";
+import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
 import { isPrintAgentEnabled, pingPrintAgent, printViaAgent } from "./print-agent";
 
-import { requestUsbPrinter } from "./escpos-usb";
+
 
 /**
  * Tenta imprimir SEM diálogo do navegador, na ordem:
