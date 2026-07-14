@@ -61,19 +61,25 @@ function runPowerShell(script, args = [], opts = {}) {
   const exe = process.env.SystemRoot
     ? path.join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
     : "powershell.exe";
-  const r = spawnSync(exe, [
-    "-NoProfile",
-    "-NonInteractive",
-    "-ExecutionPolicy", "Bypass",
-    "-Command", script,
-    ...args,
-  ], { encoding: "utf8", windowsHide: true, timeout: opts.timeoutMs || 15000 });
-  if (r.error) throw r.error;
-  if (r.status !== 0) {
-    const msg = (r.stderr || r.stdout || `PowerShell saiu com código ${r.status}`).trim();
-    throw new Error(msg);
+  const scriptFile = path.join(os.tmpdir(), `bastion-pos-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.ps1`);
+  fs.writeFileSync(scriptFile, script, "utf8");
+  try {
+    const r = spawnSync(exe, [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy", "Bypass",
+      "-File", scriptFile,
+      ...args,
+    ], { encoding: "utf8", windowsHide: true, timeout: opts.timeoutMs || 15000 });
+    if (r.error) throw r.error;
+    if (r.status !== 0) {
+      const msg = (r.stderr || r.stdout || `PowerShell saiu com código ${r.status}`).trim();
+      throw new Error(msg);
+    }
+    return (r.stdout || "").trim();
+  } finally {
+    try { fs.unlinkSync(scriptFile); } catch {}
   }
-  return (r.stdout || "").trim();
 }
 
 function listWindowsSpoolerPrinters() {
