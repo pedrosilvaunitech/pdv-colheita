@@ -18,6 +18,26 @@ let mainWindow = null;
 let tray = null;
 let agentServer = null;
 
+function stripJsonComments(txt) {
+  let out = "", i = 0, inStr = false, strCh = "", inBlock = false, inLine = false;
+  while (i < txt.length) {
+    const c = txt[i], n = txt[i + 1];
+    if (inLine) { if (c === "\n") { inLine = false; out += c; } i++; continue; }
+    if (inBlock) { if (c === "*" && n === "/") { inBlock = false; i += 2; } else { i++; } continue; }
+    if (inStr) {
+      out += c;
+      if (c === "\\" && i + 1 < txt.length) { out += txt[i + 1]; i += 2; continue; }
+      if (c === strCh) inStr = false;
+      i++; continue;
+    }
+    if (c === '"' || c === "'") { inStr = true; strCh = c; out += c; i++; continue; }
+    if (c === "/" && n === "/") { inLine = true; i += 2; continue; }
+    if (c === "/" && n === "*") { inBlock = true; i += 2; continue; }
+    out += c; i++;
+  }
+  return out.replace(/,(\s*[}\]])/g, "$1");
+}
+
 function loadConfig() {
   const defaults = {
     url: process.env.BASTION_URL || "https://pdv-colheita.lovable.app/pdv?kiosk=1",
@@ -33,11 +53,12 @@ function loadConfig() {
   for (const p of candidates) {
     try {
       if (p && fs.existsSync(p)) {
-        const j = JSON.parse(fs.readFileSync(p, "utf8"));
+        const raw = fs.readFileSync(p, "utf8").replace(/^\uFEFF/, "");
+        const j = JSON.parse(stripJsonComments(raw));
         console.log("[main] config carregado de:", p);
         return { ...defaults, ...j };
       }
-    } catch (e) { console.warn("[main] config.json inválido em", p, e); }
+    } catch (e) { console.warn("[main] config.json inválido em", p, e && e.message); }
   }
   console.log("[main] usando URL padrão:", defaults.url);
   return defaults;
