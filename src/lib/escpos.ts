@@ -212,26 +212,29 @@ export async function tryPrintEscPosDetailed(
     return d;
   };
 
-  // 1) Agente local
-  try {
-    const st = await pingPrintAgent();
-    if (st.online && (st.printers?.length ?? 0) > 0) {
-      const target = selected && st.printers!.some((p) => p.name === selected)
-        ? st.printers!.find((p) => p.name === selected)!
-        : st.printers![0];
-      // Ordem de precedência para largura: override manual > agente > receipt
-      const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
-      const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
-      try {
-        await printViaAgent(payload, target.name);
-        return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn("[escpos] agente falhou:", msg);
-        return record({ channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg });
+  // 1) Agente local (só se habilitado — sem agente, cai direto no WebUSB/Serial)
+  let agentError: { printer: string; paperWidth?: 58 | 80; msg: string } | null = null;
+  if (isPrintAgentEnabled()) {
+    try {
+      const st = await pingPrintAgent();
+      if (st.online && (st.printers?.length ?? 0) > 0) {
+        const target = selected && st.printers!.some((p) => p.name === selected)
+          ? st.printers!.find((p) => p.name === selected)!
+          : st.printers![0];
+        const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
+        const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
+        try {
+          await printViaAgent(payload, target.name);
+          return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn("[escpos] agente falhou, tentando fallback:", msg);
+          agentError = { printer: target.name, paperWidth: effectivePaper, msg };
+          record({ channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg });
+        }
       }
-    }
-  } catch (err) { console.warn("[escpos] agente indisponível:", err); }
+    } catch (err) { console.warn("[escpos] agente indisponível:", err); }
+  }
 
   const usbPaper = getPrinterPaperWidth("__usb__") ?? r.paper_width;
   const payload = buildEscPosPayload({ ...r, paper_width: usbPaper }, { printerId: "__usb__" });
