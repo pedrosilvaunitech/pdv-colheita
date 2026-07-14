@@ -4,14 +4,23 @@ Executável nativo (`.exe` / `.msi` para Windows, `.app` para macOS,
 `AppImage/tar.gz` para Linux) que faz duas coisas:
 
 1. **Agente de Impressão Local** — servidor HTTP em `http://127.0.0.1:9100`
-   que recebe bytes ESC/POS via `POST /print` e envia direto para a
-   impressora USB, **sem diálogo de impressão** e sem drivers extras.
+   que recebe bytes ESC/POS via `POST /print` e imprime em dois canais
+   (nesta ordem): **spooler do sistema** (via driver oficial da impressora)
+   e **USB bruto** (via libusb). Sem diálogo do navegador.
 2. **Wrapper do PDV** — abre a URL publicada do PDV em janela **kiosk**
    fullscreen, com ícone na bandeja do sistema e inicialização automática.
 
 O PWA/navegador tenta este agente **antes** de WebUSB/Web Serial, então
 basta instalar o `.exe` uma vez no PDV e a impressão passa a funcionar
 imediatamente — inclusive em Firefox/Safari, que não têm WebUSB.
+
+> **v1.1 — correção `LIBUSB_ERROR_NOT_SUPPORTED`:** o agente agora usa o
+> spooler do Windows (via `@thiagoelg/node-printer`) como canal primário.
+> Isso resolve o erro que aparecia quando o driver oficial da impressora
+> (Bematech, Elgin, Epson, etc.) reservava a interface USB e o libusb não
+> conseguia abri-la. Não é mais necessário Zadig/WinUSB na maioria dos casos.
+> **Reinstale o `.msi` para obter o fix.**
+
 
 ---
 
