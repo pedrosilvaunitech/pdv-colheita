@@ -10,7 +10,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Barcode, Trash2, ScanBarcode, Banknote, CreditCard, Smartphone, Lock, FileText, Receipt, Printer, Plus, X, Utensils } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { buildReceiptHTML, printReceipt, ReceiptData } from "@/lib/receipt";
+import { ReceiptData } from "@/lib/receipt";
 import { tryPrintEscPos } from "@/lib/escpos";
 import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
 import { PixChargeModal } from "@/components/pix-charge-modal";
@@ -382,8 +382,10 @@ function PdvPage() {
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };
-        const printed = await tryPrintEscPos(r);
-        if (!printed) printReceipt(buildReceiptHTML(r));
+        const printed = await tryPrintEscPos(r, false);
+        if (!printed) {
+          toast.error("Venda finalizada, mas a impressão direta não está conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora.");
+        }
       }
       // Se a venda saiu de uma comanda aberta, fecha a comanda e vincula o sale_id.
       if (linkedComanda) {
