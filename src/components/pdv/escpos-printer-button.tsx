@@ -105,8 +105,8 @@ export function EscPosPrinterButton() {
 
         <DropdownMenuSeparator />
         <div className="px-2 py-1.5 text-[10px] text-muted-foreground leading-relaxed">
-          Ordem de tentativa na venda: <strong>Agente → USB → Serial → HTML</strong>.
-          Impressão sem tela de diálogo apenas via Agente ou WebUSB.
+          Ordem na venda: <strong>Agente → USB autorizada → Serial</strong>.
+          O PDV não abre mais a tela de impressão do navegador.
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

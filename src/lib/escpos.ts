@@ -177,14 +177,15 @@ import { pingPrintAgent, printViaAgent } from "./print-agent";
 /**
  * Tenta imprimir SEM diálogo do navegador, na ordem:
  *   1. Agente de Impressão Local (127.0.0.1:9100) — mesmo sem "enable" salvo
- *   2. WebUSB (autoriza sozinho na 1ª venda usando o gesto do clique)
+ *   2. WebUSB já autorizada anteriormente pelo botão Impressora
  *   3. Web Serial (fallback histórico)
  * Só retorna `false` quando NADA funciona — aí o chamador imprime HTML.
  *
- * `interactiveFallback=false` desativa o prompt WebUSB (útil em jobs
- * automáticos onde não há gesto de usuário).
+ * `interactiveFallback=true` permite abrir o seletor WebUSB apenas em ações
+ * explícitas de configuração. No PDV/PWA o padrão é `false` para nunca pedir
+ * seleção de impressora durante a venda.
  */
-export async function tryPrintEscPos(r: ReceiptData, interactiveFallback = true): Promise<boolean> {
+export async function tryPrintEscPos(r: ReceiptData, interactiveFallback = false): Promise<boolean> {
   const payload = buildEscPosPayload(r);
 
   // 1) Agente local — testa sempre, mesmo sem flag salva
