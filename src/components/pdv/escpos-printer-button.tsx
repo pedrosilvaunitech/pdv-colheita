@@ -21,9 +21,11 @@ import {
   pingPrintAgent,
   setPrintAgentEnabled,
   setSelectedPrinter,
+  PRINT_AGENT_EVENT,
   type AgentPrinter,
   type AgentStatus,
 } from "@/lib/print-agent";
+import { getLastReceipt } from "@/lib/print-history";
 import { DENSITY_LABELS, getPrintDensity, setPrintDensity, type PrintDensity } from "@/lib/print-density";
 import { getBrowserDeviceFeatureState } from "@/lib/browser-device-permissions";
 
@@ -55,7 +57,10 @@ export function EscPosPrinterButton() {
     const check = () => pingPrintAgent().then(setAgent).catch(() => setAgent({ online: false }));
     check();
     const t = setInterval(check, 15000);
-    return () => clearInterval(t);
+    // Sincroniza estado local com eventos globais (multi-aba / outros componentes)
+    const onAgent = (e: Event) => setAgent((e as CustomEvent<AgentStatus>).detail);
+    window.addEventListener(PRINT_AGENT_EVENT, onAgent);
+    return () => { clearInterval(t); window.removeEventListener(PRINT_AGENT_EVENT, onAgent); };
   }, []);
 
   // Ao trocar de impressora selecionada, recarrega densidade daquela impressora
@@ -145,6 +150,14 @@ export function EscPosPrinterButton() {
     } finally { setTesting(false); }
   };
 
+  const reprintLast = async () => {
+    const r = getLastReceipt();
+    if (!r) { toast.error("Nenhum recibo anterior salvo"); return; }
+    const d = await tryPrintEscPosDetailed(r, false);
+    if (d.ok) { toast.success(`Reimpresso via ${d.channel.toUpperCase()}`); setLastErr(null); }
+    else toast.error(`Falhou (${d.channel}): ${d.error ?? "erro"}`);
+  };
+
   const anyActive = agentEnabled || usbAuthorized || serialEnabled;
   const printers: AgentPrinter[] = agent.printers ?? [];
   const activePrinter = printers.find((p) => p.name === (selected ?? printers[0]?.name));
@@ -228,7 +241,7 @@ export function EscPosPrinterButton() {
           />
         </div>
 
-        {lastErr && <PrintErrorPanel message={lastErr} onClear={() => setLastErr(null)} onReauthUsb={reauthorizeUsb} onRefreshAgent={refreshAgent} />}
+        {lastErr && <PrintErrorPanel message={lastErr} onClear={() => setLastErr(null)} onReauthUsb={reauthorizeUsb} onRefreshAgent={refreshAgent} onReprint={reprintLast} />}
 
         <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
           <button onClick={() => setDiagOpen(true)} className="flex items-center gap-1 hover:text-foreground">
@@ -269,11 +282,12 @@ function ChannelRow({ icon, title, subtitle, ok, onClick, disabled }: {
  * bloqueado pelo driver do Windows) e oferece as três saídas possíveis:
  * instalar Agente Local, trocar driver via Zadig, ou reautorizar USB.
  */
-function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent }: {
+function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onReprint }: {
   message: string;
   onClear: () => void;
   onReauthUsb: () => void;
   onRefreshAgent: () => void;
+  onReprint: () => void;
 }) {
   const isAccessDenied = /access denied|acesso negado/i.test(message);
   const isAgentDown = /agente|failed to fetch|127\.0\.0\.1/i.test(message);
@@ -307,6 +321,9 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent }: {
       )}
 
       <div className="flex flex-wrap gap-1.5">
+        <Button size="sm" variant="default" className="h-7 gap-1 text-[10px]" onClick={onReprint}>
+          <RefreshCw className="size-3" /> Reimprimir última
+        </Button>
         {isAccessDenied && (
           <Button size="sm" variant="outline" className="h-7 gap-1 text-[10px]" onClick={onRefreshAgent}>
             <Server className="size-3" /> Tentar Agente Local
