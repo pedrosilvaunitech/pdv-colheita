@@ -321,6 +321,9 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
       )}
 
       <div className="flex flex-wrap gap-1.5">
+        <Button size="sm" variant="default" className="h-7 gap-1 text-[10px]" onClick={onReprint}>
+          <RefreshCw className="size-3" /> Reimprimir última
+        </Button>
         {isAccessDenied && (
           <Button size="sm" variant="outline" className="h-7 gap-1 text-[10px]" onClick={onRefreshAgent}>
             <Server className="size-3" /> Tentar Agente Local
