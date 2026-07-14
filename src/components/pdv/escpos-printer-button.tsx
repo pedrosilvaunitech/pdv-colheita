@@ -231,12 +231,15 @@ export function EscPosPrinterButton() {
         {lastErr && <PrintErrorPanel message={lastErr} onClear={() => setLastErr(null)} onReauthUsb={reauthorizeUsb} onRefreshAgent={refreshAgent} />}
 
         <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>Ordem: <strong>Agente → USB → Serial</strong></span>
+          <button onClick={() => setDiagOpen(true)} className="flex items-center gap-1 hover:text-foreground">
+            <Activity className="size-3" /> Diagnóstico
+          </button>
           <button onClick={refreshAgent} className="flex items-center gap-1 hover:text-foreground">
             <RefreshCw className="size-3" /> Atualizar
           </button>
         </div>
       </PopoverContent>
+      <PrintDiagnosticsDialog open={diagOpen} onOpenChange={setDiagOpen} printerName={selected} />
     </Popover>
   );
 }
