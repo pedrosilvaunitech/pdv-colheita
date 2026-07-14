@@ -289,8 +289,9 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
   onRefreshAgent: () => void;
   onReprint: () => void;
 }) {
-  const isAccessDenied = /access denied|acesso negado/i.test(message);
-  const isAgentDown = /agente|failed to fetch|127\.0\.0\.1/i.test(message);
+  const isLibusbBlocked = /libusb_error_not_supported|libusb_error_access|not_supported/i.test(message);
+  const isAccessDenied = /access denied|acesso negado/i.test(message) || isLibusbBlocked;
+  const isAgentDown = /failed to fetch|127\.0\.0\.1/i.test(message) && !isLibusbBlocked;
 
   return (
     <div className="p-3 border-t border-border bg-destructive/10 space-y-2">
