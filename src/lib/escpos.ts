@@ -290,20 +290,22 @@ export async function tryPrintEscPosDetailed(
  */
 export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic> {
   const selected = getSelectedPrinter();
-  try {
-    const st = await pingPrintAgent();
-    if (st.online && (st.printers?.length ?? 0) > 0) {
-      const target = selected && st.printers!.some((p) => p.name === selected)
-        ? st.printers!.find((p) => p.name === selected)!
-        : st.printers![0];
-      try {
-        await printViaAgent(bytes, target.name);
-        return { channel: "agent", ok: true, printer: target.name };
-      } catch (err) {
-        return { channel: "agent", ok: false, printer: target.name, error: err instanceof Error ? err.message : String(err) };
+  if (isPrintAgentEnabled()) {
+    try {
+      const st = await pingPrintAgent();
+      if (st.online && (st.printers?.length ?? 0) > 0) {
+        const target = selected && st.printers!.some((p) => p.name === selected)
+          ? st.printers!.find((p) => p.name === selected)!
+          : st.printers![0];
+        try {
+          await printViaAgent(bytes, target.name);
+          return { channel: "agent", ok: true, printer: target.name };
+        } catch (err) {
+          console.warn("[escpos] agente falhou, tentando fallback:", err);
+        }
       }
-    }
-  } catch { /* segue */ }
+    } catch { /* segue */ }
+  }
   if (isWebUsbSupported()) {
     const dev = await getGrantedUsbPrinter();
     if (dev) {
