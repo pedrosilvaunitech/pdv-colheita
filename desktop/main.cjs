@@ -20,18 +20,51 @@ let agentServer = null;
 
 function loadConfig() {
   const defaults = {
-    url: process.env.BASTION_URL || "https://app.bastion-pos.com/pdv?kiosk=1",
-    kiosk: true,
+    url: process.env.BASTION_URL || "https://pdv-colheita.lovable.app/pdv?kiosk=1",
+    kiosk: false,
     startMinimized: false,
   };
-  try {
-    const p = path.join(path.dirname(app.getPath("exe")), "config.json");
-    if (fs.existsSync(p)) {
-      const j = JSON.parse(fs.readFileSync(p, "utf8"));
-      return { ...defaults, ...j };
-    }
-  } catch (e) { console.warn("[main] config.json inválido:", e); }
+  // Procura config.json em vários locais (dev, portátil, instalado)
+  const candidates = [
+    path.join(path.dirname(app.getPath("exe")), "config.json"),
+    path.join(process.resourcesPath || "", "config.json"),
+    path.join(__dirname, "config.json"),
+  ];
+  for (const p of candidates) {
+    try {
+      if (p && fs.existsSync(p)) {
+        const j = JSON.parse(fs.readFileSync(p, "utf8"));
+        console.log("[main] config carregado de:", p);
+        return { ...defaults, ...j };
+      }
+    } catch (e) { console.warn("[main] config.json inválido em", p, e); }
+  }
+  console.log("[main] usando URL padrão:", defaults.url);
   return defaults;
+}
+
+function showErrorPage(win, url, code, description) {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bastion POS</title>
+  <style>
+    body{margin:0;background:#0a0a0a;color:#e5e5e5;font-family:system-ui,Segoe UI,sans-serif;
+      display:flex;align-items:center;justify-content:center;height:100vh;padding:24px;box-sizing:border-box}
+    .card{max-width:640px;background:#141414;border:1px solid #262626;border-radius:12px;padding:32px}
+    h1{margin:0 0 8px;font-size:20px;color:#f87171}
+    code{background:#1f1f1f;padding:2px 6px;border-radius:4px;color:#fbbf24}
+    p{line-height:1.6;color:#a3a3a3}
+    button{margin-top:16px;background:#3b82f6;color:#fff;border:0;padding:10px 20px;border-radius:8px;
+      font-size:14px;cursor:pointer}
+    button:hover{background:#2563eb}
+  </style></head><body>
+  <div class="card">
+    <h1>Falha ao carregar o PDV</h1>
+    <p><b>URL:</b> <code>${url}</code></p>
+    <p><b>Erro (${code}):</b> ${description || "desconhecido"}</p>
+    <p>Verifique a conexão de internet ou edite <code>config.json</code> ao lado do executável
+    com a URL correta do PDV. Pressione <b>F5</b> para tentar novamente ou <b>F12</b> para abrir o DevTools.</p>
+    <button onclick="location.reload()">Tentar novamente</button>
+  </div></body></html>`;
+  win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
 }
 
 function createWindow(cfg) {
@@ -52,7 +85,25 @@ function createWindow(cfg) {
     },
   });
 
-  mainWindow.loadURL(cfg.url);
+  console.log("[main] carregando URL:", cfg.url);
+  mainWindow.loadURL(cfg.url).catch((e) => {
+    console.error("[main] loadURL falhou:", e);
+    showErrorPage(mainWindow, cfg.url, "load", String(e && e.message || e));
+  });
+
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc, validatedURL) => {
+    if (code === -3) return; // aborted
+    console.error("[main] did-fail-load:", code, desc, validatedURL);
+    showErrorPage(mainWindow, validatedURL || cfg.url, code, desc);
+  });
+
+  // Atalhos de debug
+  mainWindow.webContents.on("before-input-event", (_e, input) => {
+    if (input.type !== "keyDown") return;
+    if (input.key === "F12") mainWindow.webContents.toggleDevTools();
+    if (input.key === "F5") mainWindow.reload();
+    if (input.key === "F11") mainWindow.setKiosk(!mainWindow.isKiosk());
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -63,6 +114,7 @@ function createWindow(cfg) {
     if (!app.isQuitting) { e.preventDefault(); mainWindow.hide(); }
   });
 }
+
 
 function createTray() {
   try {
