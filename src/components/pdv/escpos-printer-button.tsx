@@ -41,6 +41,7 @@ export function EscPosPrinterButton() {
   const [density, setDensityState] = useState<PrintDensity>(() => getPrintDensity(getSelectedPrinter()));
   const [lastErr, setLastErr] = useState<string | null>(() => getLastPrintError());
   const [testing, setTesting] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
   const usbState = getBrowserDeviceFeatureState("usb");
   const serialState = getBrowserDeviceFeatureState("serial");
 
