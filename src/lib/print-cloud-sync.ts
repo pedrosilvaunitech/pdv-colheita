@@ -4,7 +4,11 @@
  * (flag `synced` no localStorage).
  */
 import { supabase } from "@/integrations/supabase/client";
-import { getCurrentStoreId } from "@/lib/current-store";
+
+function getCurrentStoreId(): string | null {
+  try { return localStorage.getItem("bastion:current-store"); } catch { return null; }
+}
+
 import { getPrintHistory, markHistorySynced, type PrintHistoryEntry } from "./print-history";
 
 export interface SyncResult {
