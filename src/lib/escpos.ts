@@ -171,6 +171,8 @@ export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string |
 
 import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
 import { getSelectedPrinter, pingPrintAgent, printViaAgent, setLastPrintError } from "./print-agent";
+import { appendPrintHistory } from "./print-history";
+import { getPrinterPaperWidth } from "./printer-config";
 
 export interface PrintDiagnostic {
   channel: "agent" | "usb" | "serial" | "none";
@@ -194,6 +196,19 @@ export async function tryPrintEscPosDetailed(
 ): Promise<PrintDiagnostic> {
   const selected = getSelectedPrinter();
 
+  const record = (d: PrintDiagnostic) => {
+    appendPrintHistory({
+      ts: Date.now(),
+      channel: d.channel,
+      ok: d.ok,
+      printer: d.printer,
+      paperWidth: d.paperWidth,
+      saleId: r.sale_id,
+      error: d.error,
+    });
+    return d;
+  };
+
   // 1) Agente local
   try {
     const st = await pingPrintAgent();
@@ -201,21 +216,22 @@ export async function tryPrintEscPosDetailed(
       const target = selected && st.printers!.some((p) => p.name === selected)
         ? st.printers!.find((p) => p.name === selected)!
         : st.printers![0];
-      // Detecta tamanho do papel se a impressora reportar
-      const effectivePaper = target.paperWidth ?? r.paper_width;
+      // Ordem de precedência para largura: override manual > agente > receipt
+      const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
       const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
       try {
         await printViaAgent(payload, target.name);
-        return { channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper };
+        return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn("[escpos] agente falhou:", msg);
-        return { channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg };
+        return record({ channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg });
       }
     }
   } catch (err) { console.warn("[escpos] agente indisponível:", err); }
 
-  const payload = buildEscPosPayload(r);
+  const usbPaper = getPrinterPaperWidth("__usb__") ?? r.paper_width;
+  const payload = buildEscPosPayload({ ...r, paper_width: usbPaper }, { printerId: "__usb__" });
 
   // 2) WebUSB direto
   if (isWebUsbSupported()) {
@@ -228,35 +244,65 @@ export async function tryPrintEscPosDetailed(
       if (dev) {
         try {
           await printUsbRaw(dev, payload);
-          return { channel: "usb", ok: true, printer: dev.productName ?? "USB", paperWidth: r.paper_width };
+          return record({ channel: "usb", ok: true, printer: dev.productName ?? "USB", paperWidth: usbPaper });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           setLastPrintError(msg);
-          return { channel: "usb", ok: false, error: msg };
+          return record({ channel: "usb", ok: false, printer: dev.productName ?? "USB", paperWidth: usbPaper, error: msg });
         }
       }
     } catch (err) { console.warn("[escpos] webusb falhou:", err); }
   }
 
   // 3) Web Serial
-  if (!isEscPosEnabled()) return { channel: "none", ok: false, error: "Nenhum canal ESC/POS conectado" };
+  if (!isEscPosEnabled()) return record({ channel: "none", ok: false, error: "Nenhum canal ESC/POS conectado" });
   const port = await getGrantedPort();
-  if (!port) return { channel: "none", ok: false, error: "Porta serial não autorizada" };
+  if (!port) return record({ channel: "none", ok: false, error: "Porta serial não autorizada" });
   try {
     await port.open({ baudRate: 9600 });
     const writer = port.writable?.getWriter();
-    if (!writer) { await port.close(); return { channel: "serial", ok: false, error: "Sem writer serial" }; }
+    if (!writer) { await port.close(); return record({ channel: "serial", ok: false, error: "Sem writer serial" }); }
     await writer.write(payload);
     await writer.close();
     await port.close();
-    return { channel: "serial", ok: true, paperWidth: r.paper_width };
+    return record({ channel: "serial", ok: true, paperWidth: r.paper_width });
   } catch (err) {
     console.warn("[escpos] serial falhou:", err);
     try { await port.close(); } catch { /* ignore */ }
     const msg = err instanceof Error ? err.message : String(err);
     setLastPrintError(msg);
-    return { channel: "serial", ok: false, error: msg };
+    return record({ channel: "serial", ok: false, error: msg });
   }
+}
+
+/**
+ * Envia bytes brutos ESC/POS (sem envelope de recibo) para o canal ativo.
+ * Usado por rotinas de manutenção como a calibração de largura.
+ */
+export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic> {
+  const selected = getSelectedPrinter();
+  try {
+    const st = await pingPrintAgent();
+    if (st.online && (st.printers?.length ?? 0) > 0) {
+      const target = selected && st.printers!.some((p) => p.name === selected)
+        ? st.printers!.find((p) => p.name === selected)!
+        : st.printers![0];
+      try {
+        await printViaAgent(bytes, target.name);
+        return { channel: "agent", ok: true, printer: target.name };
+      } catch (err) {
+        return { channel: "agent", ok: false, printer: target.name, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  } catch { /* segue */ }
+  if (isWebUsbSupported()) {
+    const dev = await getGrantedUsbPrinter();
+    if (dev) {
+      try { await printUsbRaw(dev, bytes); return { channel: "usb", ok: true, printer: dev.productName ?? "USB" }; }
+      catch (err) { return { channel: "usb", ok: false, error: err instanceof Error ? err.message : String(err) }; }
+    }
+  }
+  return { channel: "none", ok: false, error: "Nenhum canal ativo" };
 }
 
 /** Wrapper retro-compatível: retorna apenas boolean. */

@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getHardwareErrorMessage } from "@/lib/hardware-errors";
-import { Printer, Usb, Cable, Server, CheckCircle2, XCircle, TestTube2, AlertCircle, Ruler, RefreshCw, RotateCcw, ExternalLink } from "lucide-react";
+import { Printer, Usb, Cable, Server, CheckCircle2, XCircle, TestTube2, AlertCircle, Ruler, RefreshCw, RotateCcw, ExternalLink, Activity } from "lucide-react";
+import { PrintDiagnosticsDialog } from "./print-diagnostics-dialog";
 import { toast } from "sonner";
 import {
   isEscPosEnabled,
@@ -40,6 +41,7 @@ export function EscPosPrinterButton() {
   const [density, setDensityState] = useState<PrintDensity>(() => getPrintDensity(getSelectedPrinter()));
   const [lastErr, setLastErr] = useState<string | null>(() => getLastPrintError());
   const [testing, setTesting] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
   const usbState = getBrowserDeviceFeatureState("usb");
   const serialState = getBrowserDeviceFeatureState("serial");
 
@@ -229,12 +231,15 @@ export function EscPosPrinterButton() {
         {lastErr && <PrintErrorPanel message={lastErr} onClear={() => setLastErr(null)} onReauthUsb={reauthorizeUsb} onRefreshAgent={refreshAgent} />}
 
         <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>Ordem: <strong>Agente → USB → Serial</strong></span>
+          <button onClick={() => setDiagOpen(true)} className="flex items-center gap-1 hover:text-foreground">
+            <Activity className="size-3" /> Diagnóstico
+          </button>
           <button onClick={refreshAgent} className="flex items-center gap-1 hover:text-foreground">
             <RefreshCw className="size-3" /> Atualizar
           </button>
         </div>
       </PopoverContent>
+      <PrintDiagnosticsDialog open={diagOpen} onOpenChange={setDiagOpen} printerName={selected} />
     </Popover>
   );
 }
