@@ -57,7 +57,10 @@ export function EscPosPrinterButton() {
     const check = () => pingPrintAgent().then(setAgent).catch(() => setAgent({ online: false }));
     check();
     const t = setInterval(check, 15000);
-    return () => clearInterval(t);
+    // Sincroniza estado local com eventos globais (multi-aba / outros componentes)
+    const onAgent = (e: Event) => setAgent((e as CustomEvent<AgentStatus>).detail);
+    window.addEventListener(PRINT_AGENT_EVENT, onAgent);
+    return () => { clearInterval(t); window.removeEventListener(PRINT_AGENT_EVENT, onAgent); };
   }, []);
 
   // Ao trocar de impressora selecionada, recarrega densidade daquela impressora
