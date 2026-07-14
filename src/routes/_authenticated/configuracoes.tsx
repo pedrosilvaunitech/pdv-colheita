@@ -12,13 +12,12 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { buildReceiptHTML, printReceipt } from "@/lib/receipt";
 import { toast } from "sonner";
 import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor } from "lucide-react";
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
 import { DENSITY_LABELS, getPrintDensity, setPrintDensity, buildDensityPrefix, type PrintDensity } from "@/lib/print-density";
-import { buildEscPosPayload, tryPrintEscPos } from "@/lib/escpos";
+import { tryPrintEscPos } from "@/lib/escpos";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({ component: SettingsPage });
 
@@ -226,8 +225,8 @@ function SettingsPage() {
   if (!store) return <StoreRequired />;
   if (!form || !fiscal) return <div className="p-6 text-sm text-muted-foreground">Carregando...</div>;
 
-  const preview = () => {
-    const html = buildReceiptHTML({
+  const preview = async () => {
+    const ok = await tryPrintEscPos({
       store: { name: store.fantasy_name || store.name, cnpj: form.show_cnpj ? store.cnpj : null, address: form.show_address ? ([store.city, store.state].filter(Boolean).join(" · ") || null) : null, phone: null },
       header: form.header_text, footer: [form.thank_you_text, form.footer_text, form.extra_info].filter(Boolean).join("\n"),
       paper_width: form.paper_width,
@@ -240,8 +239,8 @@ function SettingsPage() {
       operator: form.show_operator ? "Operador exemplo" : undefined,
       customer: form.show_customer ? { name: "Cliente exemplo", doc: null } : undefined,
       sale_id: "PREVIEW00", document_type: form.default_document, issued_at: new Date(),
-    });
-    printReceipt(html);
+    }, false);
+    if (!ok) toast.error("Impressão direta não conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora do PDV.");
   };
 
   return (
