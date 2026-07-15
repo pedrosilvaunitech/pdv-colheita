@@ -111,61 +111,215 @@ function sep(cols: number): string { return "-".repeat(cols); }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string | null }): Uint8Array {
+import { defaultTemplate, loadTemplate, type ReceiptBlock, type ReceiptTemplate } from "./receipt-template";
+
+
+// Mapeamento alinhamento → ESC/POS ESC a n (0 esquerda, 1 centro, 2 direita)
+const ALIGN_CMD = { left: 0x00, center: 0x01, right: 0x02 } as const;
+
+// GS ! n — tamanho: bit 0-3 width mult, bit 4-7 height mult.
+// sm=normal, md=normal, lg=double-height (0x01) para não estourar largura.
+const SIZE_CMD: Record<"sm" | "md" | "lg", number> = { sm: 0x00, md: 0x00, lg: 0x01 };
+
+function fakeChave(saleId: string): string {
+  const hex = saleId.replace(/[^0-9a-f]/gi, "");
+  let d = "";
+  for (const c of hex) d += (parseInt(c, 16) % 10).toString();
+  while (d.length < 44) d += "0";
+  return d.slice(0, 44);
+}
+
+function renderBlockEscPos(
+  b: ReceiptBlock,
+  r: ReceiptData,
+  cols: number,
+  enc: (s: string) => Uint8Array,
+): Uint8Array[] {
+  if (!b.enabled) return [];
+  const out: Uint8Array[] = [];
+  const isFiscal = r.document_type === "fiscal";
+
+  // Alinhamento e tamanho antes de imprimir
+  out.push(bytes(ESC, 0x61, ALIGN_CMD[b.align]));
+  out.push(bytes(GS, 0x21, SIZE_CMD[b.size]));
+  if (b.bold) out.push(bytes(ESC, 0x45, 0x01));
+
+  const push = (s: string) => out.push(enc(s + "\n"));
+  const pushRaw = (s: string) => out.push(enc(s));
+
+  switch (b.kind) {
+    case "separator":
+      out.push(bytes(ESC, 0x61, 0x00));
+      pushRaw(sep(cols) + "\n");
+      break;
+
+    case "store_badge":
+      out.push(bytes(ESC, 0x21, 0x30)); // double W+H
+      push(`[ ${isFiscal ? "NFC-e" : "RECIBO"} ]`);
+      out.push(bytes(ESC, 0x21, 0x00));
+      break;
+
+    case "store_info":
+      out.push(bytes(ESC, 0x45, 0x01));
+      push(r.store.name);
+      out.push(bytes(ESC, 0x45, 0x00));
+      if (r.store.cnpj) push(`CNPJ ${r.store.cnpj}`);
+      if (r.store.address) push(r.store.address);
+      if (r.store.phone) push(r.store.phone);
+      break;
+
+    case "header_msg": {
+      const t = b.text ?? r.header ?? "";
+      if (t) for (const ln of t.split("\n")) push(ln);
+      break;
+    }
+
+    case "doc_title":
+      push(isFiscal
+        ? "DANFE NFC-e - Documento Auxiliar da NF-e"
+        : "RECIBO DE VENDA - DOCUMENTO NAO FISCAL");
+      push(isFiscal
+        ? "Nao permite credito de ICMS"
+        : "Nao substitui nota fiscal");
+      break;
+
+    case "sale_meta":
+      push(`Venda: ${r.sale_id.slice(0, 8).toUpperCase()} - ${r.issued_at.toLocaleString("pt-BR")}`);
+      if (r.operator) push(`Op: ${r.operator}`);
+      break;
+
+    case "customer":
+      if (r.customer?.name || r.customer?.doc) {
+        push(`Cli: ${r.customer?.name ?? ""}${r.customer?.doc ? " " + r.customer.doc : ""}`);
+      }
+      break;
+
+    case "items":
+      out.push(bytes(ESC, 0x61, 0x00)); // itens sempre à esquerda
+      for (const it of r.items) {
+        push(it.name.slice(0, cols));
+        const qty = it.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+        push(line(cols, `  ${qty} x ${brl(it.unit_price)}`, brl(it.total)));
+      }
+      break;
+
+    case "totals": {
+      out.push(bytes(ESC, 0x61, 0x00));
+      const itemsCount = r.items.reduce((s, it) => s + it.quantity, 0);
+      push(line(cols, "QTD ITENS", itemsCount.toLocaleString("pt-BR", { maximumFractionDigits: 3 })));
+      push(line(cols, "SUBTOTAL", brl(r.subtotal)));
+      if (r.discount > 0) push(line(cols, "DESCONTO", "-" + brl(r.discount)));
+      out.push(bytes(ESC, 0x21, 0x10)); // double height
+      push(line(cols, "TOTAL", brl(r.total)));
+      out.push(bytes(ESC, 0x21, 0x00));
+      break;
+    }
+
+    case "payments":
+      out.push(bytes(ESC, 0x61, 0x00));
+      if (r.payments && r.payments.length > 0) {
+        push("PAGAMENTOS");
+        for (const p of r.payments) {
+          push(line(cols, p.label.toUpperCase(), brl(p.amount)));
+          if (p.installments && p.installments > 1) {
+            push(line(cols, `  ${p.installments}x de ${brl(p.amount / p.installments)}`, ""));
+          }
+        }
+        push(line(cols, "RECEBIDO", brl(r.received ?? r.total)));
+      } else {
+        push(line(cols, r.payment_method.toUpperCase(), brl(r.received ?? r.total)));
+      }
+      if (r.change && r.change > 0) push(line(cols, "TROCO", brl(r.change)));
+      break;
+
+    case "tributes":
+      if (!isFiscal) break;
+      push("Tributos (Lei 12.741/2012): R$ 0,00");
+      break;
+
+    case "nfce_info":
+      if (!isFiscal) break;
+      push(`NFC-e nº ${r.sale_id.slice(0, 9).toUpperCase()} - Serie 001`);
+      push(`Emissao ${r.issued_at.toLocaleDateString("pt-BR")}`);
+      break;
+
+    case "consumer_via":
+      if (!isFiscal) break;
+      push("Via Consumidor");
+      break;
+
+    case "sefaz_link":
+      if (!isFiscal) break;
+      push("Consulta: www.nfce.sefaz.uf.gov.br");
+      break;
+
+    case "qr": {
+      if (!isFiscal) break;
+      // Placeholder QR — quando emissao real estiver ativa, substituir por
+      // GS ( k … com a URL retornada pela SEFAZ.
+      const url = `https://www.nfce.sefaz.uf.gov.br/?chNFe=${fakeChave(r.sale_id)}`;
+      const data = new TextEncoder().encode(url);
+      const storeLen = data.length + 3;
+      out.push(bytes(GS, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00)); // model 2
+      out.push(bytes(GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x06));       // module size
+      out.push(bytes(GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x30));       // ec level L
+      out.push(bytes(GS, 0x28, 0x6B, storeLen & 0xFF, (storeLen >> 8) & 0xFF, 0x31, 0x50, 0x30, ...Array.from(data)));
+      out.push(bytes(GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30));       // print
+      break;
+    }
+
+    case "chave": {
+      if (!isFiscal) break;
+      const chave = fakeChave(r.sale_id);
+      push(chave.match(/.{1,4}/g)?.join(" ") ?? chave);
+      push("!! Aguardando autorizacao SEFAZ");
+      break;
+    }
+
+    case "footer_msg": {
+      const t = b.text ?? r.footer ?? "";
+      if (t) for (const ln of t.split("\n")) push(ln);
+      break;
+    }
+
+    case "brand":
+      push("Bastion POS");
+      break;
+
+    case "custom_text": {
+      const t = b.text ?? "";
+      if (t) for (const ln of t.split("\n")) push(ln);
+      break;
+    }
+  }
+
+  // Reset negrito
+  if (b.bold) out.push(bytes(ESC, 0x45, 0x00));
+  out.push(bytes(GS, 0x21, 0x00));
+  return out;
+}
+
+export function buildEscPosPayload(
+  r: ReceiptData,
+  opts?: { printerId?: string | null; template?: ReceiptTemplate },
+): Uint8Array {
   const cols = r.paper_width === 58 ? 32 : 48;
   const codepage: Codepage = getPrinterCodepage(opts?.printerId ?? null) ?? "cp850";
   const enc = (s: string) => encWith(s, codepage);
   const chunks: Uint8Array[] = [];
   chunks.push(bytes(ESC, 0x40));                          // init
-  chunks.push(buildDensityPrefix(undefined, opts?.printerId ?? null)); // intensidade por impressora
-  chunks.push(getCodepageCommand(codepage));              // seleciona codepage escolhido
-  chunks.push(bytes(ESC, 0x61, 0x01));                    // center
-  chunks.push(bytes(ESC, 0x21, 0x08));                    // emphasized
-  chunks.push(enc(r.store.name + "\n"));
-  chunks.push(bytes(ESC, 0x21, 0x00));                    // normal
-  if (r.store.cnpj)    chunks.push(enc(`CNPJ ${r.store.cnpj}\n`));
-  if (r.store.address) chunks.push(enc(r.store.address + "\n"));
-  if (r.store.phone)   chunks.push(enc(r.store.phone + "\n"));
-  if (r.header)        chunks.push(enc(r.header + "\n"));
-  chunks.push(enc(`[ ${r.document_type === "fiscal" ? "CUPOM FISCAL (NFC-e)" : "DOCUMENTO NAO FISCAL"} ]\n`));
-  if (r.document_type !== "fiscal") chunks.push(enc("nao substitui nota fiscal\n"));
-  chunks.push(bytes(ESC, 0x61, 0x00));                    // left
-  chunks.push(enc(sep(cols) + "\n"));
-  chunks.push(enc(`Venda: ${r.sale_id.slice(0, 8).toUpperCase()}\n`));
-  chunks.push(enc(`Data:  ${r.issued_at.toLocaleString("pt-BR")}\n`));
-  if (r.operator) chunks.push(enc(`Op:    ${r.operator}\n`));
-  if (r.customer?.name || r.customer?.doc) {
-    chunks.push(enc(`Cli:   ${r.customer?.name ?? ""}${r.customer?.doc ? " " + r.customer.doc : ""}\n`));
+  chunks.push(buildDensityPrefix(undefined, opts?.printerId ?? null));
+  chunks.push(getCodepageCommand(codepage));
+
+  let template: ReceiptTemplate;
+  try { template = opts?.template ?? loadTemplate(getCurrentStoreIdSync(), r.document_type); }
+  catch { template = defaultTemplate(r.document_type); }
+
+  for (const b of template.blocks) {
+    for (const c of renderBlockEscPos(b, r, cols, enc)) chunks.push(c);
   }
-  chunks.push(enc(sep(cols) + "\n"));
-  for (const it of r.items) {
-    chunks.push(enc(it.name.slice(0, cols) + "\n"));
-    const qty = it.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
-    chunks.push(enc(line(cols, `  ${qty} x ${brl(it.unit_price)}`, brl(it.total)) + "\n"));
-  }
-  chunks.push(enc(sep(cols) + "\n"));
-  chunks.push(enc(line(cols, "SUBTOTAL", brl(r.subtotal)) + "\n"));
-  if (r.discount > 0) chunks.push(enc(line(cols, "DESCONTO", "-" + brl(r.discount)) + "\n"));
-  chunks.push(bytes(ESC, 0x21, 0x08));
-  chunks.push(enc(line(cols, "TOTAL", brl(r.total)) + "\n"));
-  chunks.push(bytes(ESC, 0x21, 0x00));
-  if (r.payments && r.payments.length > 0) {
-    chunks.push(enc("PAGAMENTOS\n"));
-    for (const p of r.payments) {
-      chunks.push(enc(line(cols, p.label.toUpperCase(), brl(p.amount)) + "\n"));
-      if (p.installments && p.installments > 1) {
-        chunks.push(enc(line(cols, `  ${p.installments}x de ${brl(p.amount / p.installments)}`, "") + "\n"));
-      }
-    }
-    chunks.push(enc(line(cols, "RECEBIDO", brl(r.received ?? r.total)) + "\n"));
-  } else {
-    chunks.push(enc(line(cols, r.payment_method.toUpperCase(), brl(r.received ?? r.total)) + "\n"));
-  }
-  if (r.change && r.change > 0) chunks.push(enc(line(cols, "TROCO", brl(r.change)) + "\n"));
-  chunks.push(enc(sep(cols) + "\n"));
-  chunks.push(bytes(ESC, 0x61, 0x01));
-  chunks.push(enc((r.footer || "Obrigado pela preferencia!") + "\n"));
-  chunks.push(enc("Bastion POS\n"));
+
+  chunks.push(bytes(ESC, 0x61, 0x00));
   chunks.push(bytes(LF, LF, LF, LF));
   chunks.push(bytes(GS, 0x56, 0x42, 0x00));                // full cut
   return bytes(...chunks);
