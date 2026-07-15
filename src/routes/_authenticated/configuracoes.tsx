@@ -84,6 +84,7 @@ function SettingsPage() {
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null);
   const [certPassword, setCertPassword] = useState("");
   const [density, setDensityState] = useState<PrintDensity>(() => getPrintDensity());
+  const [previewOpen, setPreviewOpen] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const certInputRef = useRef<HTMLInputElement>(null);
 
