@@ -300,6 +300,49 @@ function createWindow(cfg) {
   });
 }
 
+function printHtmlSilently(job) {
+  return new Promise((resolve, reject) => {
+    const html = job && typeof job.html === "string" ? job.html : "";
+    if (!html.trim()) return reject(new Error("HTML vazio."));
+    const printerName = job && typeof job.printerName === "string" && job.printerName.trim()
+      ? job.printerName.trim()
+      : undefined;
+    const win = new BrowserWindow({
+      width: 420,
+      height: 900,
+      show: false,
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    let finished = false;
+    const done = (err) => {
+      if (finished) return;
+      finished = true;
+      try { win.close(); } catch {}
+      if (err) reject(err);
+      else resolve();
+    };
+    const timeout = setTimeout(() => done(new Error("Tempo esgotado ao renderizar a prévia para impressão.")), 25000);
+    win.webContents.once("did-finish-load", () => {
+      setTimeout(() => {
+        win.webContents.print({
+          silent: true,
+          printBackground: true,
+          deviceName: printerName,
+          margins: { marginType: "none" },
+        }, (success, failureReason) => {
+          clearTimeout(timeout);
+          if (!success) done(new Error(failureReason || "Falha na impressão HTML silenciosa."));
+          else done(null);
+        });
+      }, 300);
+    });
+    win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html)).catch((e) => {
+      clearTimeout(timeout);
+      done(e);
+    });
+  });
+}
+
 // ────────────────────────────────────────────────────────────────────
 // TRAY
 // ────────────────────────────────────────────────────────────────────
@@ -348,7 +391,7 @@ function createTray() {
 app.whenReady().then(() => {
   installFileLogger();
   currentCfg = loadConfig();
-  try { agentServer = startAgent(); }
+  try { agentServer = startAgent({ printHtml: printHtmlSilently }); }
   catch (e) { console.error("[main] falha ao iniciar agente:", e); dialog.showErrorBox("Falha ao iniciar agente", String(e)); }
   createWindow(currentCfg);
   createTray();

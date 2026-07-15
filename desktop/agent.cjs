@@ -451,7 +451,7 @@ async function printSmart(hint, payload, opts = {}) {
 // ────────────────────────────────────────────────────────────────────
 // HTTP
 // ────────────────────────────────────────────────────────────────────
-function startAgent() {
+function startAgent(options = {}) {
   const app = express();
   // CORS/PNA explícito: PWAs publicados em HTTPS fazem preflight para
   // http://127.0.0.1. Sem Access-Control-Allow-Private-Network o Chrome
@@ -503,6 +503,31 @@ function startAgent() {
       res.status(200).json({ ok: true, ...r });
     } catch (e) {
       console.error("[agent] print error:", e);
+      res.status(500).send(e && e.message ? e.message : String(e));
+    }
+  });
+
+  app.post("/print-html", async (req, res) => {
+    try {
+      if (typeof options.printHtml !== "function") {
+        return res.status(501).send("Este Agente não suporta impressão HTML silenciosa. Atualize o Agente Desktop.");
+      }
+      const hint = req.headers["x-printer"];
+      const source = req.headers["x-printer-source"];
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const html = typeof body.html === "string" ? body.html : "";
+      if (!html.trim()) return res.status(400).send("HTML vazio.");
+      const printerName = typeof hint === "string"
+        ? hint
+        : (typeof body.printerName === "string" ? body.printerName : undefined);
+      await options.printHtml({
+        html,
+        printerName,
+        source: typeof source === "string" ? source : (typeof body.source === "string" ? body.source : null),
+      });
+      res.status(200).json({ ok: true, channel: "electron-html", printer: printerName || null, source: "windows" });
+    } catch (e) {
+      console.error("[agent] print-html error:", e);
       res.status(500).send(e && e.message ? e.message : String(e));
     }
   });
