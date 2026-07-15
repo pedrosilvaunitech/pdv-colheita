@@ -413,9 +413,14 @@ function PdvPage() {
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };
-        const printed = await tryPrintEscPos(r, true);
+        // interactiveFallback=false: nunca abre picker do navegador mid-sale.
+        // A escolha de impressora acontece uma única vez no botão "Impressora".
+        const printed = await tryPrintEscPos(r, false);
         if (!printed) {
-          toast.error("Venda finalizada, mas a impressão direta não está conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora.");
+          toast.error("Venda finalizada, mas nenhuma impressora está conectada. Clique em Impressora para conectar (uma vez só).");
+        } else if (docType === "nao_fiscal") {
+          // Oferece reemitir como fiscal sem refazer a venda.
+          setPendingFiscal(r);
         }
       }
       // Se a venda saiu de uma ou mais comandas abertas, fecha todas e vincula o sale_id.
