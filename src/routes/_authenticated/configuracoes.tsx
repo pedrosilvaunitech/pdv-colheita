@@ -13,11 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor } from "lucide-react";
+import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye } from "lucide-react";
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
 import { DENSITY_LABELS, getPrintDensity, setPrintDensity, type PrintDensity } from "@/lib/print-density";
 import { tryPrintEscPos } from "@/lib/escpos";
+import { ReceiptPreviewDialog } from "@/components/receipt-preview-dialog";
+import type { ReceiptData } from "@/lib/receipt";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({ component: SettingsPage });
 
@@ -82,6 +84,7 @@ function SettingsPage() {
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null);
   const [certPassword, setCertPassword] = useState("");
   const [density, setDensityState] = useState<PrintDensity>(() => getPrintDensity());
+  const [previewOpen, setPreviewOpen] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const certInputRef = useRef<HTMLInputElement>(null);
 
@@ -225,23 +228,33 @@ function SettingsPage() {
   if (!store) return <StoreRequired />;
   if (!form || !fiscal) return <div className="p-6 text-sm text-muted-foreground">Carregando...</div>;
 
-  const preview = async () => {
-    const ok = await tryPrintEscPos({
-      store: { name: store.fantasy_name || store.name, cnpj: form.show_cnpj ? store.cnpj : null, address: form.show_address ? ([store.city, store.state].filter(Boolean).join(" · ") || null) : null, phone: null },
-      header: form.header_text, footer: [form.thank_you_text, form.footer_text, form.extra_info].filter(Boolean).join("\n"),
-      paper_width: form.paper_width,
-      items: [
-        { name: "REFRIGERANTE COLA 2L", quantity: 2, unit_price: 8.5, total: 17, barcode: form.show_item_code ? "7891234567890" : undefined },
-        { name: "PAO FRANCES KG", quantity: 0.42, unit_price: 15.9, total: 6.68 },
-      ],
-      subtotal: 23.68, discount: 0, total: 23.68, payment_method: "dinheiro",
-      received: 30, change: 6.32,
-      operator: form.show_operator ? "Operador exemplo" : undefined,
-      customer: form.show_customer ? { name: "Cliente exemplo", doc: null } : undefined,
-      sale_id: "PREVIEW00", document_type: form.default_document, issued_at: new Date(),
-    }, true);
+  const buildPreviewData = (): ReceiptData => ({
+    store: {
+      name: store.fantasy_name || store.name,
+      cnpj: form.show_cnpj ? store.cnpj : null,
+      address: form.show_address ? ([store.city, store.state].filter(Boolean).join(" · ") || null) : null,
+      phone: null,
+    },
+    header: form.header_text,
+    footer: [form.thank_you_text, form.footer_text, form.extra_info].filter(Boolean).join("\n"),
+    paper_width: form.paper_width,
+    items: [
+      { name: "REFRIGERANTE COLA 2L", quantity: 2, unit_price: 8.5, total: 17, barcode: form.show_item_code ? "7891234567890" : undefined },
+      { name: "PAO FRANCES KG", quantity: 0.42, unit_price: 15.9, total: 6.68 },
+    ],
+    subtotal: 23.68, discount: 0, total: 23.68, payment_method: "dinheiro",
+    received: 30, change: 6.32,
+    operator: form.show_operator ? "Operador exemplo" : undefined,
+    customer: form.show_customer ? { name: "Cliente exemplo", doc: null } : undefined,
+    sale_id: "PREVIEW00", document_type: form.default_document, issued_at: new Date(),
+  });
+
+  const printTestReceipt = async () => {
+    const ok = await tryPrintEscPos(buildPreviewData(), true);
     if (!ok) toast.error("Impressão direta não conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora do PDV.");
+    else toast.success("Cupom teste enviado à impressora");
   };
+
 
   return (
     <div>
@@ -262,10 +275,18 @@ function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="recibo" className="mt-4">
-            <div className="flex justify-end gap-2 mb-4">
-              <Button variant="outline" className="gap-2" onClick={preview}><Printer className="size-4" />Prévia</Button>
+            <div className="flex justify-end gap-2 mb-4 flex-wrap">
+              <Button variant="outline" className="gap-2" onClick={() => setPreviewOpen(true)}><Eye className="size-4" />Prévia na tela</Button>
+              <Button variant="outline" className="gap-2" onClick={printTestReceipt}><Printer className="size-4" />Imprimir teste</Button>
               <Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-2"><Save className="size-4" />Salvar</Button>
             </div>
+
+            <ReceiptPreviewDialog
+              open={previewOpen}
+              onOpenChange={setPreviewOpen}
+              data={buildPreviewData()}
+              onPrint={printTestReceipt}
+            />
 
             <div className="grid md:grid-cols-2 gap-4">
               <div className="border border-border rounded-md bg-card p-4 space-y-3 md:col-span-2">

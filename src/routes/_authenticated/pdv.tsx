@@ -404,7 +404,8 @@ function PdvPage() {
         const paymentLabel = receiptPayments.map((p) => `${p.label} ${brl(p.amount)}`).join(" + ");
         const r: ReceiptData = {
           store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: [store.city, store.state].filter(Boolean).join(" · ") || null, phone: null },
-          header: settings.data?.header_text ?? null, footer: settings.data?.footer_text ?? null,
+          header: settings.data?.header_text ?? null,
+          footer: [settings.data?.thank_you_text, settings.data?.footer_text, settings.data?.extra_info].filter(Boolean).join("\n") || null,
           paper_width: (settings.data?.paper_width ?? 80) as 58 | 80,
           items: cart.map((i) => ({ name: i.name, quantity: i.quantity, unit_price: i.unit_price, total: i.quantity * i.unit_price, barcode: i.barcode })),
           subtotal, discount: disc, total, payment_method: paymentLabel || "—", payments: receiptPayments, received: paid, change: overpaid,
