@@ -61,12 +61,22 @@ export async function requestUsbPrinter(includeAll = false): Promise<USBDevice> 
   }
 }
 
-/** Retorna a primeira impressora já autorizada previamente. */
+/** Retorna a primeira impressora já autorizada previamente (filtrando por vendor conhecido). */
 export async function getGrantedUsbPrinter(): Promise<USBDevice | null> {
   if (!isWebUsbSupported()) return null;
   try {
     const list = await navigator.usb.getDevices();
-    return list[0] ?? null;
+    if (list.length === 0) return null;
+    const knownVendors = new Set(
+      VENDOR_FILTERS.map((f) => f.vendorId).filter((v): v is number => typeof v === "number"),
+    );
+    const preferred = list.find((d) => knownVendors.has(d.vendorId));
+    if (preferred) return preferred;
+    const printerClass = list.find((d) => {
+      const cfg = d.configuration ?? d.configurations[0];
+      return cfg?.interfaces.some((i) => i.alternate.interfaceClass === 7);
+    });
+    return printerClass ?? list[0];
   } catch (error) {
     if (error instanceof Error) console.warn("[escpos] webusb indisponível:", describeBrowserDeviceError(error, "usb"));
     return null;
