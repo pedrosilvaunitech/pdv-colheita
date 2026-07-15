@@ -31,7 +31,7 @@ export interface AgentPrinter {
   source: PrinterSource;
   status: PrinterStatus;
   statusMessage?: string;
-  paperWidth?: 58 | 76 | 80;
+  paperWidth?: 58 | 80;
   isDefault?: boolean;
   model?: string;
   vendorId?: number;
