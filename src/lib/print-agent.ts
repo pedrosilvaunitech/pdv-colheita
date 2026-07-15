@@ -274,7 +274,7 @@ function emitAgentStatus(st: AgentStatus): void {
   window.dispatchEvent(new CustomEvent<AgentStatus>(PRINT_AGENT_EVENT, { detail: st }));
 }
 
-export async function pingPrintAgent(timeoutMs = 1200): Promise<AgentStatus> {
+export async function pingPrintAgent(timeoutMs = 5000): Promise<AgentStatus> {
   try {
     const r = await fetchAgent("/status", { cache: "no-store" }, timeoutMs);
     if (!r.ok) { const off: AgentStatus = { online: false }; emitAgentStatus(off); return off; }
