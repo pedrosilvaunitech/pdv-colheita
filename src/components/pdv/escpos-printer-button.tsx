@@ -247,7 +247,7 @@ export function EscPosPrinterButton() {
   const reprintLast = async () => {
     const r = getLastReceipt();
     if (!r) { toast.error("Nenhum recibo anterior salvo"); return; }
-    const d = await tryPrintEscPosDetailed(r, false);
+    const d = await tryPrintEscPosDetailed(r, true);
     if (d.ok) { toast.success(`Reimpresso via ${d.channel.toUpperCase()}`); setLastErr(null); }
     else toast.error(`Falhou (${d.channel}): ${d.error ?? "erro"}`);
   };
