@@ -336,6 +336,7 @@ function PdvPage() {
         subtotal, discount: disc, total,
         operator_id: user.user.id, finalized_at: new Date().toISOString(),
         cash_register_id: openReg.data.id, document_type: docType,
+        fiscal_status: docType === "fiscal" ? "pendente" : "nao_fiscal",
         change_given: change,
         customer_cpf: customerCpf || null, customer_name: customerName || null,
       }).select("id").single();
