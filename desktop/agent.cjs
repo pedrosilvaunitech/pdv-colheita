@@ -274,6 +274,15 @@ function printViaSpooler(printerName, payload) {
   });
 }
 
+function pickSpoolerFallbackName() {
+  const printers = listSpoolerPrinters();
+  const preferred = printers.find((p) => /TM[-\s]?T20X/i.test(`${p.name} ${p.model || ""}`))
+    || printers.find((p) => /TM[-\s]?T20|TM[-\s]?T88|Epson/i.test(`${p.name} ${p.model || ""}`))
+    || printers.find((p) => p.isDefault)
+    || printers[0];
+  return preferred && preferred.name;
+}
+
 // ────────────────────────────────────────────────────────────────────
 // USB BRUTO (fallback — exige WinUSB no Windows)
 // ────────────────────────────────────────────────────────────────────
@@ -411,7 +420,7 @@ async function printSmart(hint, payload, opts = {}) {
       // Nesse caso o canal USB bruto falha, mas o spooler RAW imprime sem
       // trocar driver/WinUSB. Mantém a seleção antiga funcionando no PWA.
       if (process.platform === "win32") {
-        try { const name = await printViaSpooler(undefined, payload); return { channel: "spooler", printer: name, source: "windows" }; }
+        try { const name = await printViaSpooler(pickSpoolerFallbackName(), payload); return { channel: "spooler", printer: name, source: "windows" }; }
         catch (spoolerErr) { errors.push(`spooler: ${spoolerErr.message}`); }
       }
       throw new Error(errors.join(" | "));
