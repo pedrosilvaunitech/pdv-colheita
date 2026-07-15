@@ -386,26 +386,37 @@ async function writeUsbRaw(dev, payload) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Envio unificado: spooler primeiro, USB depois. Se o cliente pedir
-// explicitamente um nome no formato "Vendor-XXXX:YYYY", vai direto ao USB.
+// Envio unificado. Se o cliente indicar `source` via X-Printer-Source,
+// respeitamos o roteamento pedido. Fallback: spooler antes de USB (como
+// hoje) para evitar LIBUSB_ERROR_NOT_SUPPORTED no Windows.
 // ────────────────────────────────────────────────────────────────────
-async function printSmart(hint, payload) {
+async function printSmart(hint, payload, opts = {}) {
+  const source = typeof opts.source === "string" ? opts.source.toLowerCase() : null;
   const isUsbHint = typeof hint === "string" && /^[^-]+-[0-9a-f]{4}:[0-9a-f]{4}$/i.test(hint);
   const errors = [];
 
-  // 1. spooler / driver do sistema. No Windows, mesmo quando a UI selecionou
-  //    um device USB bruto (Epson-04b8:xxxx), preferimos o spooler porque ele
-  //    não depende de WinUSB e resolve LIBUSB_ERROR_NOT_SUPPORTED.
-  if (!isUsbHint || process.platform === "win32") {
-    try { const name = await printViaSpooler(hint, payload); return { channel: "spooler", printer: name }; }
-    catch (e) { errors.push(`spooler: ${e.message}`); }
+  // Roteamento explícito (novo cliente da UI passa source)
+  if (source === "windows") {
+    try { const name = await printViaSpooler(hint, payload); return { channel: "spooler", printer: name, source: "windows" }; }
+    catch (e) { throw new Error(`spooler: ${e.message}`); }
+  }
+  if (source === "agent") {
+    try {
+      const { dev, meta } = pickUsbDevice(isUsbHint ? hint : undefined);
+      await writeUsbRaw(dev, payload);
+      return { channel: "usb", printer: meta.name, source: "agent" };
+    } catch (e) { throw new Error(`usb: ${e.message}`); }
   }
 
-  // 2. usb bruto
+  // Comportamento legado (sem source explícito)
+  if (!isUsbHint || process.platform === "win32") {
+    try { const name = await printViaSpooler(hint, payload); return { channel: "spooler", printer: name, source: "windows" }; }
+    catch (e) { errors.push(`spooler: ${e.message}`); }
+  }
   try {
     const { dev, meta } = pickUsbDevice(isUsbHint ? hint : undefined);
     await writeUsbRaw(dev, payload);
-    return { channel: "usb", printer: meta.name };
+    return { channel: "usb", printer: meta.name, source: "agent" };
   } catch (e) { errors.push(`usb: ${e.message}`); }
 
   throw new Error(errors.join(" | "));
@@ -416,31 +427,37 @@ async function printSmart(hint, payload) {
 // ────────────────────────────────────────────────────────────────────
 function startAgent() {
   const app = express();
-  app.use(cors({ origin: true }));
+  app.use(cors({ origin: true, exposedHeaders: ["X-Agent-Version"] }));
   app.use(express.raw({ type: "application/octet-stream", limit: "10mb" }));
   app.use(express.json({ limit: "1mb" }));
+  app.use((_req, res, next) => { res.setHeader("X-Agent-Version", VERSION); next(); });
 
-  app.get("/status", (_req, res) => {
-    let spooler = [], usbList = [];
-    try { spooler = listSpoolerPrinters(); } catch {}
-    try { usbList = listUsbPrinters().map((p) => ({ name: p.name, channel: "usb" })); } catch {}
-    // Prioriza spooler na lista (é o que funciona sem WinUSB no Windows)
-    const printers = [...spooler, ...usbList];
+  const respondPrinters = (res) => {
+    const printers = listAllPrinters();
     res.json({
       version: VERSION,
       platform: process.platform,
       arch: process.arch,
       channels: { spooler: !!nodePrinter || process.platform === "win32", usb: true },
       printers,
+      generatedAt: new Date().toISOString(),
     });
-  });
+  };
+
+  app.get("/status", (_req, res) => respondPrinters(res));
+  app.get("/printers", (_req, res) => respondPrinters(res));
 
   app.post("/print", async (req, res) => {
     try {
       const hint = req.headers["x-printer"];
+      const source = req.headers["x-printer-source"];
       const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
       if (!body.length) return res.status(400).send("Payload vazio.");
-      const r = await printSmart(typeof hint === "string" ? hint : undefined, body);
+      const r = await printSmart(
+        typeof hint === "string" ? hint : undefined,
+        body,
+        { source: typeof source === "string" ? source : null },
+      );
       res.status(200).json({ ok: true, ...r });
     } catch (e) {
       console.error("[agent] print error:", e);
@@ -451,8 +468,13 @@ function startAgent() {
   app.post("/open-drawer", async (req, res) => {
     try {
       const hint = req.headers["x-printer"];
+      const source = req.headers["x-printer-source"];
       const pulse = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]);
-      const r = await printSmart(typeof hint === "string" ? hint : undefined, pulse);
+      const r = await printSmart(
+        typeof hint === "string" ? hint : undefined,
+        pulse,
+        { source: typeof source === "string" ? source : null },
+      );
       res.status(200).json({ ok: true, ...r });
     } catch (e) {
       res.status(500).send(e && e.message ? e.message : String(e));
