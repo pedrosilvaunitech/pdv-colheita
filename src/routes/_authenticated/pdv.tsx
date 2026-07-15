@@ -17,6 +17,10 @@ import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 import { ScaleWidget } from "@/components/pdv/scale-widget";
 import { getToledoScale } from "@/lib/toledo-scale";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/pdv")({
   component: PdvPage,
