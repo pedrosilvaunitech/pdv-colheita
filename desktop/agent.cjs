@@ -29,7 +29,45 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
+
+// Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
+// quando o driver não reporta e para exibir o modelo real na UI.
+const MODEL_HINTS = [
+  { re: /TM-T20/i, model: "Epson TM-T20", paperWidth: 80 },
+  { re: /TM-T88/i, model: "Epson TM-T88", paperWidth: 80 },
+  { re: /TM-U220/i, model: "Epson TM-U220", paperWidth: 76 },
+  { re: /TM-T81/i, model: "Epson TM-T81", paperWidth: 80 },
+  { re: /MP-4200/i, model: "Bematech MP-4200", paperWidth: 80 },
+  { re: /MP-100/i, model: "Bematech MP-100", paperWidth: 58 },
+  { re: /i9|i8|i7/i, model: "Elgin i9", paperWidth: 80 },
+  { re: /XP-58|XP58/i, model: "Xprinter XP-58", paperWidth: 58 },
+  { re: /XP-80|XP80/i, model: "Xprinter XP-80", paperWidth: 80 },
+];
+
+function guessModel(name) {
+  for (const h of MODEL_HINTS) if (h.re.test(name)) return h;
+  return null;
+}
+
+// Mapa Win32_Printer.PrinterStatus → estado normalizado
+const WIN_STATUS = {
+  1: { s: "error",   m: "Outro" },
+  2: { s: "offline", m: "Desconhecido" },
+  3: { s: "online",  m: "Pronta" },
+  4: { s: "online",  m: "Imprimindo" },
+  5: { s: "online",  m: "Aquecendo" },
+  6: { s: "error",   m: "Impressão parada" },
+  7: { s: "offline", m: "Offline" },
+};
+
+// Win32_Printer.DetectedErrorState → mensagem
+const WIN_ERROR = {
+  3: "Papel baixo", 4: "Sem papel", 5: "Toner baixo", 6: "Sem toner",
+  7: "Tampa aberta", 8: "Papel atolado", 9: "Serviço requerido",
+  10: "Bandeja cheia", 11: "Problema no papel", 12: "Não pode imprimir",
+  13: "Requer intervenção", 14: "Sem memória",
+};
 
 const KNOWN_VENDORS = {
   0x04b8: "Epson", 0x0fe6: "Bematech", 0x0dd4: "Custom", 0x0416: "Elgin",
