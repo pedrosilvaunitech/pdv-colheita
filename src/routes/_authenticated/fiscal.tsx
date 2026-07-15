@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentStore } from "@/lib/current-store";
 import { PageHeader, StoreRequired } from "@/components/page-header";
@@ -8,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, AlertTriangle, FileText, ShieldCheck, ExternalLink } from "lucide-react";
+import { CheckCircle2, Circle, AlertTriangle, FileText, ShieldCheck, ExternalLink, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+import { emitInvoice } from "@/lib/fiscal.functions";
 
 export const Route = createFileRoute("/_authenticated/fiscal")({
   component: FiscalPage,
@@ -196,6 +198,7 @@ function FiscalPage() {
 
           <div className="space-y-4">
             <FiscalConfigCard storeId={storeId!} config={config} />
+            <PendingFiscalCard storeId={storeId!} />
             <div className="border border-border rounded-md bg-card p-5">
               <h3 className="text-sm font-semibold mb-3">Notas recentes</h3>
               {invoices?.length === 0 ? (
@@ -319,6 +322,92 @@ function FiscalConfigCard({ storeId, config }: { storeId: string; config: Record
     </div>
   );
 }
+
+function PendingFiscalCard({ storeId }: { storeId: string }) {
+  const qc = useQueryClient();
+  const emit = useServerFn(emitInvoice);
+  const [running, setRunning] = useState(false);
+
+  const { data: pending } = useQuery({
+    queryKey: ["fiscal-pending", storeId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("id, total, finalized_at, customer_name")
+        .eq("store_id", storeId)
+        .eq("fiscal_status", "pendente")
+        .order("finalized_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  async function reemitAll() {
+    if (!pending || pending.length === 0) return;
+    setRunning(true);
+    let ok = 0;
+    let fail = 0;
+    let firstErr = "";
+    for (const sale of pending) {
+      try {
+        await emit({ data: { storeId, saleId: sale.id, type: "nfce" } });
+        await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", sale.id);
+        ok++;
+      } catch (e) {
+        fail++;
+        if (!firstErr) firstErr = (e as Error).message;
+        await supabase.from("sales").update({ fiscal_status: "falha" }).eq("id", sale.id);
+      }
+    }
+    setRunning(false);
+    qc.invalidateQueries({ queryKey: ["fiscal-pending"] });
+    qc.invalidateQueries({ queryKey: ["invoices"] });
+    if (fail === 0) toast.success(`${ok} nota(s) emitida(s)`);
+    else toast.error(`${ok} emitida(s), ${fail} com falha. ${firstErr}`);
+  }
+
+  const count = pending?.length ?? 0;
+  const totalSum = (pending ?? []).reduce((s, p) => s + Number(p.total ?? 0), 0);
+
+  return (
+    <div className="border border-warning/40 rounded-md bg-warning/5 p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold flex items-center gap-2 text-warning">
+          <AlertTriangle className="size-4" /> Vendas fiscais pendentes
+        </h3>
+        <Badge variant="outline" className="border-warning/40 text-warning font-mono">{count}</Badge>
+      </div>
+      {count === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Nenhuma venda aguardando emissão. Vendas marcadas como NFC-e no PDV aparecem aqui até serem emitidas.
+        </p>
+      ) : (
+        <>
+          <p className="text-[11px] text-muted-foreground">
+            Total pendente: <b className="font-mono text-foreground">R$ {totalSum.toFixed(2).replace(".", ",")}</b> em {count} venda(s). Configure o provedor fiscal antes de reemitir em lote.
+          </p>
+          <ul className="space-y-1 max-h-40 overflow-auto text-xs">
+            {pending!.slice(0, 10).map((s) => (
+              <li key={s.id} className="flex items-center justify-between font-mono py-1 border-b border-border last:border-0">
+                <span className="text-muted-foreground truncate">
+                  {s.finalized_at ? new Date(s.finalized_at).toLocaleString("pt-BR") : "—"}
+                  {s.customer_name ? ` · ${s.customer_name}` : ""}
+                </span>
+                <span>R$ {Number(s.total ?? 0).toFixed(2).replace(".", ",")}</span>
+              </li>
+            ))}
+            {count > 10 && <li className="text-[10px] text-muted-foreground py-1">+ {count - 10} outra(s)…</li>}
+          </ul>
+          <Button size="sm" onClick={reemitAll} disabled={running} className="w-full gap-2">
+            {running ? <><Loader2 className="size-3 animate-spin" /> Emitindo…</> : <><Send className="size-3" /> Reemitir em lote</>}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { cls: string; label: string }> = {

@@ -1260,6 +1260,7 @@ export type Database = {
           discount: number
           document_type: string
           finalized_at: string | null
+          fiscal_status: string
           id: string
           operator_id: string
           status: Database["public"]["Enums"]["sale_status"]
@@ -1278,6 +1279,7 @@ export type Database = {
           discount?: number
           document_type?: string
           finalized_at?: string | null
+          fiscal_status?: string
           id?: string
           operator_id: string
           status?: Database["public"]["Enums"]["sale_status"]
@@ -1296,6 +1298,7 @@ export type Database = {
           discount?: number
           document_type?: string
           finalized_at?: string | null
+          fiscal_status?: string
           id?: string
           operator_id?: string
           status?: Database["public"]["Enums"]["sale_status"]

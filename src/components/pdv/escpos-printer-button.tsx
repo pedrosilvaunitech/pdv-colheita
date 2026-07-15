@@ -417,6 +417,15 @@ export function EscPosPrinterButton() {
             ok={agentEnabled && agent.online}
             onClick={toggleAgent}
           />
+          {!agent.online && (
+            <a
+              href={import.meta.env.VITE_AGENT_INSTALLER_URL || "/downloads/BastionPOSAgent-Setup.exe"}
+              download
+              className="mx-2 flex items-center justify-center gap-2 h-8 rounded-sm border border-primary/40 bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+            >
+              <ExternalLink className="size-3" /> Baixar Agente Local (Windows)
+            </a>
+          )}
           <ChannelRow
             icon={<Usb className="size-4" />}
             title="WebUSB direto"
