@@ -125,7 +125,7 @@ function listWindowsSpoolerPrinters() {
   try {
     const out = runPowerShell(
       "Get-CimInstance Win32_Printer | " +
-      "Select-Object Name,Default,WorkOffline,PrinterStatus | ConvertTo-Json -Compress",
+      "Select-Object Name,Default,WorkOffline,PrinterStatus,DetectedErrorState,DriverName,PortName | ConvertTo-Json -Compress",
       [],
       { timeoutMs: 8000 },
     );
@@ -135,11 +135,24 @@ function listWindowsSpoolerPrinters() {
     return rows
       .filter((p) => p && typeof p.Name === "string" && p.Name.trim())
       .sort((a, b) => Number(Boolean(b.Default)) - Number(Boolean(a.Default)))
-      .map((p) => ({
-        name: p.Name,
-        channel: "spooler",
-        status: p.Default ? "default" : (p.WorkOffline ? "offline" : `status:${p.PrinterStatus || "unknown"}`),
-      }));
+      .map((p) => {
+        const isDefault = Boolean(p.Default);
+        const winStat = WIN_STATUS[Number(p.PrinterStatus)] || { s: "offline", m: "Sem status" };
+        const errMsg = WIN_ERROR[Number(p.DetectedErrorState)];
+        const status = errMsg ? "error" : (p.WorkOffline ? "offline" : winStat.s);
+        const statusMessage = errMsg || (p.WorkOffline ? "Trabalhando offline" : winStat.m);
+        const hint = guessModel(p.Name) || guessModel(p.DriverName || "");
+        return {
+          name: p.Name,
+          source: "windows",
+          channel: "spooler",
+          status,
+          statusMessage,
+          isDefault,
+          model: hint ? hint.model : (p.DriverName || undefined),
+          paperWidth: hint ? hint.paperWidth : undefined,
+        };
+      });
   } catch (e) {
     console.warn("[agent] spooler Windows indisponível:", e && e.message);
     return [];
