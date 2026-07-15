@@ -113,10 +113,12 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 
 export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string | null }): Uint8Array {
   const cols = r.paper_width === 58 ? 32 : 48;
+  const codepage: Codepage = getPrinterCodepage(opts?.printerId ?? null) ?? "cp850";
+  const enc = (s: string) => encWith(s, codepage);
   const chunks: Uint8Array[] = [];
   chunks.push(bytes(ESC, 0x40));                          // init
   chunks.push(buildDensityPrefix(undefined, opts?.printerId ?? null)); // intensidade por impressora
-  chunks.push(bytes(ESC, 0x74, 0x02));                    // charset CP850
+  chunks.push(getCodepageCommand(codepage));              // seleciona codepage escolhido
   chunks.push(bytes(ESC, 0x61, 0x01));                    // center
   chunks.push(bytes(ESC, 0x21, 0x08));                    // emphasized
   chunks.push(enc(r.store.name + "\n"));
