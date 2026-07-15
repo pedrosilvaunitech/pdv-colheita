@@ -213,9 +213,9 @@ function normalizePrinters(raw: unknown): AgentPrinter[] {
     const status: PrinterStatus = rawStatus === "online" || rawStatus === "offline" || rawStatus === "error"
       ? rawStatus
       : "online";
-    const pw = o.paperWidth === 58 || o.paperWidth === 76 || o.paperWidth === 80
-      ? (o.paperWidth as 58 | 76 | 80)
-      : undefined;
+    const pw = o.paperWidth === 58 || o.paperWidth === 80
+      ? (o.paperWidth as 58 | 80)
+      : (o.paperWidth === 76 ? 80 : undefined);
     return {
       name,
       source,
