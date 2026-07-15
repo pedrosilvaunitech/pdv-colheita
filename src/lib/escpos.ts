@@ -180,7 +180,7 @@ import {
 } from "./print-agent";
 import { getCurrentStoreIdSync } from "./current-store";
 import { appendPrintHistory, setLastReceipt } from "./print-history";
-import { getPrinterPaperWidth } from "./printer-config";
+import { getPrinterCodepage, getPrinterPaperWidth } from "./printer-config";
 import type { AgentStatus } from "./print-agent";
 
 export interface PrintDiagnostic {
