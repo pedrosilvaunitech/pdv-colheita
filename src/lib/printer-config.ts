@@ -78,14 +78,21 @@ export function setPrinterCodepage(printerName: string, cp: Codepage): void {
 /**
  * Payload de calibração: imprime duas réguas (48 col para 80mm e 32 col
  * para 58mm) — o operador vê qual encaixa exatamente na largura do papel.
+ * Também imprime uma linha de teste de acentos para validar o codepage.
  */
-export function buildCalibrationPayload(): Uint8Array {
+export function buildCalibrationPayload(printerName?: string | null): Uint8Array {
   const ESC = 0x1b, GS = 0x1d, LF = 0x0a;
-  const enc = (s: string) => new TextEncoder().encode(s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+  // Import dinâmico evita ciclo; código roda no browser sempre.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { encodeForCodepage, getCodepageCommand } = require("./escpos-codepage") as typeof import("./escpos-codepage");
+  const cp = getPrinterCodepage(printerName ?? null) ?? "cp850";
+  const enc = (s: string) => encodeForCodepage(s, cp);
   const parts: Uint8Array[] = [];
   parts.push(new Uint8Array([ESC, 0x40]));
-  parts.push(new Uint8Array([ESC, 0x74, 0x02]));
-  parts.push(enc("=== CALIBRACAO DE LARGURA ===\n\n"));
+  parts.push(getCodepageCommand(cp));
+  parts.push(enc("=== CALIBRACAO DE LARGURA ===\n"));
+  parts.push(enc(`Codepage: ${cp.toUpperCase()}\n`));
+  parts.push(enc("Acentos: á é í ó ú â ê ô ã õ ç Ç\n\n"));
   parts.push(enc("Regua 80mm (48 colunas):\n"));
   parts.push(enc("123456789012345678901234567890123456789012345678\n"));
   parts.push(enc("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n\n"));
