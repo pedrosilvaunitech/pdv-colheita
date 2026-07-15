@@ -118,7 +118,7 @@ function normalizePrintableText(text: string): string {
  * Caracteres não representáveis viram (nessa ordem):
  *   1) substituto ASCII manual (ASCII_FALLBACK)
  *   2) versão sem diacrítico (NFD strip)
- *   3) '?' caso nada resolva.
+ *   3) espaço em branco caso nada resolva, para não poluir valores com "??".
  */
 export function encodeForCodepage(text: string, cp: Codepage): Uint8Array {
   const table = TABLES[cp];
@@ -136,11 +136,11 @@ export function encodeForCodepage(text: string, cp: Codepage): Uint8Array {
       for (const s of stripped) {
         const c = s.codePointAt(0)!;
         if (c < 0x80) out.push(c);
-        else out.push(table[s] ?? 0x3F);
+        else out.push(table[s] ?? 0x20);
       }
       continue;
     }
-    out.push(0x3F); // '?'
+    out.push(0x20);
   }
   return new Uint8Array(out);
 }
