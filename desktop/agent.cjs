@@ -29,7 +29,45 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
+
+// Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
+// quando o driver não reporta e para exibir o modelo real na UI.
+const MODEL_HINTS = [
+  { re: /TM-T20/i, model: "Epson TM-T20", paperWidth: 80 },
+  { re: /TM-T88/i, model: "Epson TM-T88", paperWidth: 80 },
+  { re: /TM-U220/i, model: "Epson TM-U220", paperWidth: 76 },
+  { re: /TM-T81/i, model: "Epson TM-T81", paperWidth: 80 },
+  { re: /MP-4200/i, model: "Bematech MP-4200", paperWidth: 80 },
+  { re: /MP-100/i, model: "Bematech MP-100", paperWidth: 58 },
+  { re: /i9|i8|i7/i, model: "Elgin i9", paperWidth: 80 },
+  { re: /XP-58|XP58/i, model: "Xprinter XP-58", paperWidth: 58 },
+  { re: /XP-80|XP80/i, model: "Xprinter XP-80", paperWidth: 80 },
+];
+
+function guessModel(name) {
+  for (const h of MODEL_HINTS) if (h.re.test(name)) return h;
+  return null;
+}
+
+// Mapa Win32_Printer.PrinterStatus → estado normalizado
+const WIN_STATUS = {
+  1: { s: "error",   m: "Outro" },
+  2: { s: "offline", m: "Desconhecido" },
+  3: { s: "online",  m: "Pronta" },
+  4: { s: "online",  m: "Imprimindo" },
+  5: { s: "online",  m: "Aquecendo" },
+  6: { s: "error",   m: "Impressão parada" },
+  7: { s: "offline", m: "Offline" },
+};
+
+// Win32_Printer.DetectedErrorState → mensagem
+const WIN_ERROR = {
+  3: "Papel baixo", 4: "Sem papel", 5: "Toner baixo", 6: "Sem toner",
+  7: "Tampa aberta", 8: "Papel atolado", 9: "Serviço requerido",
+  10: "Bandeja cheia", 11: "Problema no papel", 12: "Não pode imprimir",
+  13: "Requer intervenção", 14: "Sem memória",
+};
 
 const KNOWN_VENDORS = {
   0x04b8: "Epson", 0x0fe6: "Bematech", 0x0dd4: "Custom", 0x0416: "Elgin",
@@ -43,16 +81,29 @@ function hex4(n) { return n.toString(16).padStart(4, "0"); }
 // SPOOLER (canal preferencial — não exige WinUSB)
 // ────────────────────────────────────────────────────────────────────
 function listSpoolerPrinters() {
-  if (!nodePrinter) return listWindowsSpoolerPrinters();
+  // No Windows, sempre use CIM (retorna default/status/errorState).
+  if (process.platform === "win32") return listWindowsSpoolerPrinters();
+  if (!nodePrinter) return [];
   try {
-    return nodePrinter.getPrinters().map((p) => ({
-      name: p.name,
-      channel: "spooler",
-      status: p.status || (p.attributes || []).join(","),
-    }));
+    const def = nodePrinter.getDefaultPrinterName && nodePrinter.getDefaultPrinterName();
+    return nodePrinter.getPrinters().map((p) => {
+      const isDefault = def && p.name === def;
+      const hint = guessModel(p.name);
+      const offline = /offline|paused|error/i.test(p.status || (p.attributes || []).join(","));
+      return {
+        name: p.name,
+        source: "windows",
+        channel: "spooler",
+        status: offline ? "offline" : "online",
+        statusMessage: p.status || (p.attributes || []).join(",") || "Pronta",
+        isDefault: !!isDefault,
+        model: hint ? hint.model : undefined,
+        paperWidth: hint ? hint.paperWidth : undefined,
+      };
+    });
   } catch (e) {
     console.warn("[agent] getPrinters falhou:", e && e.message);
-    return listWindowsSpoolerPrinters();
+    return [];
   }
 }
 
@@ -87,7 +138,7 @@ function listWindowsSpoolerPrinters() {
   try {
     const out = runPowerShell(
       "Get-CimInstance Win32_Printer | " +
-      "Select-Object Name,Default,WorkOffline,PrinterStatus | ConvertTo-Json -Compress",
+      "Select-Object Name,Default,WorkOffline,PrinterStatus,DetectedErrorState,DriverName,PortName | ConvertTo-Json -Compress",
       [],
       { timeoutMs: 8000 },
     );
@@ -97,11 +148,24 @@ function listWindowsSpoolerPrinters() {
     return rows
       .filter((p) => p && typeof p.Name === "string" && p.Name.trim())
       .sort((a, b) => Number(Boolean(b.Default)) - Number(Boolean(a.Default)))
-      .map((p) => ({
-        name: p.Name,
-        channel: "spooler",
-        status: p.Default ? "default" : (p.WorkOffline ? "offline" : `status:${p.PrinterStatus || "unknown"}`),
-      }));
+      .map((p) => {
+        const isDefault = Boolean(p.Default);
+        const winStat = WIN_STATUS[Number(p.PrinterStatus)] || { s: "offline", m: "Sem status" };
+        const errMsg = WIN_ERROR[Number(p.DetectedErrorState)];
+        const status = errMsg ? "error" : (p.WorkOffline ? "offline" : winStat.s);
+        const statusMessage = errMsg || (p.WorkOffline ? "Trabalhando offline" : winStat.m);
+        const hint = guessModel(p.Name) || guessModel(p.DriverName || "");
+        return {
+          name: p.Name,
+          source: "windows",
+          channel: "spooler",
+          status,
+          statusMessage,
+          isDefault,
+          model: hint ? hint.model : (p.DriverName || undefined),
+          paperWidth: hint ? hint.paperWidth : undefined,
+        };
+      });
   } catch (e) {
     console.warn("[agent] spooler Windows indisponível:", e && e.message);
     return [];
@@ -218,17 +282,49 @@ function listUsbPrinters() {
   for (const dev of usb.getDeviceList()) {
     try {
       const d = dev.deviceDescriptor;
-      if (KNOWN_VENDORS[d.idVendor] !== undefined || hasPrinterInterface(dev)) {
+      const vendor = KNOWN_VENDORS[d.idVendor];
+      const printerIface = hasPrinterInterface(dev);
+      if (vendor !== undefined || printerIface) {
+        const name = `${vendor || "USB"}-${hex4(d.idVendor)}:${hex4(d.idProduct)}`;
+        const hint = guessModel(name) || guessModel(vendor || "");
         out.push({
-          name: `${KNOWN_VENDORS[d.idVendor] || "USB"}-${hex4(d.idVendor)}:${hex4(d.idProduct)}`,
+          name,
+          source: "agent",
           channel: "usb",
           vendorId: d.idVendor,
           productId: d.idProduct,
+          status: "online",
+          statusMessage: printerIface ? "USB pronta" : "USB reservada",
+          isDefault: false,
+          model: hint ? hint.model : (vendor ? `${vendor} genérica` : "USB genérica"),
+          paperWidth: hint ? hint.paperWidth : undefined,
         });
       }
     } catch { /* noop */ }
   }
   return out;
+}
+
+/**
+ * União ordenada: primeiro a impressora default do Windows, depois demais
+ * do spooler, depois USB brutas. Dedup por (source|name).
+ */
+function listAllPrinters() {
+  const spooler = (() => { try { return listSpoolerPrinters(); } catch { return []; } })();
+  const usbList = (() => { try { return listUsbPrinters(); } catch { return []; } })();
+  const seen = new Set();
+  const push = (arr, out) => {
+    for (const p of arr) {
+      const k = `${p.source}|${p.name.toLowerCase()}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(p);
+    }
+  };
+  const merged = [];
+  push(spooler, merged);
+  push(usbList, merged);
+  return merged;
 }
 
 function hasPrinterInterface(dev) {
@@ -290,26 +386,37 @@ async function writeUsbRaw(dev, payload) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Envio unificado: spooler primeiro, USB depois. Se o cliente pedir
-// explicitamente um nome no formato "Vendor-XXXX:YYYY", vai direto ao USB.
+// Envio unificado. Se o cliente indicar `source` via X-Printer-Source,
+// respeitamos o roteamento pedido. Fallback: spooler antes de USB (como
+// hoje) para evitar LIBUSB_ERROR_NOT_SUPPORTED no Windows.
 // ────────────────────────────────────────────────────────────────────
-async function printSmart(hint, payload) {
+async function printSmart(hint, payload, opts = {}) {
+  const source = typeof opts.source === "string" ? opts.source.toLowerCase() : null;
   const isUsbHint = typeof hint === "string" && /^[^-]+-[0-9a-f]{4}:[0-9a-f]{4}$/i.test(hint);
   const errors = [];
 
-  // 1. spooler / driver do sistema. No Windows, mesmo quando a UI selecionou
-  //    um device USB bruto (Epson-04b8:xxxx), preferimos o spooler porque ele
-  //    não depende de WinUSB e resolve LIBUSB_ERROR_NOT_SUPPORTED.
-  if (!isUsbHint || process.platform === "win32") {
-    try { const name = await printViaSpooler(hint, payload); return { channel: "spooler", printer: name }; }
-    catch (e) { errors.push(`spooler: ${e.message}`); }
+  // Roteamento explícito (novo cliente da UI passa source)
+  if (source === "windows") {
+    try { const name = await printViaSpooler(hint, payload); return { channel: "spooler", printer: name, source: "windows" }; }
+    catch (e) { throw new Error(`spooler: ${e.message}`); }
+  }
+  if (source === "agent") {
+    try {
+      const { dev, meta } = pickUsbDevice(isUsbHint ? hint : undefined);
+      await writeUsbRaw(dev, payload);
+      return { channel: "usb", printer: meta.name, source: "agent" };
+    } catch (e) { throw new Error(`usb: ${e.message}`); }
   }
 
-  // 2. usb bruto
+  // Comportamento legado (sem source explícito)
+  if (!isUsbHint || process.platform === "win32") {
+    try { const name = await printViaSpooler(hint, payload); return { channel: "spooler", printer: name, source: "windows" }; }
+    catch (e) { errors.push(`spooler: ${e.message}`); }
+  }
   try {
     const { dev, meta } = pickUsbDevice(isUsbHint ? hint : undefined);
     await writeUsbRaw(dev, payload);
-    return { channel: "usb", printer: meta.name };
+    return { channel: "usb", printer: meta.name, source: "agent" };
   } catch (e) { errors.push(`usb: ${e.message}`); }
 
   throw new Error(errors.join(" | "));
@@ -320,31 +427,37 @@ async function printSmart(hint, payload) {
 // ────────────────────────────────────────────────────────────────────
 function startAgent() {
   const app = express();
-  app.use(cors({ origin: true }));
+  app.use(cors({ origin: true, exposedHeaders: ["X-Agent-Version"] }));
   app.use(express.raw({ type: "application/octet-stream", limit: "10mb" }));
   app.use(express.json({ limit: "1mb" }));
+  app.use((_req, res, next) => { res.setHeader("X-Agent-Version", VERSION); next(); });
 
-  app.get("/status", (_req, res) => {
-    let spooler = [], usbList = [];
-    try { spooler = listSpoolerPrinters(); } catch {}
-    try { usbList = listUsbPrinters().map((p) => ({ name: p.name, channel: "usb" })); } catch {}
-    // Prioriza spooler na lista (é o que funciona sem WinUSB no Windows)
-    const printers = [...spooler, ...usbList];
+  const respondPrinters = (res) => {
+    const printers = listAllPrinters();
     res.json({
       version: VERSION,
       platform: process.platform,
       arch: process.arch,
       channels: { spooler: !!nodePrinter || process.platform === "win32", usb: true },
       printers,
+      generatedAt: new Date().toISOString(),
     });
-  });
+  };
+
+  app.get("/status", (_req, res) => respondPrinters(res));
+  app.get("/printers", (_req, res) => respondPrinters(res));
 
   app.post("/print", async (req, res) => {
     try {
       const hint = req.headers["x-printer"];
+      const source = req.headers["x-printer-source"];
       const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
       if (!body.length) return res.status(400).send("Payload vazio.");
-      const r = await printSmart(typeof hint === "string" ? hint : undefined, body);
+      const r = await printSmart(
+        typeof hint === "string" ? hint : undefined,
+        body,
+        { source: typeof source === "string" ? source : null },
+      );
       res.status(200).json({ ok: true, ...r });
     } catch (e) {
       console.error("[agent] print error:", e);
@@ -355,8 +468,13 @@ function startAgent() {
   app.post("/open-drawer", async (req, res) => {
     try {
       const hint = req.headers["x-printer"];
+      const source = req.headers["x-printer-source"];
       const pulse = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]);
-      const r = await printSmart(typeof hint === "string" ? hint : undefined, pulse);
+      const r = await printSmart(
+        typeof hint === "string" ? hint : undefined,
+        pulse,
+        { source: typeof source === "string" ? source : null },
+      );
       res.status(200).json({ ok: true, ...r });
     } catch (e) {
       res.status(500).send(e && e.message ? e.message : String(e));

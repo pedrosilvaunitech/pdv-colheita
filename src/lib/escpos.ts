@@ -170,7 +170,14 @@ export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string |
 }
 
 import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
-import { getSelectedPrinter, isPrintAgentEnabled, pingPrintAgent, printViaAgent, setLastPrintError } from "./print-agent";
+import {
+  getSelectedPrinterForStore,
+  isPrintAgentEnabled,
+  pingPrintAgent,
+  printViaAgent,
+  setLastPrintError,
+} from "./print-agent";
+import { getCurrentStoreIdSync } from "./current-store";
 import { appendPrintHistory, setLastReceipt } from "./print-history";
 import { getPrinterPaperWidth } from "./printer-config";
 
@@ -194,10 +201,12 @@ export async function tryPrintEscPosDetailed(
   r: ReceiptData,
   interactiveFallback = false,
 ): Promise<PrintDiagnostic> {
-  const selected = getSelectedPrinter();
+  const storeId = getCurrentStoreIdSync();
+  const selection = getSelectedPrinterForStore(storeId);
+  const selected = selection?.name ?? null;
+  const selectedSource = selection?.source ?? null;
   // Guarda o último recibo para permitir reimpressão após falha.
   try { setLastReceipt(r); } catch { /* noop */ }
-
 
   const record = (d: PrintDiagnostic) => {
     appendPrintHistory({
@@ -212,19 +221,28 @@ export async function tryPrintEscPosDetailed(
     return d;
   };
 
-  // 1) Agente local (só se habilitado — sem agente, cai direto no WebUSB/Serial)
+  // Se o usuário escolheu explicitamente WebUSB, pula o agente
+  const preferWebUsb = selectedSource === "webusb";
+
+  // 1) Agente local (spooler Windows ou USB bruto). Habilitado sozinho ou
+  //    quando a seleção salva aponta para "agent"/"windows".
   let agentError: { printer: string; paperWidth?: 58 | 80; msg: string } | null = null;
-  if (isPrintAgentEnabled()) {
+  const shouldTryAgent = !preferWebUsb && (isPrintAgentEnabled() || selectedSource === "agent" || selectedSource === "windows");
+  if (shouldTryAgent) {
     try {
       const st = await pingPrintAgent();
       if (st.online && (st.printers?.length ?? 0) > 0) {
-        const target = selected && st.printers!.some((p) => p.name === selected)
-          ? st.printers!.find((p) => p.name === selected)!
-          : st.printers![0];
+        const printers = st.printers!;
+        let target: typeof printers[number] | undefined;
+        if (selected) {
+          target = printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
+                ?? printers.find((p) => p.name === selected);
+        }
+        if (!target) target = printers[0];
         const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
         const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
         try {
-          await printViaAgent(payload, target.name);
+          await printViaAgent(payload, target.name, target.source);
           return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -289,16 +307,17 @@ export async function tryPrintEscPosDetailed(
  * Usado por rotinas de manutenção como a calibração de largura.
  */
 export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic> {
-  const selected = getSelectedPrinter();
-  if (isPrintAgentEnabled()) {
+  const selection = getSelectedPrinterForStore(getCurrentStoreIdSync());
+  const selected = selection?.name ?? null;
+  const selectedSource = selection?.source ?? null;
+  if (isPrintAgentEnabled() || selectedSource === "agent" || selectedSource === "windows") {
     try {
       const st = await pingPrintAgent();
       if (st.online && (st.printers?.length ?? 0) > 0) {
-        const target = selected && st.printers!.some((p) => p.name === selected)
-          ? st.printers!.find((p) => p.name === selected)!
-          : st.printers![0];
+        const printers = st.printers!;
+        const target = (selected && printers.find((p) => p.name === selected)) || printers[0];
         try {
-          await printViaAgent(bytes, target.name);
+          await printViaAgent(bytes, target.name, target.source);
           return { channel: "agent", ok: true, printer: target.name };
         } catch (err) {
           console.warn("[escpos] agente falhou, tentando fallback:", err);
