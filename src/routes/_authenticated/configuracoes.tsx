@@ -101,7 +101,7 @@ function SettingsPage() {
       subtotal: 21, discount: 0, total: 21, payment_method: "dinheiro",
       received: 21, change: 0,
       sale_id: "TEST0000", document_type: "nao_fiscal", issued_at: new Date(),
-    });
+    }, true);
     if (!ok) toast.error("Nenhum canal ESC/POS ativo. Conecte via Agente Local, WebUSB ou Serial (botão Impressora no PDV).");
     else toast.success("Teste enviado à impressora");
   };
@@ -239,7 +239,7 @@ function SettingsPage() {
       operator: form.show_operator ? "Operador exemplo" : undefined,
       customer: form.show_customer ? { name: "Cliente exemplo", doc: null } : undefined,
       sale_id: "PREVIEW00", document_type: form.default_document, issued_at: new Date(),
-    }, false);
+    }, true);
     if (!ok) toast.error("Impressão direta não conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora do PDV.");
   };
 

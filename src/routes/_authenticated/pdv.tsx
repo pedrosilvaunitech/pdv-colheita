@@ -382,7 +382,7 @@ function PdvPage() {
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };
-        const printed = await tryPrintEscPos(r, false);
+        const printed = await tryPrintEscPos(r, true);
         if (!printed) {
           toast.error("Venda finalizada, mas a impressão direta não está conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora.");
         }

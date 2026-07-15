@@ -3,10 +3,18 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getHardwareErrorMessage } from "@/lib/hardware-errors";
 import {
   Printer, Usb, Cable, Server, CheckCircle2, XCircle, TestTube2, Ruler, RefreshCw,
-  RotateCcw, ExternalLink, Activity, Sparkles, MonitorSmartphone,
+  RotateCcw, ExternalLink, Activity, Sparkles, MonitorSmartphone, AlertTriangle,
 } from "lucide-react";
 import { PrintDiagnosticsDialog } from "./print-diagnostics-dialog";
 import { toast } from "sonner";
@@ -15,6 +23,7 @@ import {
 } from "@/lib/escpos";
 import {
   isWebUsbSupported, requestUsbPrinter, getGrantedUsbPrinter, forgetUsbPrinter,
+  isUsbAccessDeniedError, resetUsbPrinterConnection,
 } from "@/lib/escpos-usb";
 import {
   getLastPrintError,
@@ -61,6 +70,7 @@ export function EscPosPrinterButton() {
   const [lastErr, setLastErr] = useState<string | null>(() => getLastPrintError());
   const [testing, setTesting] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
+  const [usbBlockedOpen, setUsbBlockedOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [terminalLabel] = useState(() => getTerminalLabel());
   const usbState = getBrowserDeviceFeatureState("usb");
@@ -179,20 +189,49 @@ export function EscPosPrinterButton() {
 
   const connectUsb = async () => {
     try {
-      const d = await requestUsbPrinter();
+      const d = await requestUsbPrinter(true);
       setUsbDev(d);
+      const name = d.productName ?? `USB ${d.vendorId.toString(16)}:${d.productId.toString(16)}`;
+      const sel = { name, source: "webusb" as const };
+      setSelectedPrinterForStore(storeId, sel);
+      setSelection(sel);
       toast.success(`USB autorizada: ${d.productName ?? "impressora"}`);
-    } catch (e) { toast.error(getHardwareErrorMessage(e, "usb")); }
+    } catch (e) {
+      if (isUsbAccessDeniedError(e)) setUsbBlockedOpen(true);
+      toast.error(getHardwareErrorMessage(e, "usb"));
+    }
   };
 
   const reauthorizeUsb = async () => {
     try {
       await forgetUsbPrinter();
       setUsbDev(null);
-      const d = await requestUsbPrinter();
+      const d = await requestUsbPrinter(true);
       setUsbDev(d);
       toast.success(`USB reautorizada: ${d.productName ?? "impressora"}`);
-    } catch (e) { toast.error(getHardwareErrorMessage(e, "usb")); }
+    } catch (e) {
+      if (isUsbAccessDeniedError(e)) setUsbBlockedOpen(true);
+      toast.error(getHardwareErrorMessage(e, "usb"));
+    }
+  };
+
+  const resetUsbConnection = async () => {
+    try {
+      await resetUsbPrinterConnection();
+      setUsbDev(null);
+      setLastErr(null);
+      const d = await requestUsbPrinter(true);
+      setUsbDev(d);
+      const name = d.productName ?? `USB ${d.vendorId.toString(16)}:${d.productId.toString(16)}`;
+      const sel = { name, source: "webusb" as const };
+      setSelectedPrinterForStore(storeId, sel);
+      setSelection(sel);
+      setUsbBlockedOpen(false);
+      toast.success(`Conexão USB resetada: ${name}`);
+    } catch (e) {
+      if (isUsbAccessDeniedError(e)) setUsbBlockedOpen(true);
+      toast.error(getHardwareErrorMessage(e, "usb"));
+    }
   };
 
   const refreshAgent = async () => {
@@ -239,6 +278,7 @@ export function EscPosPrinterButton() {
       } else {
         const msg = d.error ?? "Nenhum canal ESC/POS ativo";
         setLastErr(msg);
+        if (isUsbAccessDeniedError(msg)) setUsbBlockedOpen(true);
         toast.error(`Falhou (${d.channel}): ${msg}`);
       }
     } finally { setTesting(false); }
@@ -249,7 +289,11 @@ export function EscPosPrinterButton() {
     if (!r) { toast.error("Nenhum recibo anterior salvo"); return; }
     const d = await tryPrintEscPosDetailed(r, true);
     if (d.ok) { toast.success(`Reimpresso via ${d.channel.toUpperCase()}`); setLastErr(null); }
-    else toast.error(`Falhou (${d.channel}): ${d.error ?? "erro"}`);
+    else {
+      const msg = d.error ?? "erro";
+      if (isUsbAccessDeniedError(msg)) setUsbBlockedOpen(true);
+      toast.error(`Falhou (${d.channel}): ${msg}`);
+    }
   };
 
   const anyActive = Boolean(selection) || agentEnabled || usbDev || serialEnabled;
@@ -379,6 +423,7 @@ export function EscPosPrinterButton() {
             message={lastErr}
             onClear={() => setLastErr(null)}
             onReauthUsb={reauthorizeUsb}
+            onResetUsb={resetUsbConnection}
             onRefreshAgent={refreshAgent}
             onReprint={reprintLast}
           />
@@ -394,6 +439,12 @@ export function EscPosPrinterButton() {
         </div>
       </PopoverContent>
       <PrintDiagnosticsDialog open={diagOpen} onOpenChange={setDiagOpen} printerName={selection?.name ?? null} />
+      <UsbBlockedDialog
+        open={usbBlockedOpen}
+        onOpenChange={setUsbBlockedOpen}
+        onResetUsb={resetUsbConnection}
+        onRefreshAgent={refreshAgent}
+      />
     </Popover>
   );
 }
@@ -442,10 +493,11 @@ function ChannelRow({ icon, title, subtitle, ok, onClick, disabled }: {
   );
 }
 
-function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onReprint }: {
+function PrintErrorPanel({ message, onClear, onReauthUsb, onResetUsb, onRefreshAgent, onReprint }: {
   message: string;
   onClear: () => void;
   onReauthUsb: () => void;
+  onResetUsb: () => void;
   onRefreshAgent: () => void;
   onReprint: () => void;
 }) {
@@ -488,6 +540,9 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
         <Button size="sm" variant="outline" className="h-7 gap-1 text-[10px]" onClick={onReauthUsb}>
           <RotateCcw className="size-3" /> Reautorizar USB
         </Button>
+        <Button size="sm" variant="outline" className="h-7 gap-1 text-[10px]" onClick={onResetUsb}>
+          <Usb className="size-3" /> Resetar conexão
+        </Button>
         <a
           href="https://zadig.akeo.ie/"
           target="_blank"
@@ -499,5 +554,39 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
         <Button size="sm" variant="ghost" className="h-7 text-[10px] ml-auto" onClick={onClear}>Limpar</Button>
       </div>
     </div>
+  );
+}
+
+function UsbBlockedDialog({ open, onOpenChange, onResetUsb, onRefreshAgent }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onResetUsb: () => void;
+  onRefreshAgent: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="size-5 text-destructive" /> Acesso WebUSB bloqueado
+          </DialogTitle>
+          <DialogDescription>
+            A impressora está sendo usada pelo driver/spooler do sistema ou por outra sessão. O PDV tenta usar o Agente Local/Windows como fallback automático; para WebUSB direto, o navegador precisa de acesso exclusivo.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 text-sm text-foreground">
+          <p>Para liberar o WebUSB, remova a impressora dos dispositivos do Windows/Linux ou instale o driver WinUSB via Zadig.</p>
+          <p className="text-muted-foreground">Se ela estiver instalada como impressora normal no Windows, prefira o item com badge Windows no seletor: ele imprime pelo Agente Local sem trocar driver.</p>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onRefreshAgent} className="gap-2">
+            <Server className="size-4" /> Tentar Agente/Windows
+          </Button>
+          <Button onClick={onResetUsb} className="gap-2">
+            <RotateCcw className="size-4" /> Resetar conexão de impressora
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

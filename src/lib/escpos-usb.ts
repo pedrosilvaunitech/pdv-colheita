@@ -47,6 +47,18 @@ export function isWebUsbSupported(): boolean {
   return getBrowserDeviceFeatureState("usb").available;
 }
 
+export function isUsbAccessDeniedError(error: unknown): boolean {
+  const msg = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  return /access denied|acesso negado|permission denied|libusb_error_access|libusb_error_not_supported|not_supported/i.test(msg);
+}
+
+export function getUsbAccessDeniedMessage(detail?: string): string {
+  const suffix = detail ? ` Detalhe: ${detail}` : "";
+  return "Acesso USB negado: a impressora está presa pelo driver/spooler do sistema ou por outra sessão. " +
+    "O PDV vai tentar imprimir pelo Agente Local/Windows automaticamente. Para usar WebUSB direto, remova a impressora dos dispositivos do sistema ou instale WinUSB via Zadig." +
+    suffix;
+}
+
 /** Solicita permissão para uma impressora USB. Gesto de usuário obrigatório. */
 export async function requestUsbPrinter(includeAll = false): Promise<USBDevice> {
   const state = getBrowserDeviceFeatureState("usb");
@@ -97,15 +109,49 @@ export async function forgetUsbPrinter(): Promise<void> {
   }
 }
 
+/** Fecha sessões WebUSB abertas e revoga permissões para forçar uma autorização limpa. */
+export async function resetUsbPrinterConnection(): Promise<void> {
+  if (!isWebUsbSupported()) return;
+  try {
+    const list = await navigator.usb.getDevices();
+    for (const device of list) {
+      await safelyCloseUsbDevice(device);
+      const anyDevice = device as USBDevice & { forget?: () => Promise<void> };
+      if (typeof anyDevice.forget === "function") {
+        try { await anyDevice.forget(); } catch { /* navegadores podem negar forget() */ }
+      }
+    }
+  } catch (error) {
+    console.warn("[escpos] resetUsbPrinterConnection falhou:", error);
+  }
+}
+
+async function safelyCloseUsbDevice(device: USBDevice, claimedInterface?: number | null): Promise<void> {
+  if (claimedInterface !== null && claimedInterface !== undefined) {
+    try { await device.releaseInterface(claimedInterface); } catch { /* noop */ }
+  }
+  try {
+    if (device.opened) await device.close();
+  } catch { /* noop */ }
+}
+
 /**
  * Envia bytes ESC/POS crus para a impressora USB.
  * Estratégia: abre o device, seleciona a primeira configuração, faz claim
  * da primeira interface com endpoint OUT bulk, e escreve o payload.
  */
 export async function printUsbRaw(device: USBDevice, payload: Uint8Array): Promise<void> {
-  await device.open();
   let claimed: number | null = null;
   try {
+    if (!device.opened) {
+      try {
+        await device.open();
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        if (isUsbAccessDeniedError(error)) throw new Error(getUsbAccessDeniedMessage(detail));
+        throw error;
+      }
+    }
     if (device.configuration === null) await device.selectConfiguration(1);
     const iface = pickPrinterInterface(device);
     if (!iface) throw new Error("Nenhuma interface de impressão encontrada no dispositivo.");
@@ -113,10 +159,10 @@ export async function printUsbRaw(device: USBDevice, payload: Uint8Array): Promi
       await device.claimInterface(iface.interfaceNumber);
       claimed = iface.interfaceNumber;
     } catch (e: unknown) {
-      throw new Error(
-        "Não foi possível reservar a interface USB da impressora. " +
-        "No Windows, instale o driver WinUSB (Zadig) ou utilize o Agente de Impressão Local (.exe). " +
-        `Detalhe: ${e instanceof Error ? e.message : String(e)}`,
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new Error(isUsbAccessDeniedError(e)
+        ? getUsbAccessDeniedMessage(detail)
+        : `Não foi possível reservar a interface USB da impressora. Detalhe: ${detail}`,
       );
     }
     try { await device.selectAlternateInterface(iface.interfaceNumber, iface.alternate.alternateSetting); }
@@ -131,8 +177,7 @@ export async function printUsbRaw(device: USBDevice, payload: Uint8Array): Promi
       if (res.status !== "ok") throw new Error(`transferOut status=${res.status}`);
     }
   } finally {
-    if (claimed !== null) { try { await device.releaseInterface(claimed); } catch { /* noop */ } }
-    try { await device.close(); } catch { /* noop */ }
+    await safelyCloseUsbDevice(device, claimed);
   }
 }
 

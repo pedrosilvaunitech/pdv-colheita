@@ -29,7 +29,7 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.3.1";
+const VERSION = "1.3.2";
 
 // Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
 // quando o driver não reporta e para exibir o modelo real na UI.
@@ -361,35 +361,42 @@ function pickUsbDevice(nameHint) {
 }
 
 async function writeUsbRaw(dev, payload) {
-  dev.open();
-  const iface =
-    dev.interfaces.find((i) => i.descriptor && i.descriptor.bInterfaceClass === 7) ||
-    dev.interfaces[0];
-  if (!iface) throw new Error("Interface USB de impressora não encontrada.");
-  if (typeof iface.isKernelDriverActive === "function") {
-    try { if (iface.isKernelDriverActive()) iface.detachKernelDriver(); } catch {}
-  }
+  let claimed = false;
   try {
-    iface.claim();
+    dev.open();
   } catch (e) {
-    // Traduz erros libusb em mensagens acionáveis
     const m = e && e.message ? e.message : String(e);
-    if (/NOT_SUPPORTED/i.test(m)) {
-      throw new Error("LIBUSB_ERROR_NOT_SUPPORTED — driver de impressora do Windows travou a interface. Use o canal spooler (imprima pelo driver do Windows) ou substitua o driver por WinUSB via Zadig.");
-    }
     if (/ACCESS/i.test(m)) {
-      throw new Error("LIBUSB_ERROR_ACCESS — sem permissão para o dispositivo USB. Feche outros programas que estejam usando a impressora ou execute o agente como administrador.");
+      throw new Error("LIBUSB_ERROR_ACCESS — acesso negado ao USB bruto. A impressora está presa pelo driver/spooler do sistema ou por outro processo; o agente tentará o spooler do Windows quando disponível.");
     }
     throw e;
   }
+  const iface =
+    dev.interfaces.find((i) => i.descriptor && i.descriptor.bInterfaceClass === 7) ||
+    dev.interfaces[0];
   try {
+    if (!iface) throw new Error("Interface USB de impressora não encontrada.");
+    if (typeof iface.isKernelDriverActive === "function") {
+      try { if (iface.isKernelDriverActive()) iface.detachKernelDriver(); } catch {}
+    }
+    iface.claim();
+    claimed = true;
     const endpoint = iface.endpoints.find((e) => e.direction === "out");
     if (!endpoint) throw new Error("Endpoint OUT não encontrado.");
     await new Promise((resolve, reject) => {
       endpoint.transfer(Buffer.from(payload), (err) => (err ? reject(err) : resolve()));
     });
+  } catch (e) {
+    const m = e && e.message ? e.message : String(e);
+    if (/NOT_SUPPORTED/i.test(m)) {
+      throw new Error("LIBUSB_ERROR_NOT_SUPPORTED — driver de impressora do Windows travou a interface. Use o canal spooler/Windows ou substitua o driver por WinUSB via Zadig.");
+    }
+    if (/ACCESS/i.test(m)) {
+      throw new Error("LIBUSB_ERROR_ACCESS — acesso negado ao USB bruto. Feche outros programas ou use o canal Windows pelo Agente Local.");
+    }
+    throw e;
   } finally {
-    try { iface.release(true, () => {}); } catch {}
+    if (claimed) { try { iface.release(true, () => {}); } catch {} }
     try { dev.close(); } catch {}
   }
 }
