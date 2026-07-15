@@ -5,7 +5,7 @@
  *  - codepage (linguagem/charset ESC/POS para acentos corretos)
  */
 
-import type { Codepage } from "./escpos-codepage";
+import { encodeForCodepage, getCodepageCommand, type Codepage } from "./escpos-codepage";
 
 const LS_PAPER = "printer_paper_width_v1"; // JSON: { [printerName]: 58 | 80 }
 const LS_CODEPAGE = "printer_codepage_v1"; // JSON: { [printerName]: Codepage }
@@ -82,9 +82,6 @@ export function setPrinterCodepage(printerName: string, cp: Codepage): void {
  */
 export function buildCalibrationPayload(printerName?: string | null): Uint8Array {
   const ESC = 0x1b, GS = 0x1d, LF = 0x0a;
-  // Import dinâmico evita ciclo; código roda no browser sempre.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { encodeForCodepage, getCodepageCommand } = require("./escpos-codepage") as typeof import("./escpos-codepage");
   const cp = getPrinterCodepage(printerName ?? null) ?? "cp850";
   const enc = (s: string) => encodeForCodepage(s, cp);
   const parts: Uint8Array[] = [];
