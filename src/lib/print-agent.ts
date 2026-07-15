@@ -176,11 +176,15 @@ function emitSelectionChanged(): void {
 // ─────────────────────────────────────────────────────────────
 
 const AUTO_PRIORITY: Array<(p: AgentPrinter) => boolean> = [
+  (p) => p.source === "windows" && /TM[-\s]?T20X/i.test(`${p.name} ${p.model ?? ""}`),
+  (p) => p.source === "windows" && /TM[-\s]?T20/i.test(`${p.name} ${p.model ?? ""}`),
+  (p) => p.source === "windows" && /TM[-\s]?T88/i.test(`${p.name} ${p.model ?? ""}`),
+  (p) => p.source === "windows" && /Epson/i.test(`${p.name} ${p.model ?? ""}`),
+  (p) => p.source === "windows" && Boolean(p.isDefault),
   (p) => /TM[-\s]?T20X/i.test(`${p.name} ${p.model ?? ""}`),
   (p) => /TM[-\s]?T20/i.test(`${p.name} ${p.model ?? ""}`),
   (p) => /TM[-\s]?T88/i.test(`${p.name} ${p.model ?? ""}`),
-  (p) => /Epson/i.test(`${p.name} ${p.model ?? ""}`),
-  (p) => Boolean(p.isDefault),
+  (p) => p.source === "windows" && p.status === "online",
   (p) => p.status === "online",
 ];
 
