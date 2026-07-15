@@ -228,23 +228,33 @@ function SettingsPage() {
   if (!store) return <StoreRequired />;
   if (!form || !fiscal) return <div className="p-6 text-sm text-muted-foreground">Carregando...</div>;
 
-  const preview = async () => {
-    const ok = await tryPrintEscPos({
-      store: { name: store.fantasy_name || store.name, cnpj: form.show_cnpj ? store.cnpj : null, address: form.show_address ? ([store.city, store.state].filter(Boolean).join(" · ") || null) : null, phone: null },
-      header: form.header_text, footer: [form.thank_you_text, form.footer_text, form.extra_info].filter(Boolean).join("\n"),
-      paper_width: form.paper_width,
-      items: [
-        { name: "REFRIGERANTE COLA 2L", quantity: 2, unit_price: 8.5, total: 17, barcode: form.show_item_code ? "7891234567890" : undefined },
-        { name: "PAO FRANCES KG", quantity: 0.42, unit_price: 15.9, total: 6.68 },
-      ],
-      subtotal: 23.68, discount: 0, total: 23.68, payment_method: "dinheiro",
-      received: 30, change: 6.32,
-      operator: form.show_operator ? "Operador exemplo" : undefined,
-      customer: form.show_customer ? { name: "Cliente exemplo", doc: null } : undefined,
-      sale_id: "PREVIEW00", document_type: form.default_document, issued_at: new Date(),
-    }, true);
+  const buildPreviewData = (): ReceiptData => ({
+    store: {
+      name: store.fantasy_name || store.name,
+      cnpj: form.show_cnpj ? store.cnpj : null,
+      address: form.show_address ? ([store.city, store.state].filter(Boolean).join(" · ") || null) : null,
+      phone: null,
+    },
+    header: form.header_text,
+    footer: [form.thank_you_text, form.footer_text, form.extra_info].filter(Boolean).join("\n"),
+    paper_width: form.paper_width,
+    items: [
+      { name: "REFRIGERANTE COLA 2L", quantity: 2, unit_price: 8.5, total: 17, barcode: form.show_item_code ? "7891234567890" : undefined },
+      { name: "PAO FRANCES KG", quantity: 0.42, unit_price: 15.9, total: 6.68 },
+    ],
+    subtotal: 23.68, discount: 0, total: 23.68, payment_method: "dinheiro",
+    received: 30, change: 6.32,
+    operator: form.show_operator ? "Operador exemplo" : undefined,
+    customer: form.show_customer ? { name: "Cliente exemplo", doc: null } : undefined,
+    sale_id: "PREVIEW00", document_type: form.default_document, issued_at: new Date(),
+  });
+
+  const printTestReceipt = async () => {
+    const ok = await tryPrintEscPos(buildPreviewData(), true);
     if (!ok) toast.error("Impressão direta não conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora do PDV.");
+    else toast.success("Cupom teste enviado à impressora");
   };
+
 
   return (
     <div>
