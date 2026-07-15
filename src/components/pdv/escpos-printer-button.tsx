@@ -86,7 +86,24 @@ export function EscPosPrinterButton() {
   // WebUSB autorizada
   useEffect(() => {
     if (!isWebUsbSupported()) return;
-    getGrantedUsbPrinter().then(setUsbDev).catch(() => setUsbDev(null));
+    const refreshUsb = () => getGrantedUsbPrinter().then(setUsbDev).catch(() => setUsbDev(null));
+    const usb = navigator.usb;
+    const onDisconnect = (event: USBConnectionEvent) => {
+      setUsbDev((current) => {
+        if (!current) return null;
+        const sameDevice = current.vendorId === event.device.vendorId
+          && current.productId === event.device.productId
+          && (current.serialNumber === event.device.serialNumber || !current.serialNumber || !event.device.serialNumber);
+        return sameDevice ? null : current;
+      });
+    };
+    refreshUsb();
+    usb.addEventListener("connect", refreshUsb);
+    usb.addEventListener("disconnect", onDisconnect);
+    return () => {
+      usb.removeEventListener("connect", refreshUsb);
+      usb.removeEventListener("disconnect", onDisconnect);
+    };
   }, []);
 
   // Polling adaptativo do agente + escuta de eventos globais
