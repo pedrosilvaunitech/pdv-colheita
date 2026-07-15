@@ -104,30 +104,34 @@ export async function forgetUsbPrinter(): Promise<void> {
  */
 export async function printUsbRaw(device: USBDevice, payload: Uint8Array): Promise<void> {
   await device.open();
+  let claimed: number | null = null;
   try {
     if (device.configuration === null) await device.selectConfiguration(1);
     const iface = pickPrinterInterface(device);
     if (!iface) throw new Error("Nenhuma interface de impressão encontrada no dispositivo.");
-    // Em Linux/macOS o driver genérico usbfs cede a interface sem drama.
-    // Em Windows exige WinUSB (via Zadig) ou uso do Agente Local.
-    try { await device.claimInterface(iface.interfaceNumber); }
-    catch (e: unknown) {
+    try {
+      await device.claimInterface(iface.interfaceNumber);
+      claimed = iface.interfaceNumber;
+    } catch (e: unknown) {
       throw new Error(
         "Não foi possível reservar a interface USB da impressora. " +
         "No Windows, instale o driver WinUSB (Zadig) ou utilize o Agente de Impressão Local (.exe). " +
-        `Detalhe: ${e instanceof Error ? e.message : String(e)}`
+        `Detalhe: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
+    try { await device.selectAlternateInterface(iface.interfaceNumber, iface.alternate.alternateSetting); }
+    catch { /* algumas impressoras rejeitam — ignorar */ }
     const endpoint = iface.alternate.endpoints.find((e) => e.direction === "out" && e.type === "bulk");
     if (!endpoint) throw new Error("Endpoint OUT/bulk não encontrado.");
-    // Alguns firmwares aceitam apenas blocos <= 64 bytes; enviamos em pedaços.
-    const CHUNK = 64;
+    // Chunk grande para reduzir latência; TM-T20X aceita 512+.
+    const CHUNK = Math.max(64, endpoint.packetSize || 64) * 8;
     for (let i = 0; i < payload.length; i += CHUNK) {
       const slice = payload.slice(i, i + CHUNK);
-      await device.transferOut(endpoint.endpointNumber, slice);
+      const res = await device.transferOut(endpoint.endpointNumber, slice);
+      if (res.status !== "ok") throw new Error(`transferOut status=${res.status}`);
     }
   } finally {
-    try { await device.releaseInterface(0); } catch { /* noop */ }
+    if (claimed !== null) { try { await device.releaseInterface(claimed); } catch { /* noop */ } }
     try { await device.close(); } catch { /* noop */ }
   }
 }
