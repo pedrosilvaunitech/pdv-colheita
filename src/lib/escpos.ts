@@ -1,7 +1,6 @@
 // ESC/POS raw printing via Web Serial API.
 // Fallback: quando não suportado, o chamador deve imprimir o HTML térmico.
 // Perfis 58mm (32 col) e 80mm (48 col).
-import { getHardwareErrorMessage } from "./hardware-errors";
 import { buildDensityPrefix } from "./print-density";
 
 import type { ReceiptData } from "./receipt";
@@ -172,7 +171,6 @@ export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string |
 import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
 import {
   getSelectedPrinterForStore,
-  isPrintAgentEnabled,
   pingPrintAgent,
   printViaAgent,
   setLastPrintError,
@@ -180,6 +178,7 @@ import {
 import { getCurrentStoreIdSync } from "./current-store";
 import { appendPrintHistory, setLastReceipt } from "./print-history";
 import { getPrinterPaperWidth } from "./printer-config";
+import type { AgentStatus } from "./print-agent";
 
 export interface PrintDiagnostic {
   channel: "agent" | "usb" | "serial" | "none";
@@ -221,62 +220,67 @@ export async function tryPrintEscPosDetailed(
     return d;
   };
 
-  // Se o usuário escolheu explicitamente WebUSB, pula o agente
-  const preferWebUsb = selectedSource === "webusb";
-
-  // 1) Agente local (spooler Windows ou USB bruto). Habilitado sozinho ou
-  //    quando a seleção salva aponta para "agent"/"windows".
-  let agentError: { printer: string; paperWidth?: 58 | 80; msg: string } | null = null;
-  const shouldTryAgent = !preferWebUsb && (isPrintAgentEnabled() || selectedSource === "agent" || selectedSource === "windows");
-  if (shouldTryAgent) {
-    try {
-      const st = await pingPrintAgent();
-      if (st.online && (st.printers?.length ?? 0) > 0) {
-        const printers = st.printers!;
-        let target: typeof printers[number] | undefined;
-        if (selected) {
-          target = printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
-                ?? printers.find((p) => p.name === selected);
-        }
-        if (!target) target = printers[0];
-        const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
-        const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
-        try {
-          await printViaAgent(payload, target.name, target.source);
-          return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn("[escpos] agente falhou, tentando fallback:", msg);
-          agentError = { printer: target.name, paperWidth: effectivePaper, msg };
-          record({ channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg });
-        }
-      }
-    } catch (err) { console.warn("[escpos] agente indisponível:", err); }
-  }
-
   const usbPaper = getPrinterPaperWidth("__usb__") ?? r.paper_width;
-  const payload = buildEscPosPayload({ ...r, paper_width: usbPaper }, { printerId: "__usb__" });
+  const usbPayload = buildEscPosPayload({ ...r, paper_width: usbPaper }, { printerId: "__usb__" });
 
-  // 2) WebUSB direto
-  if (isWebUsbSupported()) {
+  const tryWebUsb = async (): Promise<PrintDiagnostic | null> => {
+    if (!isWebUsbSupported()) return null;
     try {
       let dev = await getGrantedUsbPrinter();
       if (!dev && interactiveFallback) {
         try { dev = await requestUsbPrinter(); }
         catch (e) { console.warn("[escpos] usuário não autorizou USB:", e); }
       }
-      if (dev) {
-        try {
-          await printUsbRaw(dev, payload);
-          return record({ channel: "usb", ok: true, printer: dev.productName ?? "USB", paperWidth: usbPaper });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          setLastPrintError(msg);
-          return record({ channel: "usb", ok: false, printer: dev.productName ?? "USB", paperWidth: usbPaper, error: msg });
-        }
+      if (!dev) return null;
+      try {
+        await printUsbRaw(dev, usbPayload);
+        return record({ channel: "usb", ok: true, printer: dev.productName ?? "USB", paperWidth: usbPaper });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setLastPrintError(msg);
+        return record({ channel: "usb", ok: false, printer: dev.productName ?? "USB", paperWidth: usbPaper, error: msg });
       }
-    } catch (err) { console.warn("[escpos] webusb falhou:", err); }
+    } catch (err) { console.warn("[escpos] webusb falhou:", err); return null; }
+  };
+
+  // Se a seleção salva aponta para WebUSB, tenta sem diálogo primeiro. Caso o
+  // PWA não tenha a mesma permissão USB do navegador, cai para o agente local.
+  if (selectedSource === "webusb") {
+    const usb = await tryWebUsb();
+    if (usb?.ok) return usb;
   }
+
+  // 1) Agente local (spooler Windows ou USB bruto). Habilitado sozinho ou
+  //    quando encontrado em 127.0.0.1/localhost. Isso iguala PWA e navegador:
+  //    se o agente existe, ele é o caminho preferencial e não depende de WebUSB.
+  let agentError: { printer: string; paperWidth?: 58 | 80; msg: string } | null = null;
+  try {
+    const st: AgentStatus = await pingPrintAgent();
+    if (st.online && (st.printers?.length ?? 0) > 0) {
+      const printers = st.printers!;
+      let target: typeof printers[number] | undefined;
+      if (selected && selectedSource !== "webusb") {
+        target = printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
+              ?? printers.find((p) => p.name === selected);
+      }
+      if (!target) target = printers[0];
+      const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
+      const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
+      try {
+        await printViaAgent(payload, target.name, target.source);
+        return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[escpos] agente falhou, tentando fallback:", msg);
+        agentError = { printer: target.name, paperWidth: effectivePaper, msg };
+        record({ channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg });
+      }
+    }
+  } catch (err) { console.warn("[escpos] agente indisponível:", err); }
+
+  // 2) WebUSB direto
+  const usb = selectedSource === "webusb" ? null : await tryWebUsb();
+  if (usb) return usb;
 
   // 3) Web Serial
   if (!isEscPosEnabled()) {
@@ -289,7 +293,7 @@ export async function tryPrintEscPosDetailed(
     await port.open({ baudRate: 9600 });
     const writer = port.writable?.getWriter();
     if (!writer) { await port.close(); return record({ channel: "serial", ok: false, error: "Sem writer serial" }); }
-    await writer.write(payload);
+    await writer.write(usbPayload);
     await writer.close();
     await port.close();
     return record({ channel: "serial", ok: true, paperWidth: r.paper_width });
@@ -310,12 +314,14 @@ export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic>
   const selection = getSelectedPrinterForStore(getCurrentStoreIdSync());
   const selected = selection?.name ?? null;
   const selectedSource = selection?.source ?? null;
-  if (isPrintAgentEnabled() || selectedSource === "agent" || selectedSource === "windows") {
+  if (selectedSource !== "webusb") {
     try {
       const st = await pingPrintAgent();
       if (st.online && (st.printers?.length ?? 0) > 0) {
         const printers = st.printers!;
-        const target = (selected && printers.find((p) => p.name === selected)) || printers[0];
+        const target = (selected && printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource)))
+          || (selected && printers.find((p) => p.name === selected))
+          || printers[0];
         try {
           await printViaAgent(bytes, target.name, target.source);
           return { channel: "agent", ok: true, printer: target.name };
