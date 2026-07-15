@@ -103,12 +103,18 @@ function PdvPage() {
   // ============================================================
   const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
   const navigate = useNavigate();
-  const [linkedComanda, setLinkedComanda] = useState<{ id: string; number: number; label: string | null } | null>(null);
+  const [linkedComandas, setLinkedComandas] = useState<Array<{ id: string; number: number; label: string | null; itemsCount: number }>>([]);
   const [comandaInput, setComandaInput] = useState("");
 
   const loadComanda = async (numRaw: string | number) => {
     const num = Number(String(numRaw).replace(/\D/g, ""));
     if (!storeId || !Number.isFinite(num) || num <= 0) { toast.error("Número de comanda inválido"); return; }
+    // Bloqueia carregar a mesma comanda duas vezes (evita duplicar itens).
+    if (linkedComandas.some((c) => c.number === num)) {
+      toast.info(`Comanda #${num} já está no carrinho`);
+      setComandaInput("");
+      return;
+    }
     const { data: c, error } = await supabase.from("comandas")
       .select("id,number,label,status").eq("store_id", storeId).eq("number", num)
       .eq("status", "aberta").maybeSingle();
@@ -118,17 +124,34 @@ function PdvPage() {
       .select("product_id,product_name,barcode,quantity,unit_price").eq("comanda_id", c.id).order("created_at");
     if (e2) { toast.error(e2.message); return; }
     if (!its || its.length === 0) { toast.error("Comanda sem itens"); return; }
-    setCart(its.map((i) => ({
-      product_id: i.product_id ?? "",
-      name: i.product_name,
-      barcode: i.barcode,
-      unit_price: Number(i.unit_price),
-      quantity: Number(i.quantity),
-      is_weighable: false,
-    })));
-    setLinkedComanda({ id: c.id, number: Number(c.number ?? num), label: c.label });
+
+    // Mescla no carrinho existente: soma quantidade quando product_id+preço batem
+    // (permite juntar itens iguais de comandas diferentes na mesma linha).
+    setCart((prev) => {
+      const next = [...prev];
+      for (const i of its) {
+        const pid = i.product_id ?? "";
+        const price = Number(i.unit_price);
+        const qty = Number(i.quantity);
+        const idx = next.findIndex((c2) => c2.product_id === pid && c2.unit_price === price && !!pid);
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], quantity: next[idx].quantity + qty };
+        } else {
+          next.push({
+            product_id: pid,
+            name: i.product_name,
+            barcode: i.barcode,
+            unit_price: price,
+            quantity: qty,
+            is_weighable: false,
+          });
+        }
+      }
+      return next;
+    });
+    setLinkedComandas((prev) => [...prev, { id: c.id, number: Number(c.number ?? num), label: c.label, itemsCount: its.length }]);
     setComandaInput("");
-    toast.success(`Comanda #${c.number ?? num} carregada · ${its.length} item(ns)`);
+    toast.success(`Comanda #${c.number ?? num} adicionada · ${its.length} item(ns) somado(s)`);
   };
 
   // Se o usuário chega via /pdv?comanda=N, carrega automaticamente uma vez.
@@ -144,7 +167,13 @@ function PdvPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, search?.comanda]);
 
-  const clearLinkedComanda = () => { setLinkedComanda(null); setCart([]); };
+  const clearLinkedComandas = () => { setLinkedComandas([]); setCart([]); };
+  const removeLinkedComanda = (id: string) => {
+    // Remove só o vínculo — não tenta subtrair itens do carrinho porque o operador
+    // pode já ter alterado quantidades. Se quiser recomeçar, use "Limpar tudo".
+    setLinkedComandas((prev) => prev.filter((c) => c.id !== id));
+    toast.info("Vínculo removido. Ajuste o carrinho manualmente se necessário.");
+  };
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.quantity * i.unit_price, 0), [cart]);
   const disc = Math.min(Number(discount || 0), subtotal);
@@ -387,14 +416,15 @@ function PdvPage() {
           toast.error("Venda finalizada, mas a impressão direta não está conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora.");
         }
       }
-      // Se a venda saiu de uma comanda aberta, fecha a comanda e vincula o sale_id.
-      if (linkedComanda) {
+      // Se a venda saiu de uma ou mais comandas abertas, fecha todas e vincula o sale_id.
+      if (linkedComandas.length > 0) {
+        const ids = linkedComandas.map((c) => c.id);
         const { error: eC } = await supabase.from("comandas")
           .update({ status: "fechada", closed_at: new Date().toISOString(), sale_id: saleId })
-          .eq("id", linkedComanda.id);
-        if (eC) toast.error(`Venda ok, mas falhou ao fechar comanda: ${eC.message}`);
-        else toast.success(`Comanda #${linkedComanda.number} fechada`);
-        setLinkedComanda(null);
+          .in("id", ids);
+        if (eC) toast.error(`Venda ok, mas falhou ao fechar comanda(s): ${eC.message}`);
+        else toast.success(`Comanda(s) #${linkedComandas.map((c) => c.number).join(", #")} fechada(s)`);
+        setLinkedComandas([]);
         qc.invalidateQueries({ queryKey: ["comandas"] });
       }
       setCart([]); setPayments([]); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
@@ -524,15 +554,29 @@ function PdvPage() {
 
       <div className="flex-1 grid grid-cols-3 gap-4 p-6 overflow-hidden">
         <div className="col-span-2 flex flex-col gap-4 min-h-0">
-          {linkedComanda && (
-            <div className="border border-primary/40 bg-primary/5 rounded-md px-4 py-2 flex items-center gap-3">
-              <Utensils className="size-4 text-primary" />
-              <div className="flex-1 text-sm">
-                <span className="font-mono font-bold text-primary">Comanda #{linkedComanda.number}</span>
-                {linkedComanda.label && <span className="text-muted-foreground"> · {linkedComanda.label}</span>}
-                <span className="text-[11px] text-muted-foreground ml-2">Itens carregados no carrinho. Finalize para fechar a comanda.</span>
+          {linkedComandas.length > 0 && (
+            <div className="border border-primary/40 bg-primary/5 rounded-md px-4 py-2 flex items-center gap-3 flex-wrap">
+              <Utensils className="size-4 text-primary shrink-0" />
+              <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <span className="text-[11px] uppercase tracking-wider font-mono text-muted-foreground">Comandas juntadas:</span>
+                {linkedComandas.map((c) => (
+                  <span key={c.id} className="inline-flex items-center gap-1 bg-primary/10 border border-primary/30 rounded px-2 py-0.5">
+                    <span className="font-mono font-bold text-primary text-xs">#{c.number}</span>
+                    {c.label && <span className="text-[11px] text-muted-foreground">· {c.label}</span>}
+                    <span className="text-[10px] text-muted-foreground">({c.itemsCount} it)</span>
+                    <button
+                      type="button"
+                      onClick={() => removeLinkedComanda(c.id)}
+                      className="ml-1 text-muted-foreground hover:text-destructive"
+                      title="Desvincular esta comanda"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+                <span className="text-[11px] text-muted-foreground ml-1">Itens somados no carrinho. Finalize para fechar todas.</span>
               </div>
-              <Button size="sm" variant="ghost" onClick={clearLinkedComanda}><X className="size-4" /></Button>
+              <Button size="sm" variant="ghost" onClick={clearLinkedComandas} title="Limpar tudo"><X className="size-4" /></Button>
             </div>
           )}
           <form onSubmit={(e) => { e.preventDefault(); addByBarcode(scan); }} className="border border-border rounded-md bg-card p-4 flex items-center gap-3">
