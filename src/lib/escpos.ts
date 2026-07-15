@@ -112,7 +112,7 @@ function sep(cols: number): string { return "-".repeat(cols); }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 import { defaultTemplate, loadTemplate, type ReceiptBlock, type ReceiptTemplate } from "./receipt-template";
-import { getCurrentStoreIdSync } from "./current-store";
+
 
 // Mapeamento alinhamento → ESC/POS ESC a n (0 esquerda, 1 centro, 2 direita)
 const ALIGN_CMD = { left: 0x00, center: 0x01, right: 0x02 } as const;
