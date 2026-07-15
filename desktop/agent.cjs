@@ -29,7 +29,7 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.3.0";
+const VERSION = "1.3.1";
 
 // Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
 // quando o driver não reporta e para exibir o modelo real na UI.
@@ -405,7 +405,17 @@ async function printSmart(hint, payload, opts = {}) {
       const { dev, meta } = pickUsbDevice(isUsbHint ? hint : undefined);
       await writeUsbRaw(dev, payload);
       return { channel: "usb", printer: meta.name, source: "agent" };
-    } catch (e) { throw new Error(`usb: ${e.message}`); }
+    } catch (e) {
+      errors.push(`usb: ${e.message}`);
+      // Em Windows, a Epson TM-T20X normalmente fica reservada pelo driver.
+      // Nesse caso o canal USB bruto falha, mas o spooler RAW imprime sem
+      // trocar driver/WinUSB. Mantém a seleção antiga funcionando no PWA.
+      if (process.platform === "win32") {
+        try { const name = await printViaSpooler(undefined, payload); return { channel: "spooler", printer: name, source: "windows" }; }
+        catch (spoolerErr) { errors.push(`spooler: ${spoolerErr.message}`); }
+      }
+      throw new Error(errors.join(" | "));
+    }
   }
 
   // Comportamento legado (sem source explícito)
@@ -427,7 +437,23 @@ async function printSmart(hint, payload, opts = {}) {
 // ────────────────────────────────────────────────────────────────────
 function startAgent() {
   const app = express();
-  app.use(cors({ origin: true, exposedHeaders: ["X-Agent-Version"] }));
+  // CORS/PNA explícito: PWAs publicados em HTTPS fazem preflight para
+  // http://127.0.0.1. Sem Access-Control-Allow-Private-Network o Chrome
+  // consegue consultar /status em alguns cenários, mas bloqueia POST /print.
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+    else res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Vary", "Origin, Access-Control-Request-Headers, Access-Control-Request-Private-Network");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] || "Content-Type, X-Printer, X-Printer-Source, Accept, Origin");
+    res.setHeader("Access-Control-Allow-Private-Network", "true");
+    res.setHeader("Access-Control-Max-Age", "86400");
+    res.setHeader("Access-Control-Expose-Headers", "X-Agent-Version");
+    res.setHeader("X-Agent-Version", VERSION);
+    if (req.method === "OPTIONS") return res.status(204).end();
+    next();
+  });
   app.use(express.raw({ type: "application/octet-stream", limit: "10mb" }));
   app.use(express.json({ limit: "1mb" }));
   app.use((_req, res, next) => { res.setHeader("X-Agent-Version", VERSION); next(); });

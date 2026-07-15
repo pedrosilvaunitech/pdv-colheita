@@ -16,7 +16,7 @@
 
 import { getCurrentStoreIdSync } from "./current-store";
 
-const AGENT_URL = "http://127.0.0.1:9100";
+const AGENT_URLS = ["http://127.0.0.1:9100", "http://localhost:9100"] as const;
 const LS_KEY = "print_agent_enabled_v1";
 const LS_PRINTER_LEGACY = "print_agent_selected_printer_v1";
 const LS_SELECTION = "printer.selection.v2";
@@ -232,6 +232,35 @@ function normalizePrinters(raw: unknown): AgentPrinter[] {
 
 export const PRINT_AGENT_EVENT = "print-agent-status";
 
+let activeAgentUrl: (typeof AGENT_URLS)[number] = AGENT_URLS[0];
+
+function explainAgentNetworkError(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (/failed to fetch|load failed|networkerror|abort/i.test(msg)) {
+    return "Não foi possível enviar para o Agente Local. No PWA/navegador publicado, atualize o Agente para v1.3.1 ou superior para liberar impressão local segura.";
+  }
+  return msg;
+}
+
+async function fetchAgent(path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const bases = [activeAgentUrl, ...AGENT_URLS.filter((u) => u !== activeAgentUrl)];
+  let lastError: unknown = null;
+  for (const base of bases) {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const response = await fetch(`${base}${path}`, { ...init, signal: ctrl.signal });
+      activeAgentUrl = base;
+      return response;
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error(explainAgentNetworkError(lastError));
+}
+
 let lastAgentSignature = "";
 function emitAgentStatus(st: AgentStatus): void {
   if (typeof window === "undefined") return;
@@ -242,17 +271,14 @@ function emitAgentStatus(st: AgentStatus): void {
 }
 
 export async function pingPrintAgent(timeoutMs = 1200): Promise<AgentStatus> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(`${AGENT_URL}/status`, { signal: ctrl.signal, cache: "no-store" });
+    const r = await fetchAgent("/status", { cache: "no-store" }, timeoutMs);
     if (!r.ok) { const off: AgentStatus = { online: false }; emitAgentStatus(off); return off; }
     const j = await r.json() as { version?: string; printers?: unknown };
     const st: AgentStatus = { online: true, version: j.version, printers: normalizePrinters(j.printers) };
     emitAgentStatus(st);
     return st;
   } catch { const off: AgentStatus = { online: false }; emitAgentStatus(off); return off; }
-  finally { clearTimeout(t); }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -272,7 +298,7 @@ export async function printViaAgent(
   if (sel?.source && sel.source !== "webusb") headers["X-Printer-Source"] = sel.source;
   const body = new Blob([new Uint8Array(payload)]);
   try {
-    const r = await fetch(`${AGENT_URL}/print`, { method: "POST", headers, body });
+    const r = await fetchAgent("/print", { method: "POST", headers, body }, 30000);
     if (!r.ok) {
       const msg = await r.text().catch(() => r.statusText);
       const err = `Agente ${r.status}: ${msg}`;
@@ -281,7 +307,8 @@ export async function printViaAgent(
     }
     setLastPrintError(null);
   } catch (e) {
-    if (e instanceof Error && !e.message.startsWith("Agente ")) setLastPrintError(e.message);
-    throw e;
+    const msg = explainAgentNetworkError(e);
+    if (!msg.startsWith("Agente ")) setLastPrintError(msg);
+    throw new Error(msg);
   }
 }
