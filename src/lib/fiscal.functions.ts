@@ -76,9 +76,12 @@ export const emitInvoice = createServerFn({ method: "POST" })
       throw new Error("Envie o certificado A1 (.pfx) antes de emitir. Consulte docs/fiscal-setup.md.");
     }
 
-    // Provedor SEFAZ direto exige assinatura XML local — fora deste MVP.
+    // Provedor SEFAZ direto exige assinatura XML local + mutual TLS + WebService SOAP por UF —
+    // não roda no runtime edge (Cloudflare Workers) usado pelo backend Lovable.
     if (provider === "direto_sefaz") {
-      throw new Error("Emissão direta SEFAZ ainda não está disponível neste MVP. Escolha um provedor (Focus NFe, PlugNotas, NFe.io, Webmania ou TecnoSpeed).");
+      throw new Error(
+        "Emissão 'Direto SEFAZ' requer um servidor Node externo (VPS/Fly.io/Railway) rodando o motor de assinatura XML-DSig + mutual TLS com o certificado A1. O backend deste projeto roda em Cloudflare Workers, que não suporta essas operações. Alternativas: (1) provisione o motor externo e aponte 'provider_api_url' para ele, ou (2) troque o provedor para Focus NFe / PlugNotas / NFe.io / Webmania / TecnoSpeed em Configurações → Fiscal."
+      );
     }
 
     const secretName = SECRET_NAME[provider]!;
