@@ -87,11 +87,12 @@ function bytes(...arr: (number | Uint8Array)[]): Uint8Array {
   return out;
 }
 
-function enc(text: string): Uint8Array {
-  // CP860/CP850 seriam ideais para PT; fallback ASCII-safe removendo diacríticos.
-  const ascii = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return new TextEncoder().encode(ascii);
+import { encodeForCodepage, getCodepageCommand, type Codepage } from "./escpos-codepage";
+
+function encWith(text: string, cp: Codepage): Uint8Array {
+  return encodeForCodepage(text, cp);
 }
+
 
 function line(cols: number, left: string, right: string): string {
   const l = left.slice(0, cols - 1);
