@@ -282,17 +282,49 @@ function listUsbPrinters() {
   for (const dev of usb.getDeviceList()) {
     try {
       const d = dev.deviceDescriptor;
-      if (KNOWN_VENDORS[d.idVendor] !== undefined || hasPrinterInterface(dev)) {
+      const vendor = KNOWN_VENDORS[d.idVendor];
+      const printerIface = hasPrinterInterface(dev);
+      if (vendor !== undefined || printerIface) {
+        const name = `${vendor || "USB"}-${hex4(d.idVendor)}:${hex4(d.idProduct)}`;
+        const hint = guessModel(name) || guessModel(vendor || "");
         out.push({
-          name: `${KNOWN_VENDORS[d.idVendor] || "USB"}-${hex4(d.idVendor)}:${hex4(d.idProduct)}`,
+          name,
+          source: "agent",
           channel: "usb",
           vendorId: d.idVendor,
           productId: d.idProduct,
+          status: "online",
+          statusMessage: printerIface ? "USB pronta" : "USB reservada",
+          isDefault: false,
+          model: hint ? hint.model : (vendor ? `${vendor} genérica` : "USB genérica"),
+          paperWidth: hint ? hint.paperWidth : undefined,
         });
       }
     } catch { /* noop */ }
   }
   return out;
+}
+
+/**
+ * União ordenada: primeiro a impressora default do Windows, depois demais
+ * do spooler, depois USB brutas. Dedup por (source|name).
+ */
+function listAllPrinters() {
+  const spooler = (() => { try { return listSpoolerPrinters(); } catch { return []; } })();
+  const usbList = (() => { try { return listUsbPrinters(); } catch { return []; } })();
+  const seen = new Set();
+  const push = (arr, out) => {
+    for (const p of arr) {
+      const k = `${p.source}|${p.name.toLowerCase()}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(p);
+    }
+  };
+  const merged = [];
+  push(spooler, merged);
+  push(usbList, merged);
+  return merged;
 }
 
 function hasPrinterInterface(dev) {
