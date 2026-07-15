@@ -100,19 +100,30 @@ const TABLES: Record<Codepage, Record<string, number>> = {
 const ASCII_FALLBACK: Record<string, string> = {
   "“":'"',"”":'"',"‘":"'","’":"'","–":"-","—":"-","…":"...","•":"*","«":"<<","»":">>",
   "€":"EUR","₧":"Pts","™":"TM","©":"(c)","®":"(r)","·":".","º":"o","ª":"a",
+  "\u00A0":" ","\u202F":" ","\u2007":" ","\u2009":" ","\u200B":"","\u2060":"","\uFEFF":"",
+  "№":"No.","−":"-","₋":"-","₊":"+","₌":"=",
 };
+
+function normalizePrintableText(text: string): string {
+  return text
+    // O Intl pt-BR costuma gerar moeda como "R$\u00A012,34". A maioria das
+    // térmicas não tem byte para esse espaço especial e imprimia "R$?12,34".
+    .replace(/[\u00A0\u202F\u2007\u2009]/g, " ")
+    // Marcadores invisíveis não devem virar "?" no papel.
+    .replace(/[\u200B\u2060\uFEFF]/g, "");
+}
 
 /**
  * Codifica texto Unicode em bytes para o codepage escolhido.
  * Caracteres não representáveis viram (nessa ordem):
  *   1) substituto ASCII manual (ASCII_FALLBACK)
  *   2) versão sem diacrítico (NFD strip)
- *   3) '?' caso nada resolva.
+ *   3) espaço em branco caso nada resolva, para não poluir valores com "??".
  */
 export function encodeForCodepage(text: string, cp: Codepage): Uint8Array {
   const table = TABLES[cp];
   const out: number[] = [];
-  for (const ch of text) {
+  for (const ch of normalizePrintableText(text)) {
     const code = ch.codePointAt(0)!;
     if (code < 0x80) { out.push(code); continue; }
     const mapped = table[ch];
@@ -125,11 +136,11 @@ export function encodeForCodepage(text: string, cp: Codepage): Uint8Array {
       for (const s of stripped) {
         const c = s.codePointAt(0)!;
         if (c < 0x80) out.push(c);
-        else out.push(table[s] ?? 0x3F);
+        else out.push(table[s] ?? 0x20);
       }
       continue;
     }
-    out.push(0x3F); // '?'
+    out.push(0x20);
   }
   return new Uint8Array(out);
 }
