@@ -40,6 +40,12 @@ export function resetCurrentStoreSelection() {
   window.dispatchEvent(new Event("bastion:store-changed"));
 }
 
+/** Leitura síncrona do storeId atual — para libs fora do React (impressão). */
+export function getCurrentStoreIdSync(): string | null {
+  try { return typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null; }
+  catch { return null; }
+}
+
 export function useMyProfile() {
   return useQuery({
     queryKey: ["my-profile"],
