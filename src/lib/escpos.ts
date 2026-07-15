@@ -233,10 +233,12 @@ export async function tryPrintEscPosDetailed(
       const st = await pingPrintAgent();
       if (st.online && (st.printers?.length ?? 0) > 0) {
         const printers = st.printers!;
-        const target =
-          selected && printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
-          ?? (selected ? printers.find((p) => p.name === selected) : undefined)
-          ?? printers[0];
+        let target: typeof printers[number] | undefined;
+        if (selected) {
+          target = printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
+                ?? printers.find((p) => p.name === selected);
+        }
+        if (!target) target = printers[0];
         const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
         const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
         try {
