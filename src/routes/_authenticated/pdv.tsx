@@ -103,12 +103,18 @@ function PdvPage() {
   // ============================================================
   const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
   const navigate = useNavigate();
-  const [linkedComanda, setLinkedComanda] = useState<{ id: string; number: number; label: string | null } | null>(null);
+  const [linkedComandas, setLinkedComandas] = useState<Array<{ id: string; number: number; label: string | null; itemsCount: number }>>([]);
   const [comandaInput, setComandaInput] = useState("");
 
   const loadComanda = async (numRaw: string | number) => {
     const num = Number(String(numRaw).replace(/\D/g, ""));
     if (!storeId || !Number.isFinite(num) || num <= 0) { toast.error("Número de comanda inválido"); return; }
+    // Bloqueia carregar a mesma comanda duas vezes (evita duplicar itens).
+    if (linkedComandas.some((c) => c.number === num)) {
+      toast.info(`Comanda #${num} já está no carrinho`);
+      setComandaInput("");
+      return;
+    }
     const { data: c, error } = await supabase.from("comandas")
       .select("id,number,label,status").eq("store_id", storeId).eq("number", num)
       .eq("status", "aberta").maybeSingle();
@@ -118,17 +124,34 @@ function PdvPage() {
       .select("product_id,product_name,barcode,quantity,unit_price").eq("comanda_id", c.id).order("created_at");
     if (e2) { toast.error(e2.message); return; }
     if (!its || its.length === 0) { toast.error("Comanda sem itens"); return; }
-    setCart(its.map((i) => ({
-      product_id: i.product_id ?? "",
-      name: i.product_name,
-      barcode: i.barcode,
-      unit_price: Number(i.unit_price),
-      quantity: Number(i.quantity),
-      is_weighable: false,
-    })));
-    setLinkedComanda({ id: c.id, number: Number(c.number ?? num), label: c.label });
+
+    // Mescla no carrinho existente: soma quantidade quando product_id+preço batem
+    // (permite juntar itens iguais de comandas diferentes na mesma linha).
+    setCart((prev) => {
+      const next = [...prev];
+      for (const i of its) {
+        const pid = i.product_id ?? "";
+        const price = Number(i.unit_price);
+        const qty = Number(i.quantity);
+        const idx = next.findIndex((c2) => c2.product_id === pid && c2.unit_price === price && !!pid);
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], quantity: next[idx].quantity + qty };
+        } else {
+          next.push({
+            product_id: pid,
+            name: i.product_name,
+            barcode: i.barcode,
+            unit_price: price,
+            quantity: qty,
+            is_weighable: false,
+          });
+        }
+      }
+      return next;
+    });
+    setLinkedComandas((prev) => [...prev, { id: c.id, number: Number(c.number ?? num), label: c.label, itemsCount: its.length }]);
     setComandaInput("");
-    toast.success(`Comanda #${c.number ?? num} carregada · ${its.length} item(ns)`);
+    toast.success(`Comanda #${c.number ?? num} adicionada · ${its.length} item(ns) somado(s)`);
   };
 
   // Se o usuário chega via /pdv?comanda=N, carrega automaticamente uma vez.
@@ -144,7 +167,13 @@ function PdvPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, search?.comanda]);
 
-  const clearLinkedComanda = () => { setLinkedComanda(null); setCart([]); };
+  const clearLinkedComandas = () => { setLinkedComandas([]); setCart([]); };
+  const removeLinkedComanda = (id: string) => {
+    // Remove só o vínculo — não tenta subtrair itens do carrinho porque o operador
+    // pode já ter alterado quantidades. Se quiser recomeçar, use "Limpar tudo".
+    setLinkedComandas((prev) => prev.filter((c) => c.id !== id));
+    toast.info("Vínculo removido. Ajuste o carrinho manualmente se necessário.");
+  };
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.quantity * i.unit_price, 0), [cart]);
   const disc = Math.min(Number(discount || 0), subtotal);
