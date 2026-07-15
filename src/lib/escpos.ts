@@ -168,7 +168,7 @@ export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string |
   return bytes(...chunks);
 }
 
-import { getGrantedUsbPrinter, isUsbAccessDeniedError, isUsbDisconnectedError, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
+import { getGrantedUsbPrinter, isUsbDisconnectedError, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
 import {
   getSelectedPrinterForStore,
   pingPrintAgent,
