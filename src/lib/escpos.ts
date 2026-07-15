@@ -295,7 +295,7 @@ export async function tryPrintEscPosDetailed(
     await port.open({ baudRate: 9600 });
     const writer = port.writable?.getWriter();
     if (!writer) { await port.close(); return record({ channel: "serial", ok: false, error: "Sem writer serial" }); }
-    await writer.write(payload);
+    await writer.write(usbPayload);
     await writer.close();
     await port.close();
     return record({ channel: "serial", ok: true, paperWidth: r.paper_width });
