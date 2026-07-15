@@ -1,7 +1,6 @@
 // ESC/POS raw printing via Web Serial API.
 // Fallback: quando não suportado, o chamador deve imprimir o HTML térmico.
 // Perfis 58mm (32 col) e 80mm (48 col).
-import { getHardwareErrorMessage } from "./hardware-errors";
 import { buildDensityPrefix } from "./print-density";
 
 import type { ReceiptData } from "./receipt";
@@ -172,7 +171,6 @@ export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string |
 import { getGrantedUsbPrinter, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
 import {
   getSelectedPrinterForStore,
-  isPrintAgentEnabled,
   pingPrintAgent,
   printViaAgent,
   setLastPrintError,
