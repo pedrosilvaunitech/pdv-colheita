@@ -182,7 +182,35 @@ export function PrintDiagnosticsDialog({
           </div>
         </div>
 
-        {/* Ações rápidas */}
+        {/* Linguagem / Codepage */}
+        <div className="border border-border rounded-md p-3 bg-card space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <TestTube2 className="size-4" /> Linguagem da impressora (charset)
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Se o teste sair com caracteres estranhos (ex.: <span className="font-mono">Ã©</span> no lugar de <span className="font-mono">é</span>),
+            troque o codepage. Padrão: <span className="font-mono">CP850</span>.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={currentCp} onValueChange={(v) => saveCodepage(v as Codepage)}>
+              <SelectTrigger className="h-8 w-[280px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CODEPAGE_OPTIONS.map((o) => (
+                  <SelectItem key={o.id} value={o.id} className="text-xs">
+                    <div className="flex flex-col">
+                      <span>{o.label}</span>
+                      <span className="text-[10px] text-muted-foreground">{o.hint}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Badge variant="secondary" className="text-[10px]">Ativo: {currentCp.toUpperCase()}</Badge>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <Button size="sm" variant="outline" onClick={reprintLast} className="gap-1 text-xs">
             <RotateCcw className="size-3" /> Reimprimir último
