@@ -1,70 +1,175 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { getHardwareErrorMessage } from "@/lib/hardware-errors";
-import { Printer, Usb, Cable, Server, CheckCircle2, XCircle, TestTube2, AlertCircle, Ruler, RefreshCw, RotateCcw, ExternalLink, Activity } from "lucide-react";
+import {
+  Printer, Usb, Cable, Server, CheckCircle2, XCircle, TestTube2, Ruler, RefreshCw,
+  RotateCcw, ExternalLink, Activity, Sparkles, MonitorSmartphone,
+} from "lucide-react";
 import { PrintDiagnosticsDialog } from "./print-diagnostics-dialog";
 import { toast } from "sonner";
 import {
-  isEscPosEnabled,
-  isEscPosSupported,
-  requestEscPosPort,
-  setEscPosEnabled,
-  tryPrintEscPosDetailed,
+  isEscPosEnabled, isEscPosSupported, requestEscPosPort, setEscPosEnabled, tryPrintEscPosDetailed,
 } from "@/lib/escpos";
-import { isWebUsbSupported, requestUsbPrinter, getGrantedUsbPrinter, forgetUsbPrinter } from "@/lib/escpos-usb";
+import {
+  isWebUsbSupported, requestUsbPrinter, getGrantedUsbPrinter, forgetUsbPrinter,
+} from "@/lib/escpos-usb";
 import {
   getLastPrintError,
-  getSelectedPrinter,
   isPrintAgentEnabled,
   pingPrintAgent,
   setPrintAgentEnabled,
-  setSelectedPrinter,
+  getSelectedPrinterForStore,
+  setSelectedPrinterForStore,
+  pickBestPrinter,
+  getTerminalLabel,
   PRINT_AGENT_EVENT,
+  PRINTER_SELECTION_EVENT,
   type AgentPrinter,
   type AgentStatus,
+  type PrinterSource,
+  type StoredPrinterSelection,
 } from "@/lib/print-agent";
 import { getLastReceipt } from "@/lib/print-history";
 import { DENSITY_LABELS, getPrintDensity, setPrintDensity, type PrintDensity } from "@/lib/print-density";
 import { getBrowserDeviceFeatureState } from "@/lib/browser-device-permissions";
+import { useCurrentStore } from "@/lib/current-store";
 
 /**
- * Configuração de impressora térmica: canais, seleção fixa da impressora,
- * intensidade por dispositivo, teste de impressão e diagnóstico do último erro.
+ * Seletor unificado de impressora do PDV.
+ *
+ * Une três fontes num único popover, com auto-detecção da Epson TM-T20X e
+ * memória de escolha por (loja + terminal):
+ *   - Agente Local (spooler do Windows OU USB bruto via libusb)
+ *   - WebUSB direta (quando o operador autorizou a impressora no navegador)
+ *
+ * Status ao vivo: a cada 5s enquanto o popover está aberto, 30s quando
+ * fechado — sem gastar rede/CPU à toa.
  */
 export function EscPosPrinterButton() {
+  const { store, storeId } = useCurrentStore();
   const [serialEnabled, setSerialEnabled] = useState(() => isEscPosEnabled());
-  const [usbAuthorized, setUsbAuthorized] = useState(false);
-  const [usbName, setUsbName] = useState<string | null>(null);
+  const [usbDev, setUsbDev] = useState<USBDevice | null>(null);
   const [agent, setAgent] = useState<AgentStatus>({ online: false });
   const [agentEnabled, setAgentEnabled] = useState(() => isPrintAgentEnabled());
-  const [selected, setSelected] = useState<string | null>(() => getSelectedPrinter());
-  const [density, setDensityState] = useState<PrintDensity>(() => getPrintDensity(getSelectedPrinter()));
+  const [selection, setSelection] = useState<StoredPrinterSelection | null>(
+    () => getSelectedPrinterForStore(storeId),
+  );
+  const [density, setDensityState] = useState<PrintDensity>(() => getPrintDensity(selection?.name ?? null));
   const [lastErr, setLastErr] = useState<string | null>(() => getLastPrintError());
   const [testing, setTesting] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [terminalLabel] = useState(() => getTerminalLabel());
   const usbState = getBrowserDeviceFeatureState("usb");
   const serialState = getBrowserDeviceFeatureState("serial");
 
+  // Sincroniza seleção salva quando trocar de loja
   useEffect(() => {
-    if (isWebUsbSupported()) {
-      getGrantedUsbPrinter().then((d) => {
-        setUsbAuthorized(!!d);
-        setUsbName(d?.productName ?? null);
-      }).catch(() => { /* noop */ });
-    }
-    const check = () => pingPrintAgent().then(setAgent).catch(() => setAgent({ online: false }));
-    check();
-    const t = setInterval(check, 15000);
-    // Sincroniza estado local com eventos globais (multi-aba / outros componentes)
-    const onAgent = (e: Event) => setAgent((e as CustomEvent<AgentStatus>).detail);
-    window.addEventListener(PRINT_AGENT_EVENT, onAgent);
-    return () => { clearInterval(t); window.removeEventListener(PRINT_AGENT_EVENT, onAgent); };
+    const sel = getSelectedPrinterForStore(storeId);
+    setSelection(sel);
+    setDensityState(getPrintDensity(sel?.name ?? null));
+  }, [storeId]);
+
+  // WebUSB autorizada
+  useEffect(() => {
+    if (!isWebUsbSupported()) return;
+    getGrantedUsbPrinter().then(setUsbDev).catch(() => setUsbDev(null));
   }, []);
 
-  // Ao trocar de impressora selecionada, recarrega densidade daquela impressora
-  useEffect(() => { setDensityState(getPrintDensity(selected)); }, [selected]);
+  // Polling adaptativo do agente + escuta de eventos globais
+  useEffect(() => {
+    const check = () => pingPrintAgent().then(setAgent).catch(() => setAgent({ online: false }));
+    check();
+    const interval = popoverOpen ? 5000 : 30000;
+    const t = setInterval(check, interval);
+    const onAgent = (e: Event) => setAgent((e as CustomEvent<AgentStatus>).detail);
+    const onSel = () => setSelection(getSelectedPrinterForStore(storeId));
+    window.addEventListener(PRINT_AGENT_EVENT, onAgent);
+    window.addEventListener(PRINTER_SELECTION_EVENT, onSel);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener(PRINT_AGENT_EVENT, onAgent);
+      window.removeEventListener(PRINTER_SELECTION_EVENT, onSel);
+    };
+  }, [popoverOpen, storeId]);
+
+  // Lista mesclada: agente + windows + webusb, dedup por (source|name)
+  const printers = useMemo<AgentPrinter[]>(() => {
+    const list: AgentPrinter[] = [...(agent.printers ?? [])];
+    if (usbDev) {
+      list.push({
+        name: usbDev.productName ?? `USB ${usbDev.vendorId.toString(16)}:${usbDev.productId.toString(16)}`,
+        source: "webusb",
+        status: "online",
+        statusMessage: "Autorizada no navegador",
+        vendorId: usbDev.vendorId,
+        productId: usbDev.productId,
+      });
+    }
+    // Dedup: mesmo (source|nameLower) só uma vez
+    const seen = new Set<string>();
+    return list.filter((p) => {
+      const k = `${p.source}|${p.name.toLowerCase()}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [agent.printers, usbDev]);
+
+  // Auto-detecção: se não há escolha salva mas há impressoras disponíveis,
+  // seleciona a melhor (Epson TM-T20X → TM-* → default Windows → primeira).
+  useEffect(() => {
+    if (selection || printers.length === 0) return;
+    const best = pickBestPrinter(printers);
+    if (best) {
+      const sel = { name: best.name, source: best.source };
+      setSelectedPrinterForStore(storeId, sel);
+      setSelection(sel);
+      toast.success(`Impressora detectada: ${best.name}`, { description: sourceLabel(best.source) });
+    }
+  }, [printers, selection, storeId]);
+
+  const activePrinter = printers.find(
+    (p) => p.name === selection?.name && p.source === selection?.source,
+  );
+
+  const pickPrinter = (compositeKey: string) => {
+    if (compositeKey === "__auto__") {
+      setSelectedPrinterForStore(storeId, null);
+      setSelection(null);
+      toast.info("Auto-seleção reativada");
+      return;
+    }
+    const [source, ...rest] = compositeKey.split("|");
+    const name = rest.join("|");
+    const src = source as PrinterSource;
+    const sel = { name, source: src };
+    setSelectedPrinterForStore(storeId, sel);
+    setSelection(sel);
+    toast.success(`Impressora fixada: ${name}`, { description: sourceLabel(src) });
+  };
+
+  const redetect = async () => {
+    const st = await pingPrintAgent();
+    setAgent(st);
+    const merged = [...(st.printers ?? []), ...(usbDev ? [{
+      name: usbDev.productName ?? "USB",
+      source: "webusb" as const,
+      status: "online" as const,
+    }] : [])];
+    const best = pickBestPrinter(merged);
+    if (best) {
+      const sel = { name: best.name, source: best.source };
+      setSelectedPrinterForStore(storeId, sel);
+      setSelection(sel);
+      toast.success(`Redetectada: ${best.name}`, { description: sourceLabel(best.source) });
+    } else {
+      toast.error("Nenhuma impressora detectada");
+    }
+  };
 
   const connectSerial = async () => {
     try { await requestEscPosPort(); setSerialEnabled(true); toast.success("Impressora serial conectada"); }
@@ -75,8 +180,7 @@ export function EscPosPrinterButton() {
   const connectUsb = async () => {
     try {
       const d = await requestUsbPrinter();
-      setUsbAuthorized(true);
-      setUsbName(d.productName ?? null);
+      setUsbDev(d);
       toast.success(`USB autorizada: ${d.productName ?? "impressora"}`);
     } catch (e) { toast.error(getHardwareErrorMessage(e, "usb")); }
   };
@@ -84,11 +188,9 @@ export function EscPosPrinterButton() {
   const reauthorizeUsb = async () => {
     try {
       await forgetUsbPrinter();
-      setUsbAuthorized(false);
-      setUsbName(null);
+      setUsbDev(null);
       const d = await requestUsbPrinter();
-      setUsbAuthorized(true);
-      setUsbName(d.productName ?? null);
+      setUsbDev(d);
       toast.success(`USB reautorizada: ${d.productName ?? "impressora"}`);
     } catch (e) { toast.error(getHardwareErrorMessage(e, "usb")); }
   };
@@ -108,27 +210,19 @@ export function EscPosPrinterButton() {
     toast.success(`Agente conectado · ${st.printers?.length ?? 0} impressora(s)`);
   };
 
-  const pickPrinter = (name: string) => {
-    const v = name === "__auto__" ? null : name;
-    setSelectedPrinter(v);
-    setSelected(v);
-    toast.success(v ? `Impressora fixada: ${v}` : "Seleção automática ativada");
-  };
-
   const changeDensity = (v: PrintDensity) => {
-    setPrintDensity(v, selected);
+    setPrintDensity(v, selection?.name ?? null);
     setDensityState(v);
-    toast.success(`Intensidade ${DENSITY_LABELS[v]}${selected ? ` · ${selected}` : ""}`);
+    toast.success(`Intensidade ${DENSITY_LABELS[v]}${selection?.name ? ` · ${selection.name}` : ""}`);
   };
 
   const runTest = async () => {
     setTesting(true);
     try {
-      const paperFromAgent = agent.printers?.find((p) => p.name === (selected ?? ""))?.paperWidth;
-      const paper = paperFromAgent ?? 80;
+      const paper = activePrinter?.paperWidth ?? 80;
       const d = await tryPrintEscPosDetailed({
         store: { name: "TESTE DE IMPRESSAO", cnpj: null, address: null, phone: null },
-        header: `Impressora: ${selected ?? "auto"}\nIntensidade: ${DENSITY_LABELS[density]}\nPapel detectado: ${paper}mm`,
+        header: `Impressora: ${selection?.name ?? "auto"}\nCanal: ${selection?.source ?? "auto"}\nIntensidade: ${DENSITY_LABELS[density]}\nPapel: ${paper}mm`,
         footer: "Se o texto estiver fraco, aumente a intensidade.",
         paper_width: paper as 58 | 80,
         items: [
@@ -158,47 +252,85 @@ export function EscPosPrinterButton() {
     else toast.error(`Falhou (${d.channel}): ${d.error ?? "erro"}`);
   };
 
-  const anyActive = agentEnabled || usbAuthorized || serialEnabled;
-  const printers: AgentPrinter[] = agent.printers ?? [];
-  const activePrinter = printers.find((p) => p.name === (selected ?? printers[0]?.name));
+  const anyActive = Boolean(selection) || agentEnabled || usbDev || serialEnabled;
+  const compositeValue = selection ? `${selection.source}|${selection.name}` : "__auto__";
 
   return (
-    <Popover>
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2 h-9">
           <Printer className={`size-4 ${anyActive ? "text-primary" : ""}`} />
-          <span className="text-xs">
-            {selected ? selected.slice(0, 18) :
-              agentEnabled && agent.online ? "Agente" :
-              usbAuthorized ? (usbName ?? "USB") :
-              serialEnabled ? "Serial" :
-              "Impressora"}
+          <span className="text-xs truncate max-w-[140px]">
+            {selection?.name ?? (agentEnabled && agent.online ? "Auto" : "Impressora")}
           </span>
+          {activePrinter && <StatusDot status={activePrinter.status} />}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="end">
+      <PopoverContent className="w-[420px] p-0" align="end">
+        {/* Cabeçalho: loja + terminal */}
+        <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center justify-between text-[10px]">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <MonitorSmartphone className="size-3" />
+            <span>Loja: <strong className="text-foreground">{store?.fantasy_name || store?.name || "—"}</strong></span>
+            <span>·</span>
+            <span>Terminal: <strong className="text-foreground">PDV-{terminalLabel}</strong></span>
+          </div>
+          <div className="flex items-center gap-1 text-muted-foreground">
+            {agent.online ? <span className="text-primary">● Agente v{agent.version}</span> : <span>○ Agente offline</span>}
+          </div>
+        </div>
+
+        {/* Seletor unificado */}
         <div className="p-3 border-b border-border">
-          <div className="text-xs font-semibold mb-2">Impressora ativa</div>
-          <Select value={selected ?? "__auto__"} onValueChange={pickPrinter}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Automática" /></SelectTrigger>
+          <div className="text-xs font-semibold mb-2 flex items-center justify-between">
+            <span>Impressora ativa</span>
+            <button
+              onClick={redetect}
+              className="text-[10px] text-primary hover:underline inline-flex items-center gap-1"
+              title="Redetectar e escolher a melhor automaticamente"
+            >
+              <Sparkles className="size-3" /> Redetectar
+            </button>
+          </div>
+          <Select value={compositeValue} onValueChange={pickPrinter}>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Automática" />
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__auto__">Automática (primeira disponível)</SelectItem>
+              <SelectItem value="__auto__">
+                <span className="inline-flex items-center gap-2">
+                  <Sparkles className="size-3" /> Automática (melhor disponível)
+                </span>
+              </SelectItem>
+              {printers.length === 0 && (
+                <div className="px-2 py-3 text-[11px] text-muted-foreground">
+                  Nenhuma impressora detectada. Ligue o Agente Local ou autorize a WebUSB abaixo.
+                </div>
+              )}
               {printers.map((p) => (
-                <SelectItem key={p.name} value={p.name}>
-                  {p.name}{p.paperWidth ? ` · ${p.paperWidth}mm` : ""}
+                <SelectItem key={`${p.source}|${p.name}`} value={`${p.source}|${p.name}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StatusDot status={p.status} />
+                    <span className="truncate flex-1 max-w-[220px]">{p.name}</span>
+                    <SourceBadge source={p.source} />
+                    {p.paperWidth && <span className="text-[10px] text-muted-foreground">{p.paperWidth}mm</span>}
+                    {p.isDefault && <span className="text-[9px] text-primary">DEFAULT</span>}
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           {activePrinter && (
-            <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
-              <Ruler className="size-3" />
-              <span>Papel: <strong>{activePrinter.paperWidth ?? "não reportado"}{activePrinter.paperWidth ? "mm" : ""}</strong></span>
-              {activePrinter.status && <span>· {activePrinter.status}</span>}
+            <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+              <StatusDot status={activePrinter.status} />
+              <span className="text-foreground">{activePrinter.statusMessage ?? statusLabel(activePrinter.status)}</span>
+              {activePrinter.model && <><span>·</span><span>{activePrinter.model}</span></>}
+              {activePrinter.paperWidth && <><span>·</span><Ruler className="size-3" /> <span>{activePrinter.paperWidth}mm</span></>}
             </div>
           )}
         </div>
 
+        {/* Contraste + teste */}
         <div className="p-3 border-b border-border">
           <div className="text-xs font-semibold mb-2">Contraste (por impressora)</div>
           <Select value={density} onValueChange={(v) => changeDensity(v as PrintDensity)}>
@@ -215,19 +347,20 @@ export function EscPosPrinterButton() {
           </Button>
         </div>
 
+        {/* Fontes de impressão */}
         <div className="p-2 space-y-1">
           <ChannelRow
             icon={<Server className="size-4" />}
             title="Agente Local (127.0.0.1)"
-            subtitle={agent.online ? `Online · v${agent.version ?? "?"} · ${printers.length} impressora(s)` : "Offline · instale o .exe/.msi"}
+            subtitle={agent.online ? `Online · v${agent.version ?? "?"} · ${agent.printers?.length ?? 0} impressora(s)` : "Offline · instale o .exe/.msi"}
             ok={agentEnabled && agent.online}
             onClick={toggleAgent}
           />
           <ChannelRow
             icon={<Usb className="size-4" />}
             title="WebUSB direto"
-            subtitle={isWebUsbSupported() ? (usbAuthorized ? `Autorizada: ${usbName ?? "impressora"}` : "Clique para autorizar") : usbState.message}
-            ok={usbAuthorized}
+            subtitle={isWebUsbSupported() ? (usbDev ? `Autorizada: ${usbDev.productName ?? "impressora"}` : "Clique para autorizar") : usbState.message}
+            ok={Boolean(usbDev)}
             onClick={connectUsb}
             disabled={!isWebUsbSupported()}
           />
@@ -241,7 +374,15 @@ export function EscPosPrinterButton() {
           />
         </div>
 
-        {lastErr && <PrintErrorPanel message={lastErr} onClear={() => setLastErr(null)} onReauthUsb={reauthorizeUsb} onRefreshAgent={refreshAgent} onReprint={reprintLast} />}
+        {lastErr && (
+          <PrintErrorPanel
+            message={lastErr}
+            onClear={() => setLastErr(null)}
+            onReauthUsb={reauthorizeUsb}
+            onRefreshAgent={refreshAgent}
+            onReprint={reprintLast}
+          />
+        )}
 
         <div className="px-3 py-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
           <button onClick={() => setDiagOpen(true)} className="flex items-center gap-1 hover:text-foreground">
@@ -252,9 +393,33 @@ export function EscPosPrinterButton() {
           </button>
         </div>
       </PopoverContent>
-      <PrintDiagnosticsDialog open={diagOpen} onOpenChange={setDiagOpen} printerName={selected} />
+      <PrintDiagnosticsDialog open={diagOpen} onOpenChange={setDiagOpen} printerName={selection?.name ?? null} />
     </Popover>
   );
+}
+
+function StatusDot({ status }: { status: AgentPrinter["status"] }) {
+  const color =
+    status === "online" ? "bg-primary" :
+    status === "error"  ? "bg-destructive" :
+                          "bg-muted-foreground/50";
+  return <span className={`inline-block size-2 rounded-full ${color}`} aria-label={status} />;
+}
+
+function SourceBadge({ source }: { source: PrinterSource }) {
+  const label =
+    source === "windows" ? "Windows" :
+    source === "agent"   ? "USB" :
+                           "WebUSB";
+  return <Badge variant="secondary" className="h-4 px-1.5 text-[9px] font-normal">{label}</Badge>;
+}
+
+function sourceLabel(s: PrinterSource): string {
+  return s === "windows" ? "Spooler do Windows" : s === "agent" ? "USB via Agente Local" : "WebUSB direto";
+}
+
+function statusLabel(s: AgentPrinter["status"]): string {
+  return s === "online" ? "Online" : s === "error" ? "Com erro" : "Offline";
 }
 
 function ChannelRow({ icon, title, subtitle, ok, onClick, disabled }: {
@@ -277,11 +442,6 @@ function ChannelRow({ icon, title, subtitle, ok, onClick, disabled }: {
   );
 }
 
-/**
- * Painel de erro com remediação inteligente. Detecta "Access denied" (WebUSB
- * bloqueado pelo driver do Windows) e oferece as três saídas possíveis:
- * instalar Agente Local, trocar driver via Zadig, ou reautorizar USB.
- */
 function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onReprint }: {
   message: string;
   onClear: () => void;
@@ -296,7 +456,7 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
   return (
     <div className="p-3 border-t border-border bg-destructive/10 space-y-2">
       <div className="flex items-start gap-2 text-[11px] text-destructive">
-        <AlertCircle className="size-3 mt-0.5 shrink-0" />
+        <XCircle className="size-3 mt-0.5 shrink-0" />
         <div className="flex-1">
           <div className="font-semibold mb-0.5">Último erro de impressão</div>
           <div className="opacity-90 break-words">{message}</div>
@@ -304,21 +464,11 @@ function PrintErrorPanel({ message, onClear, onReauthUsb, onRefreshAgent, onRepr
       </div>
 
       {isAccessDenied && (
-        <div className="text-[10px] text-foreground/80 bg-background/50 rounded p-2 space-y-1.5 leading-relaxed">
-          <div className="font-semibold text-destructive">
-            {isLibusbBlocked ? "libusb bloqueado pelo driver Windows" : "Windows travou o acesso USB"}
-          </div>
-          <div>
-            O driver de impressora do Windows reservou a interface — o acesso USB bruto (libusb/WebUSB) retorna <code>LIBUSB_ERROR_NOT_SUPPORTED</code>. Soluções, em ordem de preferência:
-          </div>
-          <ol className="list-decimal pl-4 space-y-1">
-            <li><strong>Atualize o Agente Local para v1.2+</strong>: a nova versão imprime pelo <strong>spooler do Windows</strong> mesmo se o seletor estiver em <code>USB-XXXX:YYYY</code>, usando o próprio driver da impressora — sem WinUSB.</li>
-            <li><strong>Se houver mais de uma impressora</strong>, defina a EPSON como padrão no Windows ou selecione o nome dela no seletor acima.</li>
-            <li><strong>Zadig → WinUSB</strong>: substitua o driver por WinUSB para liberar o acesso bruto (perde a fila do Windows).</li>
-          </ol>
+        <div className="text-[10px] text-foreground/80 bg-background/50 rounded p-2 leading-relaxed">
+          Driver do Windows travou o acesso USB bruto. Escolha uma impressora com badge{" "}
+          <SourceBadge source="windows" /> no seletor acima — ela imprime pelo driver oficial, sem WinUSB.
         </div>
       )}
-
 
       {isAgentDown && !isAccessDenied && (
         <div className="text-[10px] text-foreground/80 bg-background/50 rounded p-2 leading-relaxed">
