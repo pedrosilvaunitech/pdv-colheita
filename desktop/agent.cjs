@@ -81,16 +81,29 @@ function hex4(n) { return n.toString(16).padStart(4, "0"); }
 // SPOOLER (canal preferencial — não exige WinUSB)
 // ────────────────────────────────────────────────────────────────────
 function listSpoolerPrinters() {
-  if (!nodePrinter) return listWindowsSpoolerPrinters();
+  // No Windows, sempre use CIM (retorna default/status/errorState).
+  if (process.platform === "win32") return listWindowsSpoolerPrinters();
+  if (!nodePrinter) return [];
   try {
-    return nodePrinter.getPrinters().map((p) => ({
-      name: p.name,
-      channel: "spooler",
-      status: p.status || (p.attributes || []).join(","),
-    }));
+    const def = nodePrinter.getDefaultPrinterName && nodePrinter.getDefaultPrinterName();
+    return nodePrinter.getPrinters().map((p) => {
+      const isDefault = def && p.name === def;
+      const hint = guessModel(p.name);
+      const offline = /offline|paused|error/i.test(p.status || (p.attributes || []).join(","));
+      return {
+        name: p.name,
+        source: "windows",
+        channel: "spooler",
+        status: offline ? "offline" : "online",
+        statusMessage: p.status || (p.attributes || []).join(",") || "Pronta",
+        isDefault: !!isDefault,
+        model: hint ? hint.model : undefined,
+        paperWidth: hint ? hint.paperWidth : undefined,
+      };
+    });
   } catch (e) {
     console.warn("[agent] getPrinters falhou:", e && e.message);
-    return listWindowsSpoolerPrinters();
+    return [];
   }
 }
 
