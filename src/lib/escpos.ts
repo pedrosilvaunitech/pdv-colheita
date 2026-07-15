@@ -307,16 +307,17 @@ export async function tryPrintEscPosDetailed(
  * Usado por rotinas de manutenção como a calibração de largura.
  */
 export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic> {
-  const selected = getSelectedPrinter();
-  if (isPrintAgentEnabled()) {
+  const selection = getSelectedPrinterForStore(getCurrentStoreIdSync());
+  const selected = selection?.name ?? null;
+  const selectedSource = selection?.source ?? null;
+  if (isPrintAgentEnabled() || selectedSource === "agent" || selectedSource === "windows") {
     try {
       const st = await pingPrintAgent();
       if (st.online && (st.printers?.length ?? 0) > 0) {
-        const target = selected && st.printers!.some((p) => p.name === selected)
-          ? st.printers!.find((p) => p.name === selected)!
-          : st.printers![0];
+        const printers = st.printers!;
+        const target = (selected && printers.find((p) => p.name === selected)) || printers[0];
         try {
-          await printViaAgent(bytes, target.name);
+          await printViaAgent(bytes, target.name, target.source);
           return { channel: "agent", ok: true, printer: target.name };
         } catch (err) {
           console.warn("[escpos] agente falhou, tentando fallback:", err);
