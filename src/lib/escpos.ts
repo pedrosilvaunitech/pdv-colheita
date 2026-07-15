@@ -201,10 +201,12 @@ export async function tryPrintEscPosDetailed(
   r: ReceiptData,
   interactiveFallback = false,
 ): Promise<PrintDiagnostic> {
-  const selected = getSelectedPrinter();
+  const storeId = getCurrentStoreIdSync();
+  const selection = getSelectedPrinterForStore(storeId);
+  const selected = selection?.name ?? null;
+  const selectedSource = selection?.source ?? null;
   // Guarda o último recibo para permitir reimpressão após falha.
   try { setLastReceipt(r); } catch { /* noop */ }
-
 
   const record = (d: PrintDiagnostic) => {
     appendPrintHistory({
@@ -219,19 +221,26 @@ export async function tryPrintEscPosDetailed(
     return d;
   };
 
-  // 1) Agente local (só se habilitado — sem agente, cai direto no WebUSB/Serial)
+  // Se o usuário escolheu explicitamente WebUSB, pula o agente
+  const preferWebUsb = selectedSource === "webusb";
+
+  // 1) Agente local (spooler Windows ou USB bruto). Habilitado sozinho ou
+  //    quando a seleção salva aponta para "agent"/"windows".
   let agentError: { printer: string; paperWidth?: 58 | 80; msg: string } | null = null;
-  if (isPrintAgentEnabled()) {
+  const shouldTryAgent = !preferWebUsb && (isPrintAgentEnabled() || selectedSource === "agent" || selectedSource === "windows");
+  if (shouldTryAgent) {
     try {
       const st = await pingPrintAgent();
       if (st.online && (st.printers?.length ?? 0) > 0) {
-        const target = selected && st.printers!.some((p) => p.name === selected)
-          ? st.printers!.find((p) => p.name === selected)!
-          : st.printers![0];
+        const printers = st.printers!;
+        const target =
+          selected && printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
+          ?? (selected ? printers.find((p) => p.name === selected) : undefined)
+          ?? printers[0];
         const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
         const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
         try {
-          await printViaAgent(payload, target.name);
+          await printViaAgent(payload, target.name, target.source);
           return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
