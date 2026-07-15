@@ -2,11 +2,16 @@
  * Configuração por impressora persistida em localStorage:
  *  - largura do papel (override manual, usado quando o agente não reporta)
  *  - resultado da calibração automática (largura escolhida pelo operador)
+ *  - codepage (linguagem/charset ESC/POS para acentos corretos)
  */
 
+import type { Codepage } from "./escpos-codepage";
+
 const LS_PAPER = "printer_paper_width_v1"; // JSON: { [printerName]: 58 | 80 }
+const LS_CODEPAGE = "printer_codepage_v1"; // JSON: { [printerName]: Codepage }
 
 type PaperMap = Record<string, 58 | 80>;
+type CodepageMap = Record<string, Codepage>;
 
 function read(): PaperMap {
   try {
@@ -39,6 +44,36 @@ export function clearPrinterPaperWidth(printerName: string): void {
   delete map[printerName];
   write(map);
 }
+
+// ---------------- Codepage por impressora ----------------
+
+function readCp(): CodepageMap {
+  try {
+    const raw = localStorage.getItem(LS_CODEPAGE);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed as CodepageMap;
+  } catch { /* noop */ }
+  return {};
+}
+
+function writeCp(map: CodepageMap): void {
+  try { localStorage.setItem(LS_CODEPAGE, JSON.stringify(map)); } catch { /* noop */ }
+}
+
+export function getPrinterCodepage(printerName?: string | null): Codepage | null {
+  const key = (printerName ?? "").trim();
+  if (!key) return null;
+  return readCp()[key] ?? null;
+}
+
+export function setPrinterCodepage(printerName: string, cp: Codepage): void {
+  const map = readCp();
+  map[printerName] = cp;
+  writeCp(map);
+}
+
+
 
 /**
  * Payload de calibração: imprime duas réguas (48 col para 80mm e 32 col
