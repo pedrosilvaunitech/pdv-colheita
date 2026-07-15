@@ -232,7 +232,7 @@ export function EscPosPrinterButton() {
         subtotal: 0.01, discount: 0, total: 0.01, payment_method: "teste",
         received: 0.01, change: 0,
         sale_id: "TESTE" + Date.now().toString(36).slice(-4), document_type: "nao_fiscal", issued_at: new Date(),
-      }, false);
+      }, true);
       if (d.ok) {
         toast.success(`Teste enviado via ${d.channel.toUpperCase()}${d.printer ? ` · ${d.printer}` : ""}`);
         setLastErr(null);
@@ -247,7 +247,7 @@ export function EscPosPrinterButton() {
   const reprintLast = async () => {
     const r = getLastReceipt();
     if (!r) { toast.error("Nenhum recibo anterior salvo"); return; }
-    const d = await tryPrintEscPosDetailed(r, false);
+    const d = await tryPrintEscPosDetailed(r, true);
     if (d.ok) { toast.success(`Reimpresso via ${d.channel.toUpperCase()}`); setLastErr(null); }
     else toast.error(`Falhou (${d.channel}): ${d.error ?? "erro"}`);
   };

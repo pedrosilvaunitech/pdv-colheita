@@ -220,14 +220,17 @@ export async function tryPrintEscPosDetailed(
     return d;
   };
 
-  const usbPaper = getPrinterPaperWidth("__usb__") ?? r.paper_width;
-  const usbPayload = buildEscPosPayload({ ...r, paper_width: usbPaper }, { printerId: "__usb__" });
+  // Preferência de nome/densidade por impressora WebUSB (usa o nome salvo pelo
+  // seletor quando existir; assim as configs de densidade/papel batem com a UI).
+  const usbPrinterId = selectedSource === "webusb" && selected ? selected : "__usb__";
+  const usbPaper = getPrinterPaperWidth(usbPrinterId) ?? getPrinterPaperWidth("__usb__") ?? r.paper_width;
+  const usbPayload = buildEscPosPayload({ ...r, paper_width: usbPaper }, { printerId: usbPrinterId });
 
-  const tryWebUsb = async (): Promise<PrintDiagnostic | null> => {
+  const tryWebUsb = async (allowPrompt: boolean): Promise<PrintDiagnostic | null> => {
     if (!isWebUsbSupported()) return null;
     try {
       let dev = await getGrantedUsbPrinter();
-      if (!dev && interactiveFallback) {
+      if (!dev && allowPrompt) {
         try { dev = await requestUsbPrinter(); }
         catch (e) { console.warn("[escpos] usuário não autorizou USB:", e); }
       }
@@ -246,8 +249,10 @@ export async function tryPrintEscPosDetailed(
   // Se a seleção salva aponta para WebUSB, tenta sem diálogo primeiro. Caso o
   // PWA não tenha a mesma permissão USB do navegador, cai para o agente local.
   if (selectedSource === "webusb") {
-    const usb = await tryWebUsb();
+    const usb = await tryWebUsb(interactiveFallback);
     if (usb?.ok) return usb;
+    // se falhou com erro real (device existe mas transferOut deu erro),
+    // registrar e ainda tentar agente/serial como fallback resiliente.
   }
 
   // 1) Agente local (spooler Windows ou USB bruto). Habilitado sozinho ou
@@ -279,7 +284,7 @@ export async function tryPrintEscPosDetailed(
   } catch (err) { console.warn("[escpos] agente indisponível:", err); }
 
   // 2) WebUSB direto
-  const usb = selectedSource === "webusb" ? null : await tryWebUsb();
+  const usb = selectedSource === "webusb" ? null : await tryWebUsb(interactiveFallback);
   if (usb) return usb;
 
   // 3) Web Serial
