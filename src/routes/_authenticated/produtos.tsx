@@ -329,6 +329,7 @@ function ProductDialog({
     supplier_id: initial?.supplier_id ?? "",
     ncm: initial?.ncm ?? "", cfop: initial?.cfop ?? "5102", csosn: initial?.csosn ?? "102",
   });
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers-lite", storeId],
