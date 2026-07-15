@@ -17,6 +17,10 @@ import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 import { ScaleWidget } from "@/components/pdv/scale-widget";
 import { getToledoScale } from "@/lib/toledo-scale";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/pdv")({
   component: PdvPage,
@@ -69,6 +73,10 @@ function PdvPage() {
   const [payInstallments, setPayInstallments] = useState<number>(1);
   const [pixOpen, setPixOpen] = useState(false);
   const [pixAmount, setPixAmount] = useState<number>(0);
+  // Após imprimir um recibo não-fiscal, guardamos os dados para oferecer
+  // reemissão como cupom fiscal (NFC-e) sem refazer a venda.
+  const [pendingFiscal, setPendingFiscal] = useState<ReceiptData | null>(null);
+  const [reprintingFiscal, setReprintingFiscal] = useState(false);
 
 
   const settings = useQuery({
@@ -413,9 +421,14 @@ function PdvPage() {
           sale_id: saleId, document_type: docType, issued_at: new Date(),
           customer: customerName || customerCpf ? { name: customerName, doc: customerCpf } : undefined,
         };
-        const printed = await tryPrintEscPos(r, true);
+        // interactiveFallback=false: nunca abre picker do navegador mid-sale.
+        // A escolha de impressora acontece uma única vez no botão "Impressora".
+        const printed = await tryPrintEscPos(r, false);
         if (!printed) {
-          toast.error("Venda finalizada, mas a impressão direta não está conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora.");
+          toast.error("Venda finalizada, mas nenhuma impressora está conectada. Clique em Impressora para conectar (uma vez só).");
+        } else if (docType === "nao_fiscal") {
+          // Oferece reemitir como fiscal sem refazer a venda.
+          setPendingFiscal(r);
         }
       }
       // Se a venda saiu de uma ou mais comandas abertas, fecha todas e vincula o sale_id.
@@ -738,6 +751,41 @@ function PdvPage() {
           description={`Venda PDV · ${cart.length} item(ns)`}
         />
       )}
+
+      {/* Pós-impressão: pergunta se quer emitir o cupom fiscal também */}
+      <AlertDialog open={!!pendingFiscal} onOpenChange={(o) => { if (!o) setPendingFiscal(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Imprimir cupom fiscal (NFC-e)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O recibo não-fiscal já foi impresso. Deseja emitir o cupom fiscal desta mesma venda agora?
+              A venda ficará marcada como <strong>pendente de autorização SEFAZ</strong> e poderá ser reemitida em <em>Fiscal</em>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não, obrigado</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={reprintingFiscal}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!pendingFiscal) return;
+                setReprintingFiscal(true);
+                try {
+                  const r: ReceiptData = { ...pendingFiscal, document_type: "fiscal" };
+                  const ok = await tryPrintEscPos(r, false);
+                  if (ok) toast.success("Cupom fiscal enviado à impressora");
+                  else toast.error("Falha ao imprimir cupom fiscal");
+                } finally {
+                  setReprintingFiscal(false);
+                  setPendingFiscal(null);
+                }
+              }}
+            >
+              {reprintingFiscal ? "Imprimindo…" : "Sim, imprimir NFC-e"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
