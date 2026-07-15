@@ -13,7 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Barcode, Pencil, Trash2, Percent, Power, PowerOff, TagIcon } from "lucide-react";
+import { Plus, Search, Barcode, Pencil, Trash2, Percent, Power, PowerOff, TagIcon, Camera } from "lucide-react";
+import { BarcodeScannerDialog, isBarcodeScannerSupported } from "@/components/barcode-scanner-dialog";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -351,8 +352,25 @@ function ProductDialog({
       <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
       <form onSubmit={submit} className="grid grid-cols-2 gap-4">
         <Field label="Código de barras (EAN)" className="col-span-2">
-          <Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value.replace(/\D/g, "") })} placeholder="7891234567890" className="font-mono" autoFocus />
+          <div className="flex gap-2">
+            <Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value.replace(/\D/g, "") })} placeholder="7891234567890" className="font-mono flex-1" autoFocus />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setScannerOpen(true)}
+              disabled={!isBarcodeScannerSupported()}
+              title={isBarcodeScannerSupported() ? "Escanear com câmera" : "Câmera não suportada neste navegador"}
+            >
+              <Camera className="size-4" />
+            </Button>
+          </div>
         </Field>
+        <BarcodeScannerDialog
+          open={scannerOpen}
+          onOpenChange={setScannerOpen}
+          onDetected={(code) => { setForm((f) => ({ ...f, barcode: code })); toast.success(`Código lido: ${code}`); }}
+        />
         <Field label="Nome" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
         <Field label="SKU interno"><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></Field>
         <Field label="Categoria"><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Bebidas, Higiene…" /></Field>
