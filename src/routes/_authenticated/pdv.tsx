@@ -747,6 +747,41 @@ function PdvPage() {
           description={`Venda PDV · ${cart.length} item(ns)`}
         />
       )}
+
+      {/* Pós-impressão: pergunta se quer emitir o cupom fiscal também */}
+      <AlertDialog open={!!pendingFiscal} onOpenChange={(o) => { if (!o) setPendingFiscal(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Imprimir cupom fiscal (NFC-e)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O recibo não-fiscal já foi impresso. Deseja emitir o cupom fiscal desta mesma venda agora?
+              A venda ficará marcada como <strong>pendente de autorização SEFAZ</strong> e poderá ser reemitida em <em>Fiscal</em>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não, obrigado</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={reprintingFiscal}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!pendingFiscal) return;
+                setReprintingFiscal(true);
+                try {
+                  const r: ReceiptData = { ...pendingFiscal, document_type: "fiscal" };
+                  const ok = await tryPrintEscPos(r, false);
+                  if (ok) toast.success("Cupom fiscal enviado à impressora");
+                  else toast.error("Falha ao imprimir cupom fiscal");
+                } finally {
+                  setReprintingFiscal(false);
+                  setPendingFiscal(null);
+                }
+              }}
+            >
+              {reprintingFiscal ? "Imprimindo…" : "Sim, imprimir NFC-e"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
