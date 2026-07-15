@@ -315,6 +315,7 @@ export async function tryPrintEscPosDetailed(
                 ?? printers.find((p) => p.name === selected);
         }
         if (!target) target = printers.find((p) => p.source === "windows") ?? printers[0];
+        if (!target) return null;
         const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
         const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
         try {
@@ -364,6 +365,48 @@ export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic>
   const selection = getSelectedPrinterForStore(getCurrentStoreIdSync());
   const selected = selection?.name ?? null;
   const selectedSource = selection?.source ?? null;
+  const failedAttempts: string[] = [];
+
+  const tryWebUsbRaw = async (): Promise<PrintDiagnostic | null> => {
+    if (!isWebUsbSupported()) return null;
+    const dev = await getGrantedUsbPrinter();
+    if (!dev) return null;
+    try {
+      await printUsbRaw(dev, bytes);
+      return { channel: "usb", ok: true, printer: dev.productName ?? "USB" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failedAttempts.push(`WebUSB: ${msg}`);
+      setLastPrintError(msg);
+      return null;
+    }
+  };
+
+  const trySerialRaw = async (): Promise<PrintDiagnostic | null> => {
+    if (!isEscPosEnabled()) return null;
+    const port = await getGrantedPort();
+    if (!port) return null;
+    try {
+      await port.open({ baudRate: 9600 });
+      const writer = port.writable?.getWriter();
+      if (!writer) {
+        await port.close();
+        failedAttempts.push("Serial: sem writer serial");
+        return null;
+      }
+      await writer.write(bytes);
+      await writer.close();
+      await port.close();
+      return { channel: "serial", ok: true };
+    } catch (err) {
+      try { await port.close(); } catch { /* ignore */ }
+      const msg = err instanceof Error ? err.message : String(err);
+      failedAttempts.push(`Serial: ${msg}`);
+      setLastPrintError(msg);
+      return null;
+    }
+  };
+
   const tryAgentRaw = async (): Promise<PrintDiagnostic | null> => {
     try {
       const st = await pingPrintAgent();
@@ -373,38 +416,30 @@ export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic>
           || (selected && printers.find((p) => p.name === selected))
           || printers.find((p) => p.source === "windows")
           || printers[0];
+        if (!target) return null;
         try {
           await printViaAgent(bytes, target.name, target.source);
           return { channel: "agent", ok: true, printer: target.name };
         } catch (err) {
           console.warn("[escpos] agente falhou, tentando fallback:", err);
+          const msg = err instanceof Error ? err.message : String(err);
+          failedAttempts.push(`Agente (${target.source}/${target.name}): ${msg}`);
         }
       }
     } catch { /* segue */ }
     return null;
   };
 
-  if (selectedSource !== "webusb") {
-    const agentResult = await tryAgentRaw();
-    if (agentResult) return agentResult;
-  }
-  if (isWebUsbSupported()) {
-    const dev = await getGrantedUsbPrinter();
-    if (dev) {
-      try { await printUsbRaw(dev, bytes); return { channel: "usb", ok: true, printer: dev.productName ?? "USB" }; }
-      catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const agentResult = await tryAgentRaw();
-        if (agentResult) return agentResult;
-        return { channel: "usb", ok: false, error: msg };
-      }
-    }
-  }
-  if (selectedSource === "webusb") {
-    const agentResult = await tryAgentRaw();
-    if (agentResult) return agentResult;
-  }
-  return { channel: "none", ok: false, error: "Nenhum canal ativo" };
+  const usbResult = await tryWebUsbRaw();
+  if (usbResult) return usbResult;
+
+  const serialResult = await trySerialRaw();
+  if (serialResult) return serialResult;
+
+  const agentResult = await tryAgentRaw();
+  if (agentResult) return agentResult;
+
+  return { channel: "none", ok: false, error: failedAttempts.join(" | ") || "Nenhum canal ativo" };
 }
 
 /** Wrapper retro-compatível: retorna apenas boolean. */
