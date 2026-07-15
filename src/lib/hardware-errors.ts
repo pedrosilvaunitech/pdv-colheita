@@ -18,8 +18,8 @@ export function getHardwareErrorMessage(error: unknown, type: 'serial' | 'usb'):
     return "Seleção cancelada ou dispositivo desconectado.";
   }
 
-  if (msg.includes("Access denied")) {
-    return "Acesso negado. O dispositivo pode estar em uso por outro programa.";
+  if (/access denied|acesso negado|permission denied|libusb_error_access|libusb_error_not_supported|not_supported/i.test(msg)) {
+    return "Acesso USB negado. A impressora está presa pelo driver/spooler do sistema ou por outra sessão. Use o Agente Local/Windows ou resete a conexão WebUSB.";
   }
 
   if (msg.includes("NetworkError") || msg.includes("failed to open")) {
