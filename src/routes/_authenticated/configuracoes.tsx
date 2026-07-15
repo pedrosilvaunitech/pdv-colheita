@@ -13,11 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor } from "lucide-react";
+import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye } from "lucide-react";
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
 import { DENSITY_LABELS, getPrintDensity, setPrintDensity, type PrintDensity } from "@/lib/print-density";
 import { tryPrintEscPos } from "@/lib/escpos";
+import { ReceiptPreviewDialog } from "@/components/receipt-preview-dialog";
+import type { ReceiptData } from "@/lib/receipt";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({ component: SettingsPage });
 
