@@ -176,6 +176,11 @@ function emitSelectionChanged(): void {
 // ─────────────────────────────────────────────────────────────
 
 const AUTO_PRIORITY: Array<(p: AgentPrinter) => boolean> = [
+  (p) => p.source === "webusb" && /TM[-\s]?T20X/i.test(`${p.name} ${p.model ?? ""}`),
+  (p) => p.source === "webusb" && /TM[-\s]?T20/i.test(`${p.name} ${p.model ?? ""}`),
+  (p) => p.source === "webusb" && /TM[-\s]?T88/i.test(`${p.name} ${p.model ?? ""}`),
+  (p) => p.source === "webusb" && /Epson/i.test(`${p.name} ${p.model ?? ""}`),
+  (p) => p.source === "webusb" && p.status === "online",
   (p) => p.source === "windows" && /TM[-\s]?T20X/i.test(`${p.name} ${p.model ?? ""}`),
   (p) => p.source === "windows" && /TM[-\s]?T20/i.test(`${p.name} ${p.model ?? ""}`),
   (p) => p.source === "windows" && /TM[-\s]?T88/i.test(`${p.name} ${p.model ?? ""}`),
