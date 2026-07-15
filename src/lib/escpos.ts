@@ -284,7 +284,7 @@ export async function tryPrintEscPosDetailed(
   } catch (err) { console.warn("[escpos] agente indisponível:", err); }
 
   // 2) WebUSB direto
-  const usb = selectedSource === "webusb" ? null : await tryWebUsb();
+  const usb = selectedSource === "webusb" ? null : await tryWebUsb(interactiveFallback);
   if (usb) return usb;
 
   // 3) Web Serial
