@@ -12,8 +12,10 @@ import {
   PRINT_HISTORY_EVENT,
   type PrintHistoryEntry,
 } from "@/lib/print-history";
-import { buildCalibrationPayload, getPrinterPaperWidth, setPrinterPaperWidth } from "@/lib/printer-config";
+import { buildCalibrationPayload, getPrinterCodepage, getPrinterPaperWidth, setPrinterCodepage, setPrinterPaperWidth } from "@/lib/printer-config";
+import { CODEPAGE_OPTIONS, type Codepage } from "@/lib/escpos-codepage";
 import { sendRawEscPos, tryPrintEscPosDetailed } from "@/lib/escpos";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { syncPrintHistoryToCloud } from "@/lib/print-cloud-sync";
 import { jsPDF } from "jspdf";
 
@@ -33,12 +35,14 @@ export function PrintDiagnosticsDialog({
   const [calibrating, setCalibrating] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [currentPaper, setCurrentPaper] = useState<58 | 80 | null>(null);
+  const [currentCp, setCurrentCp] = useState<Codepage>("cp850");
 
   useEffect(() => {
     if (!open) return;
     const refresh = () => setEntries(getPrintHistory());
     refresh();
     setCurrentPaper(getPrinterPaperWidth(printerName ?? "__usb__"));
+    setCurrentCp(getPrinterCodepage(printerName ?? "__usb__") ?? "cp850");
     // Atualização em tempo real via evento global
     const h = () => refresh();
     window.addEventListener(PRINT_HISTORY_EVENT, h);
@@ -51,10 +55,17 @@ export function PrintDiagnosticsDialog({
   const runCalibration = async () => {
     setCalibrating(true);
     try {
-      const d = await sendRawEscPos(buildCalibrationPayload());
-      if (d.ok) toast.success("Régua impressa. Escolha a largura que se encaixa.");
+      const d = await sendRawEscPos(buildCalibrationPayload(printerName ?? "__usb__"));
+      if (d.ok) toast.success("Régua impressa. Confira acentos e escolha a largura.");
       else toast.error(`Falhou (${d.channel}): ${d.error ?? "erro desconhecido"}`);
     } finally { setCalibrating(false); }
+  };
+
+  const saveCodepage = (cp: Codepage) => {
+    const key = printerName ?? "__usb__";
+    setPrinterCodepage(key, cp);
+    setCurrentCp(cp);
+    toast.success(`Linguagem ${cp.toUpperCase()} salva. Imprima um teste para conferir.`);
   };
 
   const saveWidth = (w: 58 | 80) => {
@@ -171,7 +182,35 @@ export function PrintDiagnosticsDialog({
           </div>
         </div>
 
-        {/* Ações rápidas */}
+        {/* Linguagem / Codepage */}
+        <div className="border border-border rounded-md p-3 bg-card space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <TestTube2 className="size-4" /> Linguagem da impressora (charset)
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Se o teste sair com caracteres estranhos (ex.: <span className="font-mono">Ã©</span> no lugar de <span className="font-mono">é</span>),
+            troque o codepage. Padrão: <span className="font-mono">CP850</span>.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={currentCp} onValueChange={(v) => saveCodepage(v as Codepage)}>
+              <SelectTrigger className="h-8 w-[280px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CODEPAGE_OPTIONS.map((o) => (
+                  <SelectItem key={o.id} value={o.id} className="text-xs">
+                    <div className="flex flex-col">
+                      <span>{o.label}</span>
+                      <span className="text-[10px] text-muted-foreground">{o.hint}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Badge variant="secondary" className="text-[10px]">Ativo: {currentCp.toUpperCase()}</Badge>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <Button size="sm" variant="outline" onClick={reprintLast} className="gap-1 text-xs">
             <RotateCcw className="size-3" /> Reimprimir último

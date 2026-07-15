@@ -87,11 +87,12 @@ function bytes(...arr: (number | Uint8Array)[]): Uint8Array {
   return out;
 }
 
-function enc(text: string): Uint8Array {
-  // CP860/CP850 seriam ideais para PT; fallback ASCII-safe removendo diacríticos.
-  const ascii = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return new TextEncoder().encode(ascii);
+import { encodeForCodepage, getCodepageCommand, type Codepage } from "./escpos-codepage";
+
+function encWith(text: string, cp: Codepage): Uint8Array {
+  return encodeForCodepage(text, cp);
 }
+
 
 function line(cols: number, left: string, right: string): string {
   const l = left.slice(0, cols - 1);
@@ -112,10 +113,12 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 
 export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string | null }): Uint8Array {
   const cols = r.paper_width === 58 ? 32 : 48;
+  const codepage: Codepage = getPrinterCodepage(opts?.printerId ?? null) ?? "cp850";
+  const enc = (s: string) => encWith(s, codepage);
   const chunks: Uint8Array[] = [];
   chunks.push(bytes(ESC, 0x40));                          // init
   chunks.push(buildDensityPrefix(undefined, opts?.printerId ?? null)); // intensidade por impressora
-  chunks.push(bytes(ESC, 0x74, 0x02));                    // charset CP850
+  chunks.push(getCodepageCommand(codepage));              // seleciona codepage escolhido
   chunks.push(bytes(ESC, 0x61, 0x01));                    // center
   chunks.push(bytes(ESC, 0x21, 0x08));                    // emphasized
   chunks.push(enc(r.store.name + "\n"));
@@ -177,7 +180,7 @@ import {
 } from "./print-agent";
 import { getCurrentStoreIdSync } from "./current-store";
 import { appendPrintHistory, setLastReceipt } from "./print-history";
-import { getPrinterPaperWidth } from "./printer-config";
+import { getPrinterCodepage, getPrinterPaperWidth } from "./printer-config";
 import type { AgentStatus } from "./print-agent";
 
 export interface PrintDiagnostic {
