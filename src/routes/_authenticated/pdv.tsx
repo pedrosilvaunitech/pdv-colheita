@@ -416,14 +416,15 @@ function PdvPage() {
           toast.error("Venda finalizada, mas a impressão direta não está conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora.");
         }
       }
-      // Se a venda saiu de uma comanda aberta, fecha a comanda e vincula o sale_id.
-      if (linkedComanda) {
+      // Se a venda saiu de uma ou mais comandas abertas, fecha todas e vincula o sale_id.
+      if (linkedComandas.length > 0) {
+        const ids = linkedComandas.map((c) => c.id);
         const { error: eC } = await supabase.from("comandas")
           .update({ status: "fechada", closed_at: new Date().toISOString(), sale_id: saleId })
-          .eq("id", linkedComanda.id);
-        if (eC) toast.error(`Venda ok, mas falhou ao fechar comanda: ${eC.message}`);
-        else toast.success(`Comanda #${linkedComanda.number} fechada`);
-        setLinkedComanda(null);
+          .in("id", ids);
+        if (eC) toast.error(`Venda ok, mas falhou ao fechar comanda(s): ${eC.message}`);
+        else toast.success(`Comanda(s) #${linkedComandas.map((c) => c.number).join(", #")} fechada(s)`);
+        setLinkedComandas([]);
         qc.invalidateQueries({ queryKey: ["comandas"] });
       }
       setCart([]); setPayments([]); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
