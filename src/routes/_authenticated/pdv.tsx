@@ -554,15 +554,29 @@ function PdvPage() {
 
       <div className="flex-1 grid grid-cols-3 gap-4 p-6 overflow-hidden">
         <div className="col-span-2 flex flex-col gap-4 min-h-0">
-          {linkedComanda && (
-            <div className="border border-primary/40 bg-primary/5 rounded-md px-4 py-2 flex items-center gap-3">
-              <Utensils className="size-4 text-primary" />
-              <div className="flex-1 text-sm">
-                <span className="font-mono font-bold text-primary">Comanda #{linkedComanda.number}</span>
-                {linkedComanda.label && <span className="text-muted-foreground"> · {linkedComanda.label}</span>}
-                <span className="text-[11px] text-muted-foreground ml-2">Itens carregados no carrinho. Finalize para fechar a comanda.</span>
+          {linkedComandas.length > 0 && (
+            <div className="border border-primary/40 bg-primary/5 rounded-md px-4 py-2 flex items-center gap-3 flex-wrap">
+              <Utensils className="size-4 text-primary shrink-0" />
+              <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <span className="text-[11px] uppercase tracking-wider font-mono text-muted-foreground">Comandas juntadas:</span>
+                {linkedComandas.map((c) => (
+                  <span key={c.id} className="inline-flex items-center gap-1 bg-primary/10 border border-primary/30 rounded px-2 py-0.5">
+                    <span className="font-mono font-bold text-primary text-xs">#{c.number}</span>
+                    {c.label && <span className="text-[11px] text-muted-foreground">· {c.label}</span>}
+                    <span className="text-[10px] text-muted-foreground">({c.itemsCount} it)</span>
+                    <button
+                      type="button"
+                      onClick={() => removeLinkedComanda(c.id)}
+                      className="ml-1 text-muted-foreground hover:text-destructive"
+                      title="Desvincular esta comanda"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+                <span className="text-[11px] text-muted-foreground ml-1">Itens somados no carrinho. Finalize para fechar todas.</span>
               </div>
-              <Button size="sm" variant="ghost" onClick={clearLinkedComanda}><X className="size-4" /></Button>
+              <Button size="sm" variant="ghost" onClick={clearLinkedComandas} title="Limpar tudo"><X className="size-4" /></Button>
             </div>
           )}
           <form onSubmit={(e) => { e.preventDefault(); addByBarcode(scan); }} className="border border-border rounded-md bg-card p-4 flex items-center gap-3">
