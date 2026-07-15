@@ -198,6 +198,7 @@ function FiscalPage() {
 
           <div className="space-y-4">
             <FiscalConfigCard storeId={storeId!} config={config} />
+            <PendingFiscalCard storeId={storeId!} />
             <div className="border border-border rounded-md bg-card p-5">
               <h3 className="text-sm font-semibold mb-3">Notas recentes</h3>
               {invoices?.length === 0 ? (
