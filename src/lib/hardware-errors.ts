@@ -14,7 +14,11 @@ export function getHardwareErrorMessage(error: unknown, type: 'serial' | 'usb'):
 
   const msg = error instanceof Error ? error.message : String(error);
   
-  if (msg.includes("User cancelled") || msg.includes("no device selected") || msg.includes("The device was disconnected")) {
+  if (/device was disconnected|disconnected|desconectado/i.test(msg)) {
+    return "A conexão WebUSB foi perdida. Desconecte e reconecte o cabo USB, clique em Reautorizar USB e tente imprimir novamente.";
+  }
+
+  if (msg.includes("User cancelled") || msg.includes("no device selected")) {
     return "Seleção cancelada ou dispositivo desconectado.";
   }
 

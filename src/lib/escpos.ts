@@ -168,7 +168,7 @@ export function buildEscPosPayload(r: ReceiptData, opts?: { printerId?: string |
   return bytes(...chunks);
 }
 
-import { getGrantedUsbPrinter, isUsbAccessDeniedError, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
+import { getGrantedUsbPrinter, isUsbDisconnectedError, isWebUsbSupported, printUsbRaw, requestUsbPrinter } from "./escpos-usb";
 import {
   getSelectedPrinterForStore,
   pingPrintAgent,
@@ -190,9 +190,9 @@ export interface PrintDiagnostic {
 
 /**
  * Tenta imprimir SEM diálogo do navegador, na ordem:
- *   1. Agente de Impressão Local (127.0.0.1:9100)
- *   2. WebUSB já autorizada
- *   3. Web Serial (fallback histórico)
+ *   1. WebUSB direta (PWA/navegador)
+ *   2. Web Serial (fallback histórico)
+ *   3. Agente Local/Windows (última opção)
  *
  * Retorna diagnóstico completo do canal escolhido e erros de cada tentativa.
  */
@@ -248,94 +248,113 @@ export async function tryPrintEscPosDetailed(
         const msg = err instanceof Error ? err.message : String(err);
         failedAttempts.push(`WebUSB: ${msg}`);
         setLastPrintError(msg);
+        if (allowPrompt && isUsbDisconnectedError(err)) {
+          try {
+            const freshDev = await requestUsbPrinter(true);
+            await printUsbRaw(freshDev, usbPayload);
+            return record({ channel: "usb", ok: true, printer: freshDev.productName ?? "USB", paperWidth: usbPaper });
+          } catch (retryErr) {
+            const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            failedAttempts.push(`WebUSB reautorização: ${retryMsg}`);
+            setLastPrintError(retryMsg);
+          }
+        }
         return record({ channel: "usb", ok: false, printer: dev.productName ?? "USB", paperWidth: usbPaper, error: msg });
       }
     } catch (err) { console.warn("[escpos] webusb falhou:", err); return null; }
   };
 
-  // Se a seleção salva aponta para WebUSB, tenta sem diálogo primeiro. Caso o
-  // PWA não tenha a mesma permissão USB do navegador, cai para o agente local.
-  if (selectedSource === "webusb") {
-    const usb = await tryWebUsb(interactiveFallback);
-    if (usb?.ok) return usb;
-    // se falhou com erro real (device existe mas transferOut deu erro),
-    // registrar e ainda tentar agente/serial como fallback resiliente.
-  }
-
-  // 1) Agente local (spooler Windows ou USB bruto). Habilitado sozinho ou
-  //    quando encontrado em 127.0.0.1/localhost. Isso iguala PWA e navegador:
-  //    se o agente existe, ele é o caminho preferencial e não depende de WebUSB.
-  let agentError: { printer: string; paperWidth?: 58 | 80; msg: string } | null = null;
-  try {
-    const st: AgentStatus = await pingPrintAgent();
-    if (st.online && (st.printers?.length ?? 0) > 0) {
-      const printers = st.printers!;
-      let target: typeof printers[number] | undefined;
-      if (selected && selectedSource !== "webusb") {
-        target = printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
-              ?? printers.find((p) => p.name === selected);
+  const trySerial = async (): Promise<PrintDiagnostic | null> => {
+    if (!isEscPosEnabled()) return null;
+    const port = await getGrantedPort();
+    if (!port) {
+      failedAttempts.push("Serial: porta não autorizada");
+      return null;
+    }
+    try {
+      await port.open({ baudRate: 9600 });
+      const writer = port.writable?.getWriter();
+      if (!writer) {
+        await port.close();
+        failedAttempts.push("Serial: sem writer serial");
+        return record({ channel: "serial", ok: false, error: "Sem writer serial" });
       }
-      if (!target) target = printers[0];
-      const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
-      const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
-      try {
-        await printViaAgent(payload, target.name, target.source);
-        return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn("[escpos] agente falhou, tentando fallback:", msg);
-        agentError = { printer: target.name, paperWidth: effectivePaper, msg };
-        failedAttempts.push(`Agente (${target.source}/${target.name}): ${msg}`);
-        record({ channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg });
+      await writer.write(usbPayload);
+      await writer.close();
+      await port.close();
+      return record({ channel: "serial", ok: true, paperWidth: r.paper_width });
+    } catch (err) {
+      console.warn("[escpos] serial falhou:", err);
+      try { await port.close(); } catch { /* ignore */ }
+      const msg = err instanceof Error ? err.message : String(err);
+      failedAttempts.push(`Serial: ${msg}`);
+      setLastPrintError(msg);
+      return record({ channel: "serial", ok: false, error: msg });
+    }
+  };
 
-        const windowsFallback = printers.find((p) => p.source === "windows" && p.name !== target.name)
-          ?? printers.find((p) => p.source === "windows");
-        if (windowsFallback) {
-          const fallbackPaper = getPrinterPaperWidth(windowsFallback.name) ?? windowsFallback.paperWidth ?? effectivePaper;
-          const fallbackPayload = buildEscPosPayload({ ...r, paper_width: fallbackPaper }, { printerId: windowsFallback.name });
-          try {
-            await printViaAgent(fallbackPayload, windowsFallback.name, "windows");
-            return record({ channel: "agent", ok: true, printer: windowsFallback.name, paperWidth: fallbackPaper });
-          } catch (fallbackErr) {
-            const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-            failedAttempts.push(`Windows (${windowsFallback.name}): ${fallbackMsg}`);
-            console.warn("[escpos] fallback Windows falhou:", fallbackMsg);
+  // Prioridade corrigida: WebUSB é canal principal no PWA/navegador. O agente
+  // local fica como última opção para preservar o comportamento antigo direto.
+  const usb = await tryWebUsb(interactiveFallback || selectedSource === "webusb");
+  if (usb?.ok) return usb;
+
+  const serial = await trySerial();
+  if (serial?.ok) return serial;
+
+  // Se houve falha real no WebUSB/Serial, ainda tenta agente como último
+  // fallback, mas só retorna erro depois de esgotar todos os canais.
+
+  const tryAgent = async (): Promise<PrintDiagnostic | null> => {
+    try {
+      const st: AgentStatus = await pingPrintAgent();
+      if (st.online && (st.printers?.length ?? 0) > 0) {
+        const printers = st.printers!;
+        let target: typeof printers[number] | undefined;
+        if (selected && selectedSource !== "webusb") {
+          target = printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
+                ?? printers.find((p) => p.name === selected);
+        }
+        if (!target) target = printers.find((p) => p.source === "windows") ?? printers[0];
+        if (!target) return null;
+        const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
+        const payload = buildEscPosPayload({ ...r, paper_width: effectivePaper }, { printerId: target.name });
+        try {
+          await printViaAgent(payload, target.name, target.source);
+          return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn("[escpos] agente falhou, tentando fallback Windows:", msg);
+          failedAttempts.push(`Agente (${target.source}/${target.name}): ${msg}`);
+          record({ channel: "agent", ok: false, printer: target.name, paperWidth: effectivePaper, error: msg });
+
+          const windowsFallback = printers.find((p) => p.source === "windows" && p.name !== target.name)
+            ?? printers.find((p) => p.source === "windows");
+          if (windowsFallback) {
+            const fallbackPaper = getPrinterPaperWidth(windowsFallback.name) ?? windowsFallback.paperWidth ?? effectivePaper;
+            const fallbackPayload = buildEscPosPayload({ ...r, paper_width: fallbackPaper }, { printerId: windowsFallback.name });
+            try {
+              await printViaAgent(fallbackPayload, windowsFallback.name, "windows");
+              return record({ channel: "agent", ok: true, printer: windowsFallback.name, paperWidth: fallbackPaper });
+            } catch (fallbackErr) {
+              const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+              failedAttempts.push(`Windows (${windowsFallback.name}): ${fallbackMsg}`);
+              console.warn("[escpos] fallback Windows falhou:", fallbackMsg);
+            }
           }
         }
       }
-    }
-  } catch (err) { console.warn("[escpos] agente indisponível:", err); }
+    } catch (err) { console.warn("[escpos] agente indisponível:", err); }
+    return null;
+  };
 
-  // 2) WebUSB direto
-  const usb = selectedSource === "webusb" ? null : await tryWebUsb(interactiveFallback);
-  if (usb?.ok) return usb;
-  if (usb && !isUsbAccessDeniedError(usb.error)) return usb;
+  const agentResult = await tryAgent();
+  if (agentResult?.ok) return agentResult;
 
-  // 3) Web Serial
-  if (!isEscPosEnabled()) {
-    const err = failedAttempts.length > 0
-      ? failedAttempts.join(" | ")
-      : agentError ? `Agente: ${agentError.msg}` : "Nenhum canal ESC/POS conectado (autorize WebUSB, Web Serial ou instale o Agente Local)";
-    return record({ channel: "none", ok: false, error: err });
-  }
-  const port = await getGrantedPort();
-  if (!port) return record({ channel: "none", ok: false, error: "Porta serial não autorizada" });
-  try {
-    await port.open({ baudRate: 9600 });
-    const writer = port.writable?.getWriter();
-    if (!writer) { await port.close(); return record({ channel: "serial", ok: false, error: "Sem writer serial" }); }
-    await writer.write(usbPayload);
-    await writer.close();
-    await port.close();
-    return record({ channel: "serial", ok: true, paperWidth: r.paper_width });
-  } catch (err) {
-    console.warn("[escpos] serial falhou:", err);
-    try { await port.close(); } catch { /* ignore */ }
-    const msg = err instanceof Error ? err.message : String(err);
-    failedAttempts.push(`Serial: ${msg}`);
-    setLastPrintError(msg);
-    return record({ channel: "serial", ok: false, error: failedAttempts.join(" | ") || msg });
-  }
+  const err = failedAttempts.length > 0
+    ? failedAttempts.join(" | ")
+    : "Nenhum canal ESC/POS conectado (autorize WebUSB, Web Serial ou instale o Agente Local)";
+  return record({ channel: "none", ok: false, error: err });
+
 }
 
 /**
@@ -346,6 +365,48 @@ export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic>
   const selection = getSelectedPrinterForStore(getCurrentStoreIdSync());
   const selected = selection?.name ?? null;
   const selectedSource = selection?.source ?? null;
+  const failedAttempts: string[] = [];
+
+  const tryWebUsbRaw = async (): Promise<PrintDiagnostic | null> => {
+    if (!isWebUsbSupported()) return null;
+    const dev = await getGrantedUsbPrinter();
+    if (!dev) return null;
+    try {
+      await printUsbRaw(dev, bytes);
+      return { channel: "usb", ok: true, printer: dev.productName ?? "USB" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failedAttempts.push(`WebUSB: ${msg}`);
+      setLastPrintError(msg);
+      return null;
+    }
+  };
+
+  const trySerialRaw = async (): Promise<PrintDiagnostic | null> => {
+    if (!isEscPosEnabled()) return null;
+    const port = await getGrantedPort();
+    if (!port) return null;
+    try {
+      await port.open({ baudRate: 9600 });
+      const writer = port.writable?.getWriter();
+      if (!writer) {
+        await port.close();
+        failedAttempts.push("Serial: sem writer serial");
+        return null;
+      }
+      await writer.write(bytes);
+      await writer.close();
+      await port.close();
+      return { channel: "serial", ok: true };
+    } catch (err) {
+      try { await port.close(); } catch { /* ignore */ }
+      const msg = err instanceof Error ? err.message : String(err);
+      failedAttempts.push(`Serial: ${msg}`);
+      setLastPrintError(msg);
+      return null;
+    }
+  };
+
   const tryAgentRaw = async (): Promise<PrintDiagnostic | null> => {
     try {
       const st = await pingPrintAgent();
@@ -355,38 +416,30 @@ export async function sendRawEscPos(bytes: Uint8Array): Promise<PrintDiagnostic>
           || (selected && printers.find((p) => p.name === selected))
           || printers.find((p) => p.source === "windows")
           || printers[0];
+        if (!target) return null;
         try {
           await printViaAgent(bytes, target.name, target.source);
           return { channel: "agent", ok: true, printer: target.name };
         } catch (err) {
           console.warn("[escpos] agente falhou, tentando fallback:", err);
+          const msg = err instanceof Error ? err.message : String(err);
+          failedAttempts.push(`Agente (${target.source}/${target.name}): ${msg}`);
         }
       }
     } catch { /* segue */ }
     return null;
   };
 
-  if (selectedSource !== "webusb") {
-    const agentResult = await tryAgentRaw();
-    if (agentResult) return agentResult;
-  }
-  if (isWebUsbSupported()) {
-    const dev = await getGrantedUsbPrinter();
-    if (dev) {
-      try { await printUsbRaw(dev, bytes); return { channel: "usb", ok: true, printer: dev.productName ?? "USB" }; }
-      catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const agentResult = await tryAgentRaw();
-        if (agentResult) return agentResult;
-        return { channel: "usb", ok: false, error: msg };
-      }
-    }
-  }
-  if (selectedSource === "webusb") {
-    const agentResult = await tryAgentRaw();
-    if (agentResult) return agentResult;
-  }
-  return { channel: "none", ok: false, error: "Nenhum canal ativo" };
+  const usbResult = await tryWebUsbRaw();
+  if (usbResult) return usbResult;
+
+  const serialResult = await trySerialRaw();
+  if (serialResult) return serialResult;
+
+  const agentResult = await tryAgentRaw();
+  if (agentResult) return agentResult;
+
+  return { channel: "none", ok: false, error: failedAttempts.join(" | ") || "Nenhum canal ativo" };
 }
 
 /** Wrapper retro-compatível: retorna apenas boolean. */
