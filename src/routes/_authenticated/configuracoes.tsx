@@ -275,10 +275,18 @@ function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="recibo" className="mt-4">
-            <div className="flex justify-end gap-2 mb-4">
-              <Button variant="outline" className="gap-2" onClick={preview}><Printer className="size-4" />Prévia</Button>
+            <div className="flex justify-end gap-2 mb-4 flex-wrap">
+              <Button variant="outline" className="gap-2" onClick={() => setPreviewOpen(true)}><Eye className="size-4" />Prévia na tela</Button>
+              <Button variant="outline" className="gap-2" onClick={printTestReceipt}><Printer className="size-4" />Imprimir teste</Button>
               <Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-2"><Save className="size-4" />Salvar</Button>
             </div>
+
+            <ReceiptPreviewDialog
+              open={previewOpen}
+              onOpenChange={setPreviewOpen}
+              data={buildPreviewData()}
+              onPrint={printTestReceipt}
+            />
 
             <div className="grid md:grid-cols-2 gap-4">
               <div className="border border-border rounded-md bg-card p-4 space-y-3 md:col-span-2">
