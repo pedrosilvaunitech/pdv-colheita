@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   ArrowUp, ArrowDown, Trash2, Plus, RotateCcw, Save, Lock,
-  AlignLeft, AlignCenter, AlignRight, Bold,
+  AlignLeft, AlignCenter, AlignRight, Bold, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildReceiptHTML, type ReceiptData } from "@/lib/receipt";
+import { ReceiptPaperPreview, type ReceiptPreviewZoom } from "@/components/receipt-paper-preview";
 import {
   loadTemplate, saveTemplate, resetTemplate,
   moveBlock, updateBlock, removeBlock, addCustomTextBlock, addSeparatorBlock,
@@ -39,6 +40,7 @@ export function ReceiptTemplateEditor({
   const { storeId } = useCurrentStore();
   const [docType, setDocType] = useState<"fiscal" | "nao_fiscal">(sampleData.document_type);
   const [tpl, setTpl] = useState<ReceiptTemplate>(() => loadTemplate(storeId, docType));
+  const [zoom, setZoom] = useState<ReceiptPreviewZoom>("125");
 
   // Recarrega ao trocar tipo/loja
   useEffect(() => { setTpl(loadTemplate(storeId, docType)); }, [storeId, docType]);
@@ -48,6 +50,8 @@ export function ReceiptTemplateEditor({
     [sampleData, docType],
   );
   const html = useMemo(() => buildReceiptHTML(previewData, tpl), [previewData, tpl]);
+  const zoomOptions: ReceiptPreviewZoom[] = ["100", "125", "150", "175"];
+  const zoomIndex = zoomOptions.indexOf(zoom);
 
   const save = () => {
     saveTemplate(storeId, docType, tpl);
@@ -63,27 +67,55 @@ export function ReceiptTemplateEditor({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] max-h-[92vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Editor do cupom</DialogTitle>
-          <DialogDescription>
-            Arraste, ligue/desligue e formate cada bloco. A prévia atualiza ao vivo e é
-            exatamente o que a impressora vai imprimir.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="w-[98vw] max-w-none h-[94vh] max-h-[94vh] overflow-hidden flex flex-col p-0">
+        <div className="px-4 py-3 border-b border-border">
+          <DialogHeader>
+            <DialogTitle>Editor do cupom</DialogTitle>
+            <DialogDescription>
+              Configure os blocos e acompanhe a nota em tamanho ampliado ao lado.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <Tabs value={docType} onValueChange={(v) => setDocType(v as "fiscal" | "nao_fiscal")} className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="w-fit">
-            <TabsTrigger value="nao_fiscal">Recibo não-fiscal</TabsTrigger>
-            <TabsTrigger value="fiscal">Cupom fiscal (NFC-e)</TabsTrigger>
-          </TabsList>
+        <Tabs value={docType} onValueChange={(v) => setDocType(v as "fiscal" | "nao_fiscal")} className="flex-1 overflow-hidden flex flex-col px-4 py-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <TabsList className="w-fit">
+              <TabsTrigger value="nao_fiscal">Recibo não-fiscal</TabsTrigger>
+              <TabsTrigger value="fiscal">Cupom fiscal (NFC-e)</TabsTrigger>
+            </TabsList>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setZoom(zoomOptions[Math.max(0, zoomIndex - 1)])}
+                disabled={zoomIndex <= 0}
+                aria-label="Diminuir prévia"
+              >
+                <ZoomOut className="size-4" />
+              </Button>
+              <div className="h-9 min-w-14 rounded-sm border border-border px-2 flex items-center justify-center text-xs font-mono text-muted-foreground">
+                {zoom}%
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setZoom(zoomOptions[Math.min(zoomOptions.length - 1, zoomIndex + 1)])}
+                disabled={zoomIndex >= zoomOptions.length - 1}
+                aria-label="Aumentar prévia"
+              >
+                <ZoomIn className="size-4" />
+              </Button>
+            </div>
+          </div>
 
           <TabsContent value={docType} className="flex-1 overflow-hidden mt-3">
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(280px,340px)] gap-4 h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(430px,0.9fr)_minmax(520px,1.1fr)] gap-4 h-full">
               {/* Blocos */}
-              <div className="border border-border rounded-md p-2 overflow-y-auto max-h-[65vh]">
+              <div className="border border-border rounded-md p-2 overflow-y-auto min-h-0">
                 {docType === "fiscal" && (
-                  <div className="mb-2 text-[11px] bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 rounded p-2 flex items-start gap-1.5">
+                  <div className="mb-2 text-[11px] bg-warning/10 border border-warning/30 rounded p-2 flex items-start gap-1.5 text-warning">
                     <Lock className="size-3 mt-0.5" />
                     <span>Blocos legais (tributos, NFC-e nº, QR, chave) são obrigatórios pela SEFAZ e ficam travados.</span>
                   </div>
@@ -107,7 +139,7 @@ export function ReceiptTemplateEditor({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs font-medium truncate">{BLOCK_LABEL[b.kind]}</span>
-                              {b.locked && <Badge variant="outline" className="h-4 text-[9px] gap-0.5 border-amber-400/40"><Lock className="size-2.5" /> Legal</Badge>}
+                              {b.locked && <Badge variant="outline" className="h-4 text-[9px] gap-0.5 border-warning/40 text-warning"><Lock className="size-2.5" /> Legal</Badge>}
                             </div>
                           </div>
                           <Switch checked={b.enabled} disabled={b.locked} onCheckedChange={(v) => setTpl(updateBlock(tpl, b.id, { enabled: v }))} />
@@ -178,25 +210,17 @@ export function ReceiptTemplateEditor({
               </div>
 
               {/* Prévia */}
-              <div className="border border-border rounded-md p-2 bg-muted overflow-y-auto max-h-[65vh]">
-                <div className="text-[10px] text-muted-foreground mb-1 text-center">
+              <div className="border border-border rounded-md bg-muted/40 overflow-auto min-h-0 p-3">
+                <div className="text-[10px] text-muted-foreground mb-3 text-center font-mono uppercase">
                   Prévia — papel {previewData.paper_width}mm
                 </div>
-                <iframe
-                  title="Prévia"
-                  srcDoc={html}
-                  className="bg-white border border-border rounded shadow-sm mx-auto block"
-                  style={{
-                    width: `${(previewData.paper_width ?? 80) * 3.78}px`,
-                    minHeight: 500,
-                  }}
-                />
+                <ReceiptPaperPreview html={html} paperWidth={previewData.paper_width ?? 80} zoom={zoom} />
               </div>
             </div>
           </TabsContent>
         </Tabs>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 border-t border-border px-4 py-3">
           <Button variant="outline" onClick={doReset} className="gap-1 mr-auto">
             <RotateCcw className="size-4" /> Restaurar padrão
           </Button>

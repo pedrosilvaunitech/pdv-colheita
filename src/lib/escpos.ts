@@ -3,7 +3,7 @@
 // Perfis 58mm (32 col) e 80mm (48 col).
 import { buildDensityPrefix } from "./print-density";
 
-import type { ReceiptData } from "./receipt";
+import { buildReceiptHTML, type ReceiptData } from "./receipt";
 import {
   describeBrowserDeviceError,
   getBrowserDeviceFeatureState,
@@ -329,6 +329,7 @@ import { getGrantedUsbPrinter, isUsbDisconnectedError, isWebUsbSupported, printU
 import {
   getSelectedPrinterForStore,
   pingPrintAgent,
+  printHtmlViaAgent,
   printViaAgent,
   setLastPrintError,
 } from "./print-agent";
@@ -363,6 +364,7 @@ export async function tryPrintEscPosDetailed(
   const selectedSource = selection?.source ?? null;
   // Guarda o último recibo para permitir reimpressão após falha.
   try { setLastReceipt(r); } catch { /* noop */ }
+  const failedAttempts: string[] = [];
 
   const record = (d: PrintDiagnostic) => {
     appendPrintHistory({
@@ -382,7 +384,34 @@ export async function tryPrintEscPosDetailed(
   const usbPrinterId = selectedSource === "webusb" && selected ? selected : "__usb__";
   const usbPaper = getPrinterPaperWidth(usbPrinterId) ?? getPrinterPaperWidth("__usb__") ?? r.paper_width;
   const usbPayload = buildEscPosPayload({ ...r, paper_width: usbPaper }, { printerId: usbPrinterId });
-  const failedAttempts: string[] = [];
+
+  const tryAgentHtml = async (): Promise<PrintDiagnostic | null> => {
+    if (selectedSource === "webusb") return null;
+    try {
+      const st: AgentStatus = await pingPrintAgent();
+      if (!st.online || (st.printers?.length ?? 0) === 0) return null;
+      const printers = st.printers!;
+      let target: typeof printers[number] | undefined;
+      if (selected) {
+        target = printers.find((p) => p.name === selected && (!selectedSource || p.source === selectedSource))
+              ?? printers.find((p) => p.name === selected);
+      }
+      if (!target || target.source === "agent") {
+        target = printers.find((p) => p.source === "windows" && p.status === "online")
+              ?? printers.find((p) => p.source === "windows");
+      }
+      if (!target) return null;
+      const effectivePaper = getPrinterPaperWidth(target.name) ?? target.paperWidth ?? r.paper_width;
+      const html = buildReceiptHTML({ ...r, paper_width: effectivePaper });
+      await printHtmlViaAgent(html, target.name, target.source);
+      return record({ channel: "agent", ok: true, printer: target.name, paperWidth: effectivePaper });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failedAttempts.push(`HTML/Prévia: ${msg}`);
+      console.warn("[escpos] impressão HTML via agente indisponível, usando ESC/POS:", msg);
+      return null;
+    }
+  };
 
   const tryWebUsb = async (allowPrompt: boolean): Promise<PrintDiagnostic | null> => {
     if (!isWebUsbSupported()) return null;
@@ -450,8 +479,12 @@ export async function tryPrintEscPosDetailed(
     }
   };
 
-  // Prioridade corrigida: WebUSB é canal principal no PWA/navegador. O agente
-  // local fica como última opção para preservar o comportamento antigo direto.
+  // Primeiro tenta HTML silencioso pelo Agente Desktop: é o único caminho que
+  // imprime exatamente o mesmo documento da prévia sem abrir diálogo do navegador.
+  const htmlAgent = await tryAgentHtml();
+  if (htmlAgent?.ok) return htmlAgent;
+
+  // Fallback ESC/POS raw para WebUSB/Serial/agente antigo.
   const usb = await tryWebUsb(interactiveFallback || selectedSource === "webusb");
   if (usb?.ok) return usb;
 

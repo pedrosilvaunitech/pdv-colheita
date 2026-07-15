@@ -321,3 +321,39 @@ export async function printViaAgent(
     throw new Error(msg);
   }
 }
+
+/**
+ * Imprime o HTML exato da prévia pelo Agente Desktop quando ele suporta o
+ * endpoint /print-html. Agentes antigos retornam erro e o chamador cai para
+ * ESC/POS raw.
+ */
+export async function printHtmlViaAgent(
+  html: string,
+  printerName?: string | null,
+  source?: PrinterSource | null,
+): Promise<void> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const sel = printerName || source
+    ? { name: printerName ?? "", source: source ?? "windows" as PrinterSource }
+    : getSelectedPrinterForStore(getCurrentStoreIdSync());
+  if (sel?.name) headers["X-Printer"] = sel.name;
+  if (sel?.source && sel.source !== "webusb") headers["X-Printer-Source"] = sel.source;
+  try {
+    const r = await fetchAgent("/print-html", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ html, printerName: sel?.name ?? null, source: sel?.source ?? null }),
+    }, 30000);
+    if (!r.ok) {
+      const msg = await r.text().catch(() => r.statusText);
+      const err = `Agente HTML ${r.status}: ${msg}`;
+      setLastPrintError(err);
+      throw new Error(err);
+    }
+    setLastPrintError(null);
+  } catch (e) {
+    const msg = explainAgentNetworkError(e);
+    if (!msg.startsWith("Agente HTML ")) setLastPrintError(msg);
+    throw new Error(msg);
+  }
+}
