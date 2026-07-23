@@ -596,7 +596,6 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
 
 function PendingFiscalCard({ storeId }: { storeId: string }) {
   const qc = useQueryClient();
-  const emit = useServerFn(emitInvoice);
   const [running, setRunning] = useState(false);
 
   const { data: pending } = useQuery({
@@ -617,19 +616,14 @@ function PendingFiscalCard({ storeId }: { storeId: string }) {
   async function reemitAll() {
     if (!pending || pending.length === 0) return;
     setRunning(true);
+    const { emitDirectFiscal } = await import("@/lib/direct-fiscal");
     let ok = 0;
     let fail = 0;
     let firstErr = "";
     for (const sale of pending) {
-      try {
-        await emit({ data: { storeId, saleId: sale.id, type: "nfce" } });
-        await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", sale.id);
-        ok++;
-      } catch (e) {
-        fail++;
-        if (!firstErr) firstErr = (e as Error).message;
-        await supabase.from("sales").update({ fiscal_status: "falha" }).eq("id", sale.id);
-      }
+      const r = await emitDirectFiscal({ storeId, saleId: sale.id });
+      if (r.ok) ok++;
+      else { fail++; if (!firstErr) firstErr = r.error ?? "falha"; }
     }
     setRunning(false);
     qc.invalidateQueries({ queryKey: ["fiscal-pending"] });
@@ -637,6 +631,7 @@ function PendingFiscalCard({ storeId }: { storeId: string }) {
     if (fail === 0) toast.success(`${ok} nota(s) emitida(s)`);
     else toast.error(`${ok} emitida(s), ${fail} com falha. ${firstErr}`);
   }
+
 
   const count = pending?.length ?? 0;
   const totalSum = (pending ?? []).reduce((s, p) => s + Number(p.total ?? 0), 0);
