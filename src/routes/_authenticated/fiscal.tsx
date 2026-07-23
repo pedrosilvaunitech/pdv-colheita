@@ -342,10 +342,7 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
         store_id: storeId,
         provider: form.provider,
         environment: form.environment,
-        nfce_series: form.nfce_series,
-        nfce_next_number: form.nfce_next_number,
-        nfe_series: form.nfe_series,
-        nfe_next_number: form.nfe_next_number,
+        // numeração é gerenciada pelo NfceNumberingCard — não sobrescrever aqui
         csc_id: form.csc_id.trim() || null,
         csc_token: form.csc_token.trim() || null,
         certificate_uploaded: form.certificate_uploaded,
