@@ -12,7 +12,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { getAgentBaseUrl } from "@/lib/print-agent";
+import { pingPrintAgent } from "@/lib/print-agent";
 
 export interface DirectEmitInput {
   storeId: string;
