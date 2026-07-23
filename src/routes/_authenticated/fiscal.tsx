@@ -383,6 +383,50 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
   const secretName = PROVIDER_SECRET[form.provider];
   const canTest = form.provider !== "none" && form.provider !== "direto_sefaz" && !form.defer_credentials;
 
+  // Validação de CRT contra a Receita (chamada opcional após consulta)
+  const [crtCheck, setCrtCheck] = useState<{ ok: boolean; message: string } | null>(null);
+  async function checkCRTAgainstReceita() {
+    if (!store.cnpj) return;
+    if (!form.crt) {
+      toast.error("Selecione um CRT antes de validar.");
+      return;
+    }
+    try {
+      const data = await lookupCnpj(store.cnpj);
+      const suggestion = suggestCRT(data);
+      if (form.crt === suggestion.crt) {
+        setCrtCheck({ ok: true, message: `Bate com a Receita: ${suggestion.label}.` });
+      } else {
+        setCrtCheck({
+          ok: false,
+          message: `Receita indica CRT ${suggestion.crt} (${suggestion.label}). Você marcou CRT ${form.crt}.`,
+        });
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  const ieCheck = useMemo(
+    () => (store.ie && store.state ? validateIE(store.ie, store.state) : null),
+    [store.ie, store.state],
+  );
+  const sefaz = store.state ? SEFAZ_LINKS[store.state.toUpperCase()] : null;
+
+  function applyPrefill(patch: {
+    cnae: string;
+    crt: string;
+    razao_social?: string;
+    fantasia?: string;
+    uf?: string;
+    municipio?: string;
+    cep?: string;
+    endereco?: string;
+  }) {
+    setForm((f) => ({ ...f, cnae: patch.cnae || f.cnae, crt: patch.crt || f.crt }));
+    setCrtCheck({ ok: true, message: "Preenchido pela Receita — clique em Salvar." });
+  }
+
   return (
     <div className="border border-border rounded-md bg-card p-5 space-y-3">
       <div className="flex items-center justify-between">
@@ -391,6 +435,8 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
           {isProd ? "PRODUÇÃO" : "HOMOLOGAÇÃO"}
         </Badge>
       </div>
+
+      <CnpjPrefillButton cnpj={store.cnpj} onApply={applyPrefill} />
 
       <div className="space-y-3 text-xs">
         <div>
@@ -435,7 +481,7 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
           </div>
           <div>
             <Label className="text-xs">CRT</Label>
-            <Select value={form.crt} onValueChange={(v) => setForm({ ...form, crt: v })}>
+            <Select value={form.crt} onValueChange={(v) => { setForm({ ...form, crt: v }); setCrtCheck(null); }}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="1">1 · Simples Nacional</SelectItem>
@@ -447,12 +493,70 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div><Label className="text-xs">Série NFC-e</Label><Input type="number" min="1" value={form.nfce_series} onChange={(e) => setForm({ ...form, nfce_series: Number(e.target.value) })} className="mt-1 font-mono" /></div>
-          <div><Label className="text-xs">Próximo nº NFC-e</Label><Input type="number" min="1" value={form.nfce_next_number} onChange={(e) => setForm({ ...form, nfce_next_number: Number(e.target.value) })} className="mt-1 font-mono" /></div>
+        {form.crt && (
+          <div className="flex items-center justify-between gap-2">
+            <div
+              className={
+                "text-[10px] flex-1 " +
+                (crtCheck
+                  ? crtCheck.ok
+                    ? "text-primary"
+                    : "text-warning"
+                  : "text-muted-foreground")
+              }
+            >
+              {crtCheck
+                ? (crtCheck.ok ? "✓ " : "⚠ ") + crtCheck.message
+                : "Clique em validar para comparar com o cadastro da Receita."}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[11px] gap-1"
+              onClick={checkCRTAgainstReceita}
+              disabled={!store.cnpj}
+            >
+              <Search className="size-3" /> Validar
+            </Button>
+          </div>
+        )}
+
+        {/* Inscrição Estadual (fica na loja, mas mostramos status + link SEFAZ) */}
+        <div className="border border-border rounded-md p-2 space-y-1 bg-secondary/20">
+          <div className="flex items-center justify-between">
+            <Label className="text-[11px] font-semibold">Inscrição Estadual</Label>
+            <span className="font-mono text-[11px]">
+              {store.ie || <span className="italic text-muted-foreground">não cadastrada</span>}
+            </span>
+          </div>
+          {ieCheck && (
+            <p className={"text-[10px] " + (ieCheck.ok ? "text-primary" : "text-warning")}>
+              {ieCheck.ok ? "✓ " : "⚠ "}{ieCheck.message}
+            </p>
+          )}
+          {sefaz && (
+            <a
+              href={sefaz.ie}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] text-info hover:underline inline-flex items-center gap-1"
+            >
+              Consultar/solicitar IE no {sefaz.ieLabel} <ExternalLink className="size-3" />
+            </a>
+          )}
+          <p className="text-[10px] text-muted-foreground">
+            Edite em <b>Configurações → Loja</b>. MEI pode marcar "ISENTO" em estados que permitem.
+          </p>
         </div>
 
-        <div><Label className="text-xs">CSC ID (NFC-e)</Label><Input value={form.csc_id} onChange={(e) => setForm({ ...form, csc_id: e.target.value })} className="mt-1 font-mono" placeholder="000001" /></div>
+        <div className="grid grid-cols-2 gap-2 items-end">
+          <div>
+            <Label className="text-xs">CSC ID (NFC-e)</Label>
+            <Input value={form.csc_id} onChange={(e) => setForm({ ...form, csc_id: e.target.value })} className="mt-1 font-mono" placeholder="000001" />
+          </div>
+          <CscTokenAssistant defaultUf={store.state ?? "MG"} />
+        </div>
         <div><Label className="text-xs">CSC Token (NFC-e)</Label><Input type="password" value={form.csc_token} onChange={(e) => setForm({ ...form, csc_token: e.target.value })} className="mt-1 font-mono" placeholder="fornecido pela SEFAZ" /></div>
 
         <div><Label className="text-xs">URL da API (opcional)</Label><Input value={form.provider_api_url} onChange={(e) => setForm({ ...form, provider_api_url: e.target.value })} className="mt-1 font-mono" placeholder="deixe em branco para usar o padrão" /></div>
@@ -489,6 +593,7 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
     </div>
   );
 }
+
 
 function PendingFiscalCard({ storeId }: { storeId: string }) {
   const qc = useQueryClient();
