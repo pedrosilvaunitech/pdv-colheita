@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReceiptData } from "@/lib/receipt";
 import { tryPrintEscPos } from "@/lib/escpos";
+import { emitDirectFiscal } from "@/lib/direct-fiscal";
 import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
 import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
