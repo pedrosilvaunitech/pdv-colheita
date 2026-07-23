@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Circle, AlertTriangle, FileText, ShieldCheck, ExternalLink, Send, Loader2, PlugZap, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect, useMemo } from "react";
-import { emitInvoice, testFiscalConnection } from "@/lib/fiscal.functions";
+import { testFiscalConnection } from "@/lib/fiscal.functions";
 import { CscTokenAssistant } from "@/components/fiscal/csc-token-assistant";
 import { CnpjPrefillButton } from "@/components/fiscal/cnpj-prefill-button";
 import { NfceNumberingCard } from "@/components/fiscal/nfce-numbering-card";
