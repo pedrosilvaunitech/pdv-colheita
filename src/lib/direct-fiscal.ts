@@ -257,7 +257,7 @@ export async function emitDirectFiscal(params: {
         access_key: result.chave ?? null,
         protocol: result.protocolo ?? null,
         danfe_url: result.qr_url ?? null,
-        provider_response: result as unknown as Record<string, unknown>,
+        provider_response: JSON.parse(JSON.stringify(result)),
         issued_at: new Date().toISOString(),
       })
       .select("id")
