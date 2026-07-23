@@ -378,7 +378,11 @@ export type Database = {
           csc_id: string | null
           csc_token: string | null
           defer_credentials: boolean
+          direct_engine: string
           environment: Database["public"]["Enums"]["fiscal_env"]
+          homologacao_history: Json
+          homologacao_last_test_at: string | null
+          homologacao_last_test_result: Json | null
           nfce_next_number: number
           nfce_series: number
           nfe_next_number: number
@@ -388,6 +392,8 @@ export type Database = {
           provider_api_url: string | null
           store_id: string
           updated_at: string
+          vps_auth_secret_name: string | null
+          vps_url: string | null
         }
         Insert: {
           certificate_expires_on?: string | null
@@ -402,7 +408,11 @@ export type Database = {
           csc_id?: string | null
           csc_token?: string | null
           defer_credentials?: boolean
+          direct_engine?: string
           environment?: Database["public"]["Enums"]["fiscal_env"]
+          homologacao_history?: Json
+          homologacao_last_test_at?: string | null
+          homologacao_last_test_result?: Json | null
           nfce_next_number?: number
           nfce_series?: number
           nfe_next_number?: number
@@ -412,6 +422,8 @@ export type Database = {
           provider_api_url?: string | null
           store_id: string
           updated_at?: string
+          vps_auth_secret_name?: string | null
+          vps_url?: string | null
         }
         Update: {
           certificate_expires_on?: string | null
@@ -426,7 +438,11 @@ export type Database = {
           csc_id?: string | null
           csc_token?: string | null
           defer_credentials?: boolean
+          direct_engine?: string
           environment?: Database["public"]["Enums"]["fiscal_env"]
+          homologacao_history?: Json
+          homologacao_last_test_at?: string | null
+          homologacao_last_test_result?: Json | null
           nfce_next_number?: number
           nfce_series?: number
           nfe_next_number?: number
@@ -436,6 +452,8 @@ export type Database = {
           provider_api_url?: string | null
           store_id?: string
           updated_at?: string
+          vps_auth_secret_name?: string | null
+          vps_url?: string | null
         }
         Relationships: [
           {
@@ -1661,9 +1679,21 @@ export type Database = {
           user_id: string
         }[]
       }
+      record_homologacao_test: {
+        Args: { _result: Json; _store_id: string }
+        Returns: undefined
+      }
       regenerate_admin_code: {
         Args: { _store_id: string; _user_id: string }
         Returns: string
+      }
+      reserve_nfce_number: {
+        Args: { _store_id: string }
+        Returns: {
+          environment: string
+          number: number
+          series: number
+        }[]
       }
       set_store_master_password: {
         Args: { _password: string; _store_id: string }
