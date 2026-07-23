@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, AlertTriangle, FileText, ShieldCheck, ExternalLink, Send, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, AlertTriangle, FileText, ShieldCheck, ExternalLink, Send, Loader2, PlugZap } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { emitInvoice } from "@/lib/fiscal.functions";
+import { emitInvoice, testFiscalConnection } from "@/lib/fiscal.functions";
 
 export const Route = createFileRoute("/_authenticated/fiscal")({
   component: FiscalPage,
