@@ -29,7 +29,12 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.3.2";
+const VERSION = "1.4.0";
+
+// Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
+let nfce = null;
+try { nfce = require("./nfce"); }
+catch (e) { console.warn("[agent] nfce module indisponível:", e.message); }
 
 // Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
 // quando o driver não reporta e para exibir o modelo real na UI.
