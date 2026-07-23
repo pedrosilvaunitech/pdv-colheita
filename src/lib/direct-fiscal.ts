@@ -13,6 +13,8 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { pingPrintAgent } from "@/lib/print-agent";
+import { emitInvoice, emitViaVps } from "@/lib/fiscal.functions";
+
 
 export interface DirectEmitInput {
   storeId: string;
