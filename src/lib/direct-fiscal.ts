@@ -135,7 +135,7 @@ function mapPaymentType(method: string): string {
  * Emissão via agente local (chamada do navegador do caixa).
  */
 export async function emitViaAgent(input: DirectEmitInput): Promise<DirectEmitResult> {
-  const agentUrl = await fetchAgentUrl();
+  const agentUrl = await findAgentUrl();
   if (!agentUrl) {
     return { ok: false, channel: "agent_local", error: "Agente local offline." };
   }
