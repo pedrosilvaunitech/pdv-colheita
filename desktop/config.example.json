@@ -2,5 +2,30 @@
   "url": "https://pdv-colheita.lovable.app/pdv?kiosk=1",
   "fallbackUrl": "https://pdv-colheita.lovable.app/pdv?kiosk=1",
   "kiosk": true,
-  "startMinimized": false
+  "startMinimized": false,
+
+  "_comentario_fiscal": "Configuração fiscal fica em %USERPROFILE%/.bastion-pos/fiscal.json e é editada via PDV. NÃO cole senha aqui — o app grava lá com permissão 0600.",
+  "_exemplo_fiscal_json": {
+    "pfx_path": "C:\\certificados\\empresa.pfx",
+    "pfx_password": "senha-do-certificado",
+    "csc_id": "000001",
+    "csc_token": "TOKEN-CSC-DA-SEFAZ",
+    "uf": "MG",
+    "environment": "homologacao",
+    "cnpj": "51483602000188",
+    "ie": "0011234567890",
+    "razao_social": "51.483.602 GISELLE FORTUNATO MATIAS",
+    "nome_fantasia": "COLHEITA DA TERRA",
+    "crt": 1,
+    "serie": 1,
+    "endereco": {
+      "logradouro": "Rua Exemplo",
+      "numero": "100",
+      "bairro": "Jardim Floresta",
+      "cidade": "Pouso Alegre",
+      "uf": "MG",
+      "cep": "37551387",
+      "cMun": "3152501"
+    }
+  }
 }
