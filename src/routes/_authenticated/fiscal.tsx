@@ -302,12 +302,15 @@ function FiscalPage() {
 function FiscalConfigCard({ storeId, config }: { storeId: string; config: Record<string, unknown> | null | undefined }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<FiscalForm>({ ...DEFAULT_CONFIG });
+  const testConn = useServerFn(testFiscalConnection);
+  const [testing, setTesting] = useState(false);
 
+  // Sincroniza TODOS os campos existentes no banco (não sobrescreve com defaults).
   useEffect(() => {
     if (config) {
       setForm({
-        provider: (config.provider as typeof DEFAULT_CONFIG.provider) ?? "none",
-        environment: (config.environment as typeof DEFAULT_CONFIG.environment) ?? "homologacao",
+        provider: (config.provider as FiscalProvider) ?? "none",
+        environment: (config.environment as FiscalEnv) ?? "homologacao",
         nfce_series: Number(config.nfce_series ?? 1),
         nfce_next_number: Number(config.nfce_next_number ?? 1),
         nfe_series: Number(config.nfe_series ?? 1),
@@ -315,26 +318,64 @@ function FiscalConfigCard({ storeId, config }: { storeId: string; config: Record
         csc_id: String(config.csc_id ?? ""),
         csc_token: String(config.csc_token ?? ""),
         certificate_uploaded: Boolean(config.certificate_uploaded),
-        certificate_expires_on: String(config.certificate_expires_on ?? ""),
+        certificate_expires_on: config.certificate_expires_on ? String(config.certificate_expires_on) : "",
+        cnae: String(config.cnae ?? ""),
+        crt: String(config.crt ?? ""),
+        provider_api_url: String(config.provider_api_url ?? ""),
+        defer_credentials: config.defer_credentials === undefined ? true : Boolean(config.defer_credentials),
+        credentials_note: String(config.credentials_note ?? ""),
       });
     }
   }, [config]);
 
   const save = useMutation({
     mutationFn: async () => {
+      const err = validateFiscalForm(form);
+      if (err) throw new Error(err);
       const payload = {
-        store_id: storeId, ...form,
+        store_id: storeId,
+        provider: form.provider,
+        environment: form.environment,
+        nfce_series: form.nfce_series,
+        nfce_next_number: form.nfce_next_number,
+        nfe_series: form.nfe_series,
+        nfe_next_number: form.nfe_next_number,
+        csc_id: form.csc_id.trim() || null,
+        csc_token: form.csc_token.trim() || null,
+        certificate_uploaded: form.certificate_uploaded,
         certificate_expires_on: form.certificate_expires_on || null,
-        csc_id: form.csc_id || null, csc_token: form.csc_token || null,
+        cnae: form.cnae.trim() || null,
+        crt: form.crt || null,
+        provider_api_url: form.provider_api_url.trim() || null,
+        defer_credentials: form.defer_credentials,
+        credentials_note: form.credentials_note.trim() || null,
       };
       const { error } = await supabase.from("fiscal_configs").upsert(payload, { onConflict: "store_id" });
-      if (error) throw error;
+      if (error) throw new Error(friendlyError(error.message));
     },
-    onSuccess: () => { toast.success("Configuração salva"); qc.invalidateQueries({ queryKey: ["fiscal-config"] }); },
+    onSuccess: () => {
+      toast.success("Configuração fiscal salva");
+      qc.invalidateQueries({ queryKey: ["fiscal-config"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
+  async function handleTest() {
+    setTesting(true);
+    try {
+      const result = await testConn({ data: { storeId } });
+      if (result.ok) toast.success(result.message);
+      else toast.error(result.message);
+    } catch (e) {
+      toast.error(friendlyError((e as Error).message));
+    } finally {
+      setTesting(false);
+    }
+  }
+
   const isProd = form.environment === "producao";
+  const secretName = PROVIDER_SECRET[form.provider];
+  const canTest = form.provider !== "none" && form.provider !== "direto_sefaz" && !form.defer_credentials;
 
   return (
     <div className="border border-border rounded-md bg-card p-5 space-y-3">
@@ -346,26 +387,33 @@ function FiscalConfigCard({ storeId, config }: { storeId: string; config: Record
       </div>
 
       <div className="space-y-3 text-xs">
-        <div><Label className="text-xs">Provedor de emissão</Label>
-          <Select value={form.provider} onValueChange={(v) => setForm({ ...form, provider: v as typeof form.provider })}>
+        <div>
+          <Label className="text-xs">Provedor de emissão</Label>
+          <Select value={form.provider} onValueChange={(v) => setForm({ ...form, provider: v as FiscalProvider })}>
             <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Nenhum (só checklist)</SelectItem>
-              <SelectItem value="focus_nfe">Focus NFe</SelectItem>
-              <SelectItem value="nfe_io">NFe.io</SelectItem>
-              <SelectItem value="plugnotas">PlugNotas</SelectItem>
+              {(Object.keys(PROVIDER_LABELS) as FiscalProvider[]).map((p) => (
+                <SelectItem key={p} value={p}>{PROVIDER_LABELS[p]}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {form.provider !== "none" && (
+          {form.provider === "direto_sefaz" && (
+            <p className="text-[10px] text-destructive mt-1 flex items-start gap-1">
+              <AlertTriangle className="size-3 mt-0.5 shrink-0" />
+              Exige servidor Node externo com XML-DSig + mutual TLS. Não é suportado no runtime do backend Lovable.
+            </p>
+          )}
+          {secretName && (
             <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
               <AlertTriangle className="size-3 text-warning" />
-              Adicione a API key do provedor em <b>Segurança → Segredos</b> como <span className="font-mono">FISCAL_PROVIDER_API_KEY</span>.
+              Segredo esperado: <span className="font-mono">{secretName}</span>
             </p>
           )}
         </div>
 
-        <div><Label className="text-xs">Ambiente</Label>
-          <Select value={form.environment} onValueChange={(v) => setForm({ ...form, environment: v as typeof form.environment })}>
+        <div>
+          <Label className="text-xs">Ambiente</Label>
+          <Select value={form.environment} onValueChange={(v) => setForm({ ...form, environment: v as FiscalEnv })}>
             <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="homologacao">Homologação (testes)</SelectItem>
@@ -375,17 +423,58 @@ function FiscalConfigCard({ storeId, config }: { storeId: string; config: Record
         </div>
 
         <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs">CNAE principal</Label>
+            <Input value={form.cnae} onChange={(e) => setForm({ ...form, cnae: e.target.value })} className="mt-1 font-mono" placeholder="4711-3/02" />
+          </div>
+          <div>
+            <Label className="text-xs">CRT</Label>
+            <Select value={form.crt} onValueChange={(v) => setForm({ ...form, crt: v })}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 · Simples Nacional</SelectItem>
+                <SelectItem value="2">2 · Simples (sublimite)</SelectItem>
+                <SelectItem value="3">3 · Regime Normal</SelectItem>
+                <SelectItem value="4">4 · MEI</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
           <div><Label className="text-xs">Série NFC-e</Label><Input type="number" min="1" value={form.nfce_series} onChange={(e) => setForm({ ...form, nfce_series: Number(e.target.value) })} className="mt-1 font-mono" /></div>
           <div><Label className="text-xs">Próximo nº NFC-e</Label><Input type="number" min="1" value={form.nfce_next_number} onChange={(e) => setForm({ ...form, nfce_next_number: Number(e.target.value) })} className="mt-1 font-mono" /></div>
         </div>
 
         <div><Label className="text-xs">CSC ID (NFC-e)</Label><Input value={form.csc_id} onChange={(e) => setForm({ ...form, csc_id: e.target.value })} className="mt-1 font-mono" placeholder="000001" /></div>
         <div><Label className="text-xs">CSC Token (NFC-e)</Label><Input type="password" value={form.csc_token} onChange={(e) => setForm({ ...form, csc_token: e.target.value })} className="mt-1 font-mono" placeholder="fornecido pela SEFAZ" /></div>
+
+        <div><Label className="text-xs">URL da API (opcional)</Label><Input value={form.provider_api_url} onChange={(e) => setForm({ ...form, provider_api_url: e.target.value })} className="mt-1 font-mono" placeholder="deixe em branco para usar o padrão" /></div>
         <div><Label className="text-xs">Validade do certificado A1</Label><Input type="date" value={form.certificate_expires_on} onChange={(e) => setForm({ ...form, certificate_expires_on: e.target.value })} className="mt-1 font-mono" /></div>
 
-        <Button onClick={() => save.mutate()} disabled={save.isPending} size="sm" className="w-full">
-          {save.isPending ? "Salvando..." : "Salvar configuração"}
-        </Button>
+        <div className="flex items-center justify-between border border-border rounded-md p-2">
+          <div>
+            <div className="text-xs font-medium">Configurar credencial depois</div>
+            <div className="text-[10px] text-muted-foreground">Deixe ligado enquanto ainda não tem o token do provedor.</div>
+          </div>
+          <Switch checked={form.defer_credentials} onCheckedChange={(v) => setForm({ ...form, defer_credentials: v })} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <Button onClick={() => save.mutate()} disabled={save.isPending} size="sm">
+            {save.isPending ? "Salvando..." : "Salvar configuração"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            disabled={!canTest || testing}
+            onClick={handleTest}
+            title={!canTest ? "Escolha um provedor e desligue 'configurar depois' para testar" : "Testa a chave salva contra a API do provedor"}
+          >
+            {testing ? <><Loader2 className="size-3 animate-spin" /> Testando…</> : <><PlugZap className="size-3" /> Testar conexão</>}
+          </Button>
+        </div>
 
         <a href="https://focusnfe.com.br" target="_blank" rel="noreferrer" className="text-[11px] text-info hover:underline flex items-center gap-1">
           Documentação do provedor <ExternalLink className="size-3" />
