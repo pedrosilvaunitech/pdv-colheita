@@ -71,8 +71,8 @@ async function buildSaleDto(saleId: string, storeId: string, environment: string
   if (storeRes.error) throw storeRes.error;
   if (cfgRes.error) throw cfgRes.error;
 
-  const store = storeRes.data;
-  const cfg = cfgRes.data;
+  const store = storeRes.data as Record<string, unknown>;
+  const cfg = cfgRes.data as Record<string, unknown>;
   const items = itemsRes.data ?? [];
   const payments = paymentsRes.data ?? [];
 
@@ -82,19 +82,19 @@ async function buildSaleDto(saleId: string, storeId: string, environment: string
     environment,
     dataEmissao: new Date().toISOString(),
     emitente: {
-      cnpj: store.cnpj ?? cfg.cnpj ?? "",
-      ie: store.ie ?? "",
-      razaoSocial: store.name ?? "",
-      nomeFantasia: store.fantasy_name ?? "",
+      cnpj: String(store.cnpj ?? cfg.cnpj ?? ""),
+      ie: String(store.ie ?? ""),
+      razaoSocial: String(store.name ?? ""),
+      nomeFantasia: String(store.fantasy_name ?? ""),
       crt: Number(cfg.crt ?? 1),
       endereco: {
-        logradouro: store.address_line ?? "",
-        numero: store.address_number ?? "S/N",
-        bairro: store.district ?? "",
-        cidade: store.city ?? "",
-        uf: store.state ?? "MG",
-        cep: (store.zip ?? "").replace(/\D/g, ""),
-        cMun: store.ibge_code ?? "",
+        logradouro: String(store.address_line ?? ""),
+        numero: String((store.address_number as string) ?? "S/N"),
+        bairro: String((store.district as string) ?? ""),
+        cidade: String(store.city ?? ""),
+        uf: String(store.state ?? "MG"),
+        cep: String(store.zip ?? "").replace(/\D/g, ""),
+        cMun: String((store.ibge_code as string) ?? ""),
       },
     },
     itens: items.map((it: Record<string, unknown>) => {
