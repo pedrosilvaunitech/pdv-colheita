@@ -231,7 +231,7 @@ export const emitInvoice = createServerFn({ method: "POST" })
 
     const { data: config, error: cfgErr } = await supabase
       .from("fiscal_configs")
-      .select("provider, environment, certificate_uploaded, defer_credentials, nfce_series, nfce_next_number, nfe_series, nfe_next_number, provider_api_url, cnae, crt, csc_id, csc_token")
+      .select("provider, environment, certificate_uploaded, defer_credentials, nfce_series, nfce_next_number, nfe_series, nfe_next_number, provider_api_url, cnae, crt, csc_id, csc_token, direct_engine, vps_url, vps_auth_secret_name")
       .eq("store_id", data.storeId)
       .maybeSingle();
     if (cfgErr) throw new Error(cfgErr.message);
@@ -241,6 +241,36 @@ export const emitInvoice = createServerFn({ method: "POST" })
     if (provider === "none") {
       throw new Error("Escolha um provedor fiscal em Configurações → Fiscal antes de emitir.");
     }
+
+    // ─── DIRETO SEFAZ ────────────────────────────────────────────
+    // agent_local → cliente chama o agente. Retornamos "delegate" com dados úteis.
+    // vps          → chamamos a VPS aqui mesmo (server-side).
+    if (provider === "direto_sefaz") {
+      if (!config.cnae || !config.crt) throw new Error("Preencha CNAE e CRT antes de emitir.");
+      if (!config.csc_id || !config.csc_token) throw new Error("CSC ID e CSC Token são obrigatórios.");
+
+      const engine = (config as { direct_engine?: string }).direct_engine ?? "agent_local";
+      if (engine === "vps") {
+        const vpsUrl = (config as { vps_url?: string }).vps_url;
+        const tokenName = (config as { vps_auth_secret_name?: string }).vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
+        if (!vpsUrl) throw new Error("URL da VPS não configurada.");
+        const token = process.env[tokenName];
+        if (!token) throw new Error(`Secret ${tokenName} ausente. Cadastre em Segredos.`);
+        // O cliente ainda precisa montar o DTO e chamar recordDirectEmissionResult,
+        // mas devolvemos o endpoint pronto para a mutation client-side.
+        return {
+          delegate: "vps" as const,
+          vps_url: vpsUrl,
+          secret_name: tokenName,
+          environment: config.environment,
+        };
+      }
+      return {
+        delegate: "agent_local" as const,
+        environment: config.environment,
+      };
+    }
+
     if (!config.certificate_uploaded) {
       throw new Error("Envie o certificado A1 (.pfx) antes de emitir. Consulte docs/fiscal-setup.md.");
     }
@@ -249,12 +279,6 @@ export const emitInvoice = createServerFn({ method: "POST" })
     }
     if (!config.csc_id || !config.csc_token) {
       throw new Error("CSC ID e CSC Token são obrigatórios para NFC-e. Solicite-os no portal da SEFAZ do seu estado.");
-    }
-
-    if (provider === "direto_sefaz") {
-      throw new Error(
-        "Emissão 'Direto SEFAZ' requer um servidor Node externo (VPS/Fly.io/Railway) rodando o motor de assinatura XML-DSig + mutual TLS com o certificado A1. O backend Lovable (Cloudflare Workers) não suporta essas operações. Troque para Focus NFe / PlugNotas / NFe.io / Webmania / TecnoSpeed."
-      );
     }
 
     const secretName = SECRET_NAME[provider]!;
@@ -286,4 +310,50 @@ export const emitInvoice = createServerFn({ method: "POST" })
     if (invErr) throw new Error(invErr.message);
 
     return { invoiceId: invoice.id, status: "processando" as const };
+  });
+
+// ─────────────────────────────────────────────────────────────
+// Emissão via VPS externa (chamada do backend)
+// ─────────────────────────────────────────────────────────────
+const emitVpsSchema = z.object({
+  storeId: z.string().uuid(),
+  dto: z.record(z.string(), z.unknown()),
+});
+
+export const emitViaVps = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d) => emitVpsSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: cfg, error: cfgErr } = await supabase
+      .from("fiscal_configs")
+      .select("vps_url, vps_auth_secret_name, environment")
+      .eq("store_id", data.storeId)
+      .maybeSingle();
+    if (cfgErr) throw new Error(cfgErr.message);
+    if (!cfg?.vps_url) throw new Error("URL da VPS não configurada.");
+    const tokenName = cfg.vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
+    const token = process.env[tokenName];
+    if (!token) throw new Error(`Secret ${tokenName} ausente.`);
+
+    const started = Date.now();
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30_000);
+      const res = await fetch(`${cfg.vps_url.replace(/\/+$/, "")}/nfce/emit`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data.dto),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      const body = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+      return { ...body, elapsed_ms: Date.now() - started, channel: "vps" as const };
+    } catch (e) {
+      const err = e as Error;
+      return { ok: false, error: err.message, elapsed_ms: Date.now() - started, channel: "vps" as const };
+    }
   });
