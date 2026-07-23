@@ -277,6 +277,7 @@ function FiscalPage() {
           <div className="space-y-4">
             <FiscalConfigCard storeId={storeId!} store={store} config={config} />
             <NfceNumberingCard storeId={storeId!} />
+            <DirectEngineCard storeId={storeId!} />
             <PendingFiscalCard storeId={storeId!} />
             <div className="border border-border rounded-md bg-card p-5">
               <h3 className="text-sm font-semibold mb-3">Notas recentes</h3>
