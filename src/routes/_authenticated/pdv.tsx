@@ -386,7 +386,20 @@ function PdvPage() {
       return sale.id;
     },
     onSuccess: async (saleId) => {
-      toast.success(docType === "fiscal" ? "Venda finalizada · NFC-e pendente de emissão" : "Venda finalizada");
+      toast.success(docType === "fiscal" ? "Venda finalizada · emitindo NFC-e…" : "Venda finalizada");
+      // Emissão direta SEFAZ: dispara em paralelo com a impressão do recibo.
+      if (docType === "fiscal" && storeId) {
+        void (async () => {
+          const r = await emitDirectFiscal({ storeId, saleId });
+          if (r.ok) {
+            toast.success(`NFC-e autorizada · ${r.chave ? "chave " + r.chave.slice(-8) : "protocolo " + (r.protocolo ?? "—")}`);
+          } else {
+            toast.error(`NFC-e falhou: ${r.error ?? "erro desconhecido"}. Reemita em Fiscal → Pendentes.`);
+          }
+          qc.invalidateQueries({ queryKey: ["fiscal-pending"] });
+          qc.invalidateQueries({ queryKey: ["invoices"] });
+        })();
+      }
       const shouldPrint = settings.data?.print_auto ?? true;
       if (shouldPrint && store) {
         const change = overpaid;
