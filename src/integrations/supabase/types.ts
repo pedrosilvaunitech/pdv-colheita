@@ -1705,7 +1705,14 @@ export type Database = {
     Enums: {
       app_role: "admin" | "gerente" | "caixa" | "estoquista" | "admin_dev"
       fiscal_env: "homologacao" | "producao"
-      fiscal_provider: "none" | "focus_nfe" | "nfe_io" | "plugnotas"
+      fiscal_provider:
+        | "none"
+        | "focus_nfe"
+        | "nfe_io"
+        | "plugnotas"
+        | "webmania"
+        | "tecnospeed"
+        | "direto_sefaz"
       invoice_status:
         | "rascunho"
         | "processando"
@@ -1857,7 +1864,15 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "gerente", "caixa", "estoquista", "admin_dev"],
       fiscal_env: ["homologacao", "producao"],
-      fiscal_provider: ["none", "focus_nfe", "nfe_io", "plugnotas"],
+      fiscal_provider: [
+        "none",
+        "focus_nfe",
+        "nfe_io",
+        "plugnotas",
+        "webmania",
+        "tecnospeed",
+        "direto_sefaz",
+      ],
       invoice_status: [
         "rascunho",
         "processando",
