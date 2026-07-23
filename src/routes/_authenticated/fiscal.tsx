@@ -305,7 +305,7 @@ function FiscalPage() {
   );
 }
 
-function FiscalConfigCard({ storeId, config }: { storeId: string; config: Record<string, unknown> | null | undefined }) {
+function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: StoreRow; config: Record<string, unknown> | null | undefined }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<FiscalForm>({ ...DEFAULT_CONFIG });
   const testConn = useServerFn(testFiscalConnection);
