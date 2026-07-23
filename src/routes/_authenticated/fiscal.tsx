@@ -79,7 +79,14 @@ const STEPS: Step[] = [
   },
 ];
 
-type FiscalProvider = "none" | "focus_nfe" | "nfe_io" | "plugnotas";
+type FiscalProvider =
+  | "none"
+  | "focus_nfe"
+  | "nfe_io"
+  | "plugnotas"
+  | "webmania"
+  | "tecnospeed"
+  | "direto_sefaz";
 type FiscalEnv = "homologacao" | "producao";
 interface FiscalForm {
   provider: FiscalProvider;
@@ -92,7 +99,30 @@ interface FiscalForm {
   csc_token: string;
   certificate_uploaded: boolean;
   certificate_expires_on: string;
+  cnae: string;
+  crt: string;
+  provider_api_url: string;
+  defer_credentials: boolean;
+  credentials_note: string;
 }
+const PROVIDER_LABELS: Record<FiscalProvider, string> = {
+  none: "Nenhum (só checklist)",
+  focus_nfe: "Focus NFe",
+  nfe_io: "NFe.io",
+  plugnotas: "PlugNotas",
+  webmania: "WebmaniaBR",
+  tecnospeed: "TecnoSpeed",
+  direto_sefaz: "Direto SEFAZ (avançado)",
+};
+const PROVIDER_SECRET: Record<FiscalProvider, string | null> = {
+  none: null,
+  focus_nfe: "FISCAL_FOCUS_NFE_TOKEN",
+  nfe_io: "FISCAL_NFE_IO_API_KEY",
+  plugnotas: "FISCAL_PLUGNOTAS_API_KEY",
+  webmania: "FISCAL_WEBMANIA_API_KEY",
+  tecnospeed: "FISCAL_TECNOSPEED_API_KEY",
+  direto_sefaz: null,
+};
 const DEFAULT_CONFIG: FiscalForm = {
   provider: "none",
   environment: "homologacao",
@@ -104,7 +134,48 @@ const DEFAULT_CONFIG: FiscalForm = {
   csc_token: "",
   certificate_uploaded: false,
   certificate_expires_on: "",
+  cnae: "",
+  crt: "",
+  provider_api_url: "",
+  defer_credentials: true,
+  credentials_note: "",
 };
+
+function validateFiscalForm(f: FiscalForm): string | null {
+  if (f.provider === "none" && f.environment === "producao") {
+    return "Para operar em produção você precisa escolher um provedor de emissão.";
+  }
+  if (f.provider === "direto_sefaz") {
+    return "'Direto SEFAZ' exige servidor Node externo — o backend Lovable (Cloudflare Workers) não suporta assinatura XML-DSig + mutual TLS. Escolha um provedor de API.";
+  }
+  if (f.environment === "producao") {
+    if (!f.cnae.trim()) return "CNAE principal é obrigatório em produção.";
+    if (!f.crt) return "CRT (Código de Regime Tributário) é obrigatório em produção.";
+    if (!f.csc_id.trim() || !f.csc_token.trim()) return "CSC ID e CSC Token são obrigatórios para emitir NFC-e em produção.";
+    if (!f.certificate_uploaded) return "Envie o certificado A1 (.pfx) antes de virar produção.";
+    if (f.defer_credentials) return "Desmarque 'Configurar credencial depois' e cadastre a chave do provedor antes de virar produção.";
+  }
+  if (f.nfce_series < 1 || f.nfce_next_number < 1) return "Série e próximo número da NFC-e precisam ser ≥ 1.";
+  if (f.cnae && !/^\d{4}-\d\/\d{2}$/.test(f.cnae.trim())) {
+    return "CNAE deve seguir o formato 9999-9/99 (ex.: 4711-3/02).";
+  }
+  return null;
+}
+
+function friendlyError(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("row-level security") || m.includes("row level security")) {
+    return "Você não tem permissão para alterar a configuração desta loja. Peça a um admin/gerente.";
+  }
+  if (m.includes("invalid input value for enum")) {
+    const match = msg.match(/"([^"]+)"/);
+    return `Valor "${match?.[1] ?? "?"}" ainda não é aceito no banco. Recarregue a página e tente de novo.`;
+  }
+  if (m.includes("duplicate key")) return "Já existe uma configuração fiscal para esta loja. Ela foi atualizada.";
+  if (m.includes("not-null") || m.includes("null value")) return "Um campo obrigatório ficou vazio. Revise o formulário.";
+  if (m.includes("permission denied")) return "Sem permissão do banco para essa operação. Confirme que você é admin/gerente da loja.";
+  return msg;
+}
 
 function FiscalPage() {
   const { store, storeId } = useCurrentStore();
