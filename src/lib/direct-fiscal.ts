@@ -179,3 +179,94 @@ export async function testHomologacaoViaAgent(input: DirectEmitInput): Promise<D
   }
   return result;
 }
+
+/**
+ * Emissão VPS server-side. Reserva número + monta DTO no navegador
+ * (usa RLS do usuário logado) e transmite pelo backend com Bearer.
+ */
+export async function emitViaVpsFlow(input: DirectEmitInput): Promise<DirectEmitResult> {
+  const reserved = await reserveNumber(input.storeId);
+  const environment = input.environment ?? (reserved.environment as "homologacao" | "producao");
+  const dto = await buildSaleDto(input.saleId, input.storeId, environment, reserved.series, reserved.number);
+  const started = Date.now();
+  const r = await emitViaVps({ data: { storeId: input.storeId, dto } });
+  return { ...(r as Record<string, unknown>), channel: "vps", elapsed_ms: (r as { elapsed_ms?: number }).elapsed_ms ?? Date.now() - started } as DirectEmitResult;
+}
+
+/**
+ * Fluxo completo pós-venda: consulta emitInvoice (autorização + delegate),
+ * despacha para agente local ou VPS, grava invoice + atualiza sales.fiscal_status.
+ * Retorna resultado unificado. Não lança — grava "falha" e devolve error.
+ */
+export async function emitDirectFiscal(params: {
+  storeId: string;
+  saleId: string;
+}): Promise<DirectEmitResult & { invoiceId?: string }> {
+  const { storeId, saleId } = params;
+  let result: DirectEmitResult;
+  try {
+    const dispatch = (await emitInvoice({ data: { storeId, saleId, type: "nfce" } })) as
+      | { delegate: "agent_local"; environment: string }
+      | { delegate: "vps"; environment: string; vps_url: string; secret_name: string }
+      | { invoiceId: string; status: string };
+
+    if (!("delegate" in dispatch)) {
+      // Provedor terceirizado (Focus/PlugNotas). Já criou invoice=processando.
+      await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", saleId);
+      return { ok: true, channel: "vps", invoiceId: dispatch.invoiceId };
+    }
+
+    if (dispatch.delegate === "agent_local") {
+      result = await emitViaAgent({ storeId, saleId, environment: dispatch.environment as "homologacao" | "producao" });
+    } else {
+      result = await emitViaVpsFlow({ storeId, saleId, environment: dispatch.environment as "homologacao" | "producao" });
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await supabase.from("sales").update({ fiscal_status: "falha" }).eq("id", saleId).then(
+      () => undefined,
+      () => undefined,
+    );
+    return { ok: false, channel: "agent_local", error: msg };
+  }
+
+  if (!result.ok) {
+    await supabase.from("sales").update({ fiscal_status: "falha" }).eq("id", saleId);
+    return result;
+  }
+
+  // Grava invoice autorizada + atualiza sale.
+  try {
+    const { data: sale } = await supabase.from("sales").select("total").eq("id", saleId).single();
+    const { data: cfg } = await supabase
+      .from("fiscal_configs")
+      .select("nfce_series, nfce_next_number, environment")
+      .eq("store_id", storeId)
+      .single();
+    const { data: inv } = await supabase
+      .from("invoices")
+      .insert({
+        store_id: storeId,
+        sale_id: saleId,
+        type: "nfce",
+        status: "autorizada",
+        environment: (cfg?.environment ?? result.ambiente ?? "homologacao") as "homologacao" | "producao",
+        series: cfg?.nfce_series ?? 1,
+        number: cfg?.nfce_next_number ?? 1,
+        total: Number(sale?.total ?? 0),
+        access_key: result.chave ?? null,
+        protocol: result.protocolo ?? null,
+        danfe_url: result.qr_url ?? null,
+        provider_response: result as unknown as Record<string, unknown>,
+        issued_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", saleId);
+    return { ...result, invoiceId: inv?.id };
+  } catch (e) {
+    console.warn("[direct-fiscal] emissão OK mas falhou ao gravar invoice:", e);
+    await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", saleId);
+    return result;
+  }
+}
