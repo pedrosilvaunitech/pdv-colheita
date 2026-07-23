@@ -1,7 +1,7 @@
 {
   "name": "bastion-pos-agent",
   "productName": "Bastion POS Agent",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "Agente de Impressão Local + Wrapper Desktop do Bastion POS. Escuta em 127.0.0.1:9100 e imprime ESC/POS via USB sem tela de diálogo.",
   "main": "main.cjs",
   "author": "Bastion POS",
@@ -20,7 +20,10 @@
     "usb": "^2.14.0"
   },
   "optionalDependencies": {
-    "@thiagoelg/node-printer": "^0.6.2"
+    "@thiagoelg/node-printer": "^0.6.2",
+    "node-dfe": "^1.0.0",
+    "node-forge": "^1.3.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "electron": "^33.0.0",

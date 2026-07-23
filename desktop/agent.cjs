@@ -29,7 +29,12 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.3.2";
+const VERSION = "1.4.0";
+
+// Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
+let nfce = null;
+try { nfce = require("./nfce"); }
+catch (e) { console.warn("[agent] nfce module indisponível:", e.message); }
 
 // Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
 // quando o driver não reporta e para exibir o modelo real na UI.
@@ -548,8 +553,66 @@ function startAgent(options = {}) {
     }
   });
 
+  // ────────────────────────────────────────────────────────────────
+  // NFC-e — Emissão direta SEFAZ (via node-dfe)
+  // ────────────────────────────────────────────────────────────────
+  app.get("/nfce/config", (_req, res) => {
+    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado (falta node-dfe)." });
+    res.json({ ok: true, engine_ready: nfce.isAvailable(), config: nfce.maskFiscalConfig(nfce.loadFiscalConfig()) });
+  });
+
+  app.post("/nfce/config", (req, res) => {
+    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado." });
+    try {
+      const body = req.body || {};
+      const current = nfce.loadFiscalConfig() || {};
+      // Não sobrescreve senha com máscara vazia se o cliente não mandou nova.
+      const merged = { ...current, ...body };
+      if (!body.pfx_password) merged.pfx_password = current.pfx_password;
+      nfce.saveFiscalConfig(merged);
+      res.json({ ok: true, config: nfce.maskFiscalConfig(merged) });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  app.get("/nfce/certificate", (_req, res) => {
+    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado." });
+    const cfg = nfce.loadFiscalConfig();
+    if (!cfg?.pfx_path || !cfg?.pfx_password) return res.status(400).json({ ok: false, error: "Certificado não configurado." });
+    res.json(nfce.inspectCertificate(cfg.pfx_path, cfg.pfx_password));
+  });
+
+  app.get("/nfce/status", async (_req, res) => {
+    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado." });
+    try { res.json(await nfce.statusServico()); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  app.post("/nfce/emit", async (req, res) => {
+    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado. Instale node-dfe na pasta do agente." });
+    try {
+      const started = Date.now();
+      const result = await nfce.emitNFCe(req.body || {});
+      res.status(result.ok ? 200 : 502).json({ ...result, elapsed_ms: Date.now() - started });
+    } catch (e) {
+      console.error("[agent] nfce/emit:", e);
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
+  app.post("/nfce/cancel", async (req, res) => {
+    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado." });
+    try { res.json(await nfce.cancelNFCe(req.body || {})); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  app.post("/nfce/inutilizar", async (req, res) => {
+    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado." });
+    try { res.json(await nfce.inutilizarFaixa(req.body || {})); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
   const server = app.listen(PORT, "127.0.0.1", () => {
-    console.log(`[bastion-agent] http://127.0.0.1:${PORT} · v${VERSION} · spooler=${!!nodePrinter || process.platform === "win32"} usb=true`);
+    console.log(`[bastion-agent] http://127.0.0.1:${PORT} · v${VERSION} · spooler=${!!nodePrinter || process.platform === "win32"} usb=true nfce=${nfce?.isAvailable() ? "ready" : "off"}`);
   });
   return server;
 }

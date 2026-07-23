@@ -17,6 +17,7 @@ import { emitInvoice, testFiscalConnection } from "@/lib/fiscal.functions";
 import { CscTokenAssistant } from "@/components/fiscal/csc-token-assistant";
 import { CnpjPrefillButton } from "@/components/fiscal/cnpj-prefill-button";
 import { NfceNumberingCard } from "@/components/fiscal/nfce-numbering-card";
+import { DirectEngineCard } from "@/components/fiscal/direct-engine-card";
 import { validateIE, SEFAZ_LINKS, lookupCnpj, suggestCRT } from "@/lib/cnpj-lookup";
 import type { StoreRow } from "@/lib/current-store";
 
@@ -276,6 +277,7 @@ function FiscalPage() {
           <div className="space-y-4">
             <FiscalConfigCard storeId={storeId!} store={store} config={config} />
             <NfceNumberingCard storeId={storeId!} />
+            <DirectEngineCard storeId={storeId!} />
             <PendingFiscalCard storeId={storeId!} />
             <div className="border border-border rounded-md bg-card p-5">
               <h3 className="text-sm font-semibold mb-3">Notas recentes</h3>
