@@ -10,10 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, AlertTriangle, FileText, ShieldCheck, ExternalLink, Send, Loader2, PlugZap } from "lucide-react";
+import { CheckCircle2, Circle, AlertTriangle, FileText, ShieldCheck, ExternalLink, Send, Loader2, PlugZap, Search } from "lucide-react";
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { emitInvoice, testFiscalConnection } from "@/lib/fiscal.functions";
+import { CscTokenAssistant } from "@/components/fiscal/csc-token-assistant";
+import { CnpjPrefillButton } from "@/components/fiscal/cnpj-prefill-button";
+import { NfceNumberingCard } from "@/components/fiscal/nfce-numbering-card";
+import { validateIE, SEFAZ_LINKS, lookupCnpj, suggestCRT } from "@/lib/cnpj-lookup";
+import type { StoreRow } from "@/lib/current-store";
 
 export const Route = createFileRoute("/_authenticated/fiscal")({
   component: FiscalPage,
