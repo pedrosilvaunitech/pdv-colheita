@@ -34,9 +34,19 @@ export interface DirectEmitResult {
   error?: string;
 }
 
-async function fetchAgentUrl(): Promise<string | null> {
-  try { return await getAgentBaseUrl(); }
-  catch { return null; }
+const AGENT_BASE_URLS = ["http://127.0.0.1:9100", "http://localhost:9100"];
+
+async function findAgentUrl(): Promise<string | null> {
+  const ping = await pingPrintAgent(3000).catch(() => null);
+  if (!ping?.online) return null;
+  // pingPrintAgent tenta os dois hosts internamente; usamos o primeiro que responde no fetch.
+  for (const base of AGENT_BASE_URLS) {
+    try {
+      const r = await fetch(`${base}/status`, { signal: AbortSignal.timeout(2000) });
+      if (r.ok) return base;
+    } catch { /* tenta próximo */ }
+  }
+  return null;
 }
 
 async function reserveNumber(storeId: string) {
