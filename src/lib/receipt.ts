@@ -42,7 +42,24 @@ export interface ReceiptData {
   document_type: "fiscal" | "nao_fiscal";
   issued_at: Date;
   customer?: { name?: string | null; doc?: string | null };
+  /**
+   * Dados retornados pela SEFAZ após autorização. Quando presente, o cupom
+   * imprime o QR Code real, a chave de acesso verdadeira e o protocolo —
+   * é isto que diferencia a reimpressão autorizada do cupom provisório.
+   */
+  fiscal?: {
+    chave?: string | null;
+    protocolo?: string | null;
+    qr_url?: string | null;
+    /** data:image/png;base64,… gerado pelo agente/VPS. */
+    qr_png?: string | null;
+    ambiente?: string | null;
+    series?: number | null;
+    number?: number | null;
+    issued_at?: string | null;
+  } | null;
 }
+
 
 const num = (v: number, d = 2) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
