@@ -19,6 +19,7 @@ import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedPdvRouteImport } from './routes/_authenticated/pdv'
 import { Route as AuthenticatedLojasRouteImport } from './routes/_authenticated/lojas'
 import { Route as AuthenticatedFornecedoresRouteImport } from './routes/_authenticated/fornecedores'
+import { Route as AuthenticatedFiscalErrosRouteImport } from './routes/_authenticated/fiscal-erros'
 import { Route as AuthenticatedFiscalRouteImport } from './routes/_authenticated/fiscal'
 import { Route as AuthenticatedEstoqueRouteImport } from './routes/_authenticated/estoque'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -77,6 +78,12 @@ const AuthenticatedFornecedoresRoute =
   AuthenticatedFornecedoresRouteImport.update({
     id: '/fornecedores',
     path: '/fornecedores',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedFiscalErrosRoute =
+  AuthenticatedFiscalErrosRouteImport.update({
+    id: '/fiscal-erros',
+    path: '/fiscal-erros',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedFiscalRoute = AuthenticatedFiscalRouteImport.update({
@@ -138,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/estoque': typeof AuthenticatedEstoqueRoute
   '/fiscal': typeof AuthenticatedFiscalRoute
+  '/fiscal-erros': typeof AuthenticatedFiscalErrosRoute
   '/fornecedores': typeof AuthenticatedFornecedoresRoute
   '/lojas': typeof AuthenticatedLojasRoute
   '/pdv': typeof AuthenticatedPdvRoute
@@ -158,6 +166,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/estoque': typeof AuthenticatedEstoqueRoute
   '/fiscal': typeof AuthenticatedFiscalRoute
+  '/fiscal-erros': typeof AuthenticatedFiscalErrosRoute
   '/fornecedores': typeof AuthenticatedFornecedoresRoute
   '/lojas': typeof AuthenticatedLojasRoute
   '/pdv': typeof AuthenticatedPdvRoute
@@ -180,6 +189,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/estoque': typeof AuthenticatedEstoqueRoute
   '/_authenticated/fiscal': typeof AuthenticatedFiscalRoute
+  '/_authenticated/fiscal-erros': typeof AuthenticatedFiscalErrosRoute
   '/_authenticated/fornecedores': typeof AuthenticatedFornecedoresRoute
   '/_authenticated/lojas': typeof AuthenticatedLojasRoute
   '/_authenticated/pdv': typeof AuthenticatedPdvRoute
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/estoque'
     | '/fiscal'
+    | '/fiscal-erros'
     | '/fornecedores'
     | '/lojas'
     | '/pdv'
@@ -222,6 +233,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/estoque'
     | '/fiscal'
+    | '/fiscal-erros'
     | '/fornecedores'
     | '/lojas'
     | '/pdv'
@@ -243,6 +255,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/estoque'
     | '/_authenticated/fiscal'
+    | '/_authenticated/fiscal-erros'
     | '/_authenticated/fornecedores'
     | '/_authenticated/lojas'
     | '/_authenticated/pdv'
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFornecedoresRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/fiscal-erros': {
+      id: '/_authenticated/fiscal-erros'
+      path: '/fiscal-erros'
+      fullPath: '/fiscal-erros'
+      preLoaderRoute: typeof AuthenticatedFiscalErrosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/fiscal': {
       id: '/_authenticated/fiscal'
       path: '/fiscal'
@@ -407,6 +427,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedEstoqueRoute: typeof AuthenticatedEstoqueRoute
   AuthenticatedFiscalRoute: typeof AuthenticatedFiscalRoute
+  AuthenticatedFiscalErrosRoute: typeof AuthenticatedFiscalErrosRoute
   AuthenticatedFornecedoresRoute: typeof AuthenticatedFornecedoresRoute
   AuthenticatedLojasRoute: typeof AuthenticatedLojasRoute
   AuthenticatedPdvRoute: typeof AuthenticatedPdvRoute
@@ -425,6 +446,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedEstoqueRoute: AuthenticatedEstoqueRoute,
   AuthenticatedFiscalRoute: AuthenticatedFiscalRoute,
+  AuthenticatedFiscalErrosRoute: AuthenticatedFiscalErrosRoute,
   AuthenticatedFornecedoresRoute: AuthenticatedFornecedoresRoute,
   AuthenticatedLojasRoute: AuthenticatedLojasRoute,
   AuthenticatedPdvRoute: AuthenticatedPdvRoute,

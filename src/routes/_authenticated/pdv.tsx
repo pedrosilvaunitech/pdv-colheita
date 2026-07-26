@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ReceiptData } from "@/lib/receipt";
 import { tryPrintEscPos } from "@/lib/escpos";
 import { emitDirectFiscal } from "@/lib/direct-fiscal";
+import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
 import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
 import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
@@ -430,10 +431,18 @@ function PdvPage() {
         void (async () => {
           const r = await emitDirectFiscal({ storeId, saleId });
           if (r.ok) {
-            toast.success(`NFC-e autorizada · ${r.chave ? "chave " + r.chave.slice(-8) : "protocolo " + (r.protocolo ?? "—")}`);
+            toast.success(
+              `NFC-e autorizada${r.fellBackToVps ? " (via VPS)" : ""} · ${r.chave ? "chave " + r.chave.slice(-8) : "protocolo " + (r.protocolo ?? "—")}`,
+            );
+            // Reimprime a via do consumidor já com chave, protocolo e QR real.
+            if (settings.data?.print_auto ?? true) {
+              const rp = await reprintAuthorizedReceipt(saleId);
+              if (!rp.ok) toast.warning(`Cupom com QR não impresso: ${rp.error ?? "erro"}. Reimprima em Erros fiscais.`);
+            }
           } else {
-            toast.error(`NFC-e falhou: ${r.error ?? "erro desconhecido"}. Reemita em Fiscal → Pendentes.`);
+            toast.error(`NFC-e falhou: ${r.error ?? "erro desconhecido"}. Reemissão automática agendada · veja Erros fiscais.`);
           }
+
           qc.invalidateQueries({ queryKey: ["fiscal-pending"] });
           qc.invalidateQueries({ queryKey: ["invoices"] });
         })();
