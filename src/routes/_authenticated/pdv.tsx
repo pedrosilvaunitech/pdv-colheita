@@ -447,8 +447,22 @@ function PdvPage() {
           qc.invalidateQueries({ queryKey: ["invoices"] });
         })();
       }
+      // Gaveta: abre junto com o cupom quando houver dinheiro/troco envolvido.
+      // Best-effort — nunca bloqueia a conclusão da venda.
+      {
+        const hasCash = payments.some((p) => p.method === "dinheiro") || overpaid > 0;
+        if (shouldAutoOpen(settings.data as never, hasCash)) {
+          void openCashDrawer({
+            storeId, saleId, reason: "venda", automatic: true,
+            pin: ((settings.data as never as { drawer_pulse_pin?: 0 | 1 })?.drawer_pulse_pin ?? 0),
+          }).then((res) => {
+            if (!res.ok) toast.warning(`Gaveta não abriu: ${res.error ?? "sem canal"}`);
+          });
+        }
+      }
       const shouldPrint = settings.data?.print_auto ?? true;
       if (shouldPrint && store) {
+
         const change = overpaid;
         // pagamentos "efetivos" (com troco descontado do último dinheiro) para o recibo
         const effective = payments.map((p) => ({ ...p }));
