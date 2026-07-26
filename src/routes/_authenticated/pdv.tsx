@@ -878,6 +878,16 @@ function PdvPage() {
             <Printer className="size-5" />
             {finalize.isPending ? "Finalizando..." : `Finalizar · ${docType === "fiscal" ? "NFC-e" : "Recibo"} · F8`}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+            disabled={(cart.length === 0 && payments.length === 0) || finalize.isPending}
+            onClick={() => setCancelOpen(true)}
+          >
+            <X className="size-4" />
+            Cancelar venda{cashReceived > 0 ? ` · devolver ${brl(cashReceived)}` : ""}
+          </Button>
           {docType === "fiscal" && (
             <p className="text-[10px] font-mono uppercase text-warning text-center">
               Emissão real de NFC-e pendente · configure módulo fiscal
