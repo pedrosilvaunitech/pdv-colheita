@@ -458,7 +458,7 @@ function PdvPage() {
           void openCashDrawer({
             storeId, saleId, reason: "venda", automatic: true,
             pin: ((settings.data as never as { drawer_pulse_pin?: 0 | 1 })?.drawer_pulse_pin ?? 0),
-          }).then((res) => {
+          }).then((res: { ok: boolean; error?: string }) => {
             if (!res.ok) toast.warning(`Gaveta não abriu: ${res.error ?? "sem canal"}`);
           });
         }
