@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ShiftReport } from "@/components/reports/shift-report";
 
 export const Route = createFileRoute("/_authenticated/relatorios")({ component: RelatoriosPage });
 
@@ -122,6 +123,9 @@ function RelatoriosPage() {
           <Kpi label="Vendas no período" value={brl(data.total)} icon={ShoppingCart} />
           <Kpi label="Ticket médio" value={brl(data.avgTicket)} icon={BarChart3} />
         </section>
+
+        {storeId && <ShiftReport storeId={storeId} />}
+
 
         <section className="grid gap-4 xl:grid-cols-3">
           <div className="xl:col-span-2 border border-border rounded-md bg-card p-4">

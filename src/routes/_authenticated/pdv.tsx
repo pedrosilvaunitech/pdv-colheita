@@ -368,7 +368,56 @@ function PdvPage() {
   };
 
 
-  const removePayment = (idx: number) => setPayments((p) => p.filter((_, i) => i !== idx));
+  /**
+   * Remover um pagamento em dinheiro significa devolver cédulas ao cliente —
+   * a gaveta precisa abrir para o operador conseguir fazer isso.
+   */
+  const removePayment = (idx: number) => {
+    const removed = payments[idx];
+    setPayments((p) => p.filter((_, i) => i !== idx));
+    if (removed?.method === "dinheiro" && removed.amount > 0) {
+      void openCashDrawer({
+        storeId, reason: "cancelamento", automatic: true,
+        pin: ((settings.data as never as { drawer_pulse_pin?: 0 | 1 })?.drawer_pulse_pin ?? 0),
+      }).then((res) => {
+        if (!res.ok) toast.warning(`Gaveta não abriu para devolução: ${res.error ?? "sem canal"}`);
+      });
+    }
+  };
+
+  /** Valor já recebido em dinheiro nesta venda (usado no cancelamento). */
+  const cashReceived = useMemo(
+    () => payments.filter((p) => p.method === "dinheiro").reduce((s, p) => s + p.amount, 0),
+    [payments],
+  );
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  /**
+   * Cancela a venda em andamento (nada foi gravado no banco ainda) e abre a
+   * gaveta quando há dinheiro a devolver, registrando o evento na auditoria.
+   */
+  const cancelSale = async () => {
+    setCancelling(true);
+    try {
+      if (cashReceived > 0) {
+        const res = await openCashDrawer({
+          storeId, reason: "cancelamento", automatic: false,
+          pin: ((settings.data as never as { drawer_pulse_pin?: 0 | 1 })?.drawer_pulse_pin ?? 0),
+        });
+        if (!res.ok) toast.warning(`Gaveta não abriu: ${res.error ?? "sem canal"} · devolva ${brl(cashReceived)} manualmente`);
+        else toast.success(`Gaveta aberta para devolver ${brl(cashReceived)}`);
+      }
+      setCart([]); setPayments([]); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
+      setLinkedComandas([]);
+      toast.info("Venda cancelada");
+      inputRef.current?.focus();
+    } finally {
+      setCancelling(false);
+      setCancelOpen(false);
+    }
+  };
+
 
   const finalize = useMutation({
     mutationFn: async () => {
@@ -829,6 +878,16 @@ function PdvPage() {
             <Printer className="size-5" />
             {finalize.isPending ? "Finalizando..." : `Finalizar · ${docType === "fiscal" ? "NFC-e" : "Recibo"} · F8`}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+            disabled={(cart.length === 0 && payments.length === 0) || finalize.isPending}
+            onClick={() => setCancelOpen(true)}
+          >
+            <X className="size-4" />
+            Cancelar venda{cashReceived > 0 ? ` · devolver ${brl(cashReceived)}` : ""}
+          </Button>
           {docType === "fiscal" && (
             <p className="text-[10px] font-mono uppercase text-warning text-center">
               Emissão real de NFC-e pendente · configure módulo fiscal
@@ -862,6 +921,30 @@ function PdvPage() {
         onApproved={onTefApproved}
       />
 
+
+      {/* Cancelamento da venda em andamento — abre a gaveta se houver dinheiro a devolver */}
+      <AlertDialog open={cancelOpen} onOpenChange={(o) => { if (!o) setCancelOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta venda?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O carrinho ({cart.length} item(ns)) e os pagamentos lançados serão descartados.
+              {cashReceived > 0
+                ? ` A gaveta será aberta para devolver ${brl(cashReceived)} em dinheiro ao cliente, e a abertura ficará registrada na auditoria.`
+                : " Nenhum valor em dinheiro foi recebido, então a gaveta não será aberta."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelling}
+              onClick={(e) => { e.preventDefault(); void cancelSale(); }}
+            >
+              {cancelling ? "Cancelando…" : cashReceived > 0 ? "Cancelar e abrir gaveta" : "Cancelar venda"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Pós-impressão: pergunta se quer emitir o cupom fiscal também */}
       <AlertDialog open={!!pendingFiscal} onOpenChange={(o) => { if (!o) setPendingFiscal(null); }}>

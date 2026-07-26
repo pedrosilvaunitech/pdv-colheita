@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye, Archive } from "lucide-react";
 import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
+import { DrawerPinTest } from "@/components/pdv/drawer-pin-test";
 
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
@@ -388,6 +389,14 @@ function SettingsPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-muted-foreground mt-1">Se a gaveta não abrir com o padrão, troque para o pino 5.</p>
+                </div>
+                <div className="border-t border-border pt-3">
+                  <Label className="text-xs">Teste de pinos</Label>
+                  <DrawerPinTest
+                    storeId={storeId}
+                    className="mt-2"
+                    onWorkingPin={(pin) => setForm({ ...form, drawer_pulse_pin: pin })}
+                  />
                 </div>
                 {storeId && <CashDrawerButton storeId={storeId} className="w-full" />}
               </div>
