@@ -356,6 +356,42 @@ function SettingsPage() {
                 </div>
               </div>
 
+              <div className="border border-border rounded-md bg-card p-4 space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2"><Archive className="size-4" /> Gaveta de dinheiro</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  A gaveta é aberta por um pulso enviado à impressora térmica (conector RJ11/RJ12). Funciona pelo Agente Local e, como reserva, por WebUSB/Serial.
+                </p>
+                <div className="flex items-center justify-between">
+                  <div><Label>Abrir automaticamente</Label><p className="text-xs text-muted-foreground">Ao finalizar a venda</p></div>
+                  <Switch checked={form.drawer_auto} onCheckedChange={(c) => setForm({ ...form, drawer_auto: c })} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div><Label>Somente com dinheiro</Label><p className="text-xs text-muted-foreground">Não abre em cartão/PIX sem troco</p></div>
+                  <Switch
+                    checked={form.drawer_cash_only}
+                    disabled={!form.drawer_auto}
+                    onCheckedChange={(c) => setForm({ ...form, drawer_cash_only: c })}
+                  />
+                </div>
+                <div>
+                  <Label>Pino do conector</Label>
+                  <Select
+                    value={String(form.drawer_pulse_pin)}
+                    onValueChange={(v) => setForm({ ...form, drawer_pulse_pin: Number(v) as 0 | 1 })}
+                  >
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Pino 2 (padrão)</SelectItem>
+                      <SelectItem value="1">Pino 5 (alternativo)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">Se a gaveta não abrir com o padrão, troque para o pino 5.</p>
+                </div>
+                {storeId && <CashDrawerButton storeId={storeId} className="w-full" />}
+              </div>
+
+
+
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2"><ImageIcon className="size-4" /> Logo da empresa</h3>
