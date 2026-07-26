@@ -9,7 +9,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { tryPrintEscPos } from "@/lib/escpos";
-import { buildReceiptHTML, printReceiptHTML, type ReceiptData, type ReceiptPayment } from "@/lib/receipt";
+import { buildReceiptHTML, printReceipt, type ReceiptData, type ReceiptPayment } from "@/lib/receipt";
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: "Dinheiro",
@@ -86,7 +86,7 @@ export async function buildAuthorizedReceipt(saleId: string): Promise<Authorized
         name: prod.name ?? "Item",
         quantity: Number(it.quantity ?? 0),
         unit_price: Number(it.unit_price ?? 0),
-        total: Number(it.total_price ?? 0),
+        total: Number(it.total ?? 0),
         barcode: prod.barcode ?? null,
       };
     }),
@@ -125,7 +125,7 @@ export async function reprintAuthorizedReceipt(saleId: string): Promise<{ ok: bo
   try {
     const { data, authorized } = await buildAuthorizedReceipt(saleId);
     const printed = await tryPrintEscPos(data, false);
-    if (!printed) printReceiptHTML(buildReceiptHTML(data));
+    if (!printed) printReceipt(buildReceiptHTML(data));
     return { ok: true, authorized };
   } catch (e) {
     return { ok: false, authorized: false, error: e instanceof Error ? e.message : String(e) };
