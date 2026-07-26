@@ -76,9 +76,9 @@ function FiscalErrorsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices")
-        .select("id, sale_id, series, number, status, error_message, created_at, total")
+        .select("id, sale_id, series, number, status, rejection_reason, created_at, total")
         .eq("store_id", storeId!)
-        .in("status", ["rejeitada", "erro"])
+        .eq("status", "rejeitada")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -149,7 +149,7 @@ function FiscalErrorsPage() {
               <RefreshCw className="size-4 mr-1.5" /> Atualizar
             </Button>
             <Button size="sm" onClick={retryAll} disabled={busy !== null || rows.length === 0}>
-              {busy === "__all__" ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Send className2="" />}
+              {busy === "__all__" ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <RefreshCw className="size-4 mr-1.5" />}
               Reemitir todas ({rows.length})
             </Button>
           </div>
@@ -230,7 +230,7 @@ function FiscalErrorsPage() {
                   <span className="text-[11px] text-muted-foreground ml-auto">{new Date(inv.created_at).toLocaleString("pt-BR")}</span>
                 </div>
                 <p className="text-[11px] text-destructive mt-1 font-mono break-words">
-                  {inv.error_message ?? "Sem detalhe retornado pelo provedor."}
+                  {inv.rejection_reason ?? "Sem detalhe retornado pelo provedor."}
                 </p>
               </li>
             ))}
