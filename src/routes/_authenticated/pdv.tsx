@@ -15,6 +15,9 @@ import { tryPrintEscPos } from "@/lib/escpos";
 import { emitDirectFiscal } from "@/lib/direct-fiscal";
 import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
 import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
+import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
+import { openCashDrawer, shouldAutoOpen } from "@/lib/cash-drawer";
+
 import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 import { ScaleWidget } from "@/components/pdv/scale-widget";
