@@ -237,11 +237,17 @@ function renderBlockEscPos(
       push("Tributos (Lei 12.741/2012): R$ 0,00");
       break;
 
-    case "nfce_info":
+    case "nfce_info": {
       if (!isFiscal) break;
-      push(`NFC-e nº ${r.sale_id.slice(0, 9).toUpperCase()} - Serie 001`);
-      push(`Emissao ${r.issued_at.toLocaleDateString("pt-BR")}`);
+      const f = r.fiscal;
+      const numero = f?.number != null ? String(f.number) : r.sale_id.slice(0, 9).toUpperCase();
+      const serie = String(f?.series ?? 1).padStart(3, "0");
+      const emissao = f?.issued_at ? new Date(f.issued_at) : r.issued_at;
+      push(`NFC-e no ${numero} - Serie ${serie}`);
+      push(`Emissao ${emissao.toLocaleDateString("pt-BR")}`);
+      if (f?.ambiente && f.ambiente !== "producao") push("HOMOLOGACAO - SEM VALOR FISCAL");
       break;
+    }
 
     case "consumer_via":
       if (!isFiscal) break;
@@ -251,13 +257,15 @@ function renderBlockEscPos(
     case "sefaz_link":
       if (!isFiscal) break;
       push("Consulta: www.nfce.sefaz.uf.gov.br");
+      if (r.fiscal?.protocolo) push(`Protocolo: ${r.fiscal.protocolo}`);
       break;
 
     case "qr": {
       if (!isFiscal) break;
-      // Placeholder QR — quando emissao real estiver ativa, substituir por
-      // GS ( k … com a URL retornada pela SEFAZ.
-      const url = `https://www.nfce.sefaz.uf.gov.br/?chNFe=${fakeChave(r.sale_id)}`;
+      // Com autorização: imprime a URL oficial devolvida pela SEFAZ (contém o
+      // hash CSC). Sem autorização: QR provisório só para conferência visual.
+      const url = r.fiscal?.qr_url
+        ?? `https://www.nfce.sefaz.uf.gov.br/?chNFe=${r.fiscal?.chave ?? fakeChave(r.sale_id)}`;
       const data = new TextEncoder().encode(url);
       const storeLen = data.length + 3;
       out.push(bytes(GS, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00)); // model 2
@@ -270,11 +278,12 @@ function renderBlockEscPos(
 
     case "chave": {
       if (!isFiscal) break;
-      const chave = fakeChave(r.sale_id);
+      const chave = r.fiscal?.chave ?? fakeChave(r.sale_id);
       push(chave.match(/.{1,4}/g)?.join(" ") ?? chave);
-      push("!! Aguardando autorizacao SEFAZ");
+      if (!r.fiscal?.chave) push("!! Aguardando autorizacao SEFAZ");
       break;
     }
+
 
     case "footer_msg": {
       const t = b.text ?? r.footer ?? "";
