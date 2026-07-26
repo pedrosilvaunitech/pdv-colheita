@@ -77,6 +77,13 @@ function PdvPage() {
   const [payInstallments, setPayInstallments] = useState<number>(1);
   const [pixOpen, setPixOpen] = useState(false);
   const [pixAmount, setPixAmount] = useState<number>(0);
+  // Requisição TEF pendente (null = nenhum pagamento com cartão em andamento).
+  const [tefRequest, setTefRequest] = useState<{
+    amount: number; paymentType: TefPaymentType; installments: number; orderId: string;
+  } | null>(null);
+  const [tefOn, setTefOn] = useState(false);
+  useEffect(() => { setTefOn(isTefEnabled()); }, []);
+
   // Após imprimir um recibo não-fiscal, guardamos os dados para oferecer
   // reemissão como cupom fiscal (NFC-e) sem refazer a venda.
   const [pendingFiscal, setPendingFiscal] = useState<ReceiptData | null>(null);
