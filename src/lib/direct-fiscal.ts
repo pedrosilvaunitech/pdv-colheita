@@ -305,10 +305,11 @@ export async function emitDirectFiscal(params: {
       .select("id")
       .single();
     await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", saleId);
-    return { ...result, invoiceId: inv?.id };
+    return { ...result, invoiceId: inv?.id, fellBackToVps };
   } catch (e) {
     console.warn("[direct-fiscal] emissão OK mas falhou ao gravar invoice:", e);
     await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", saleId);
-    return result;
+    return { ...result, fellBackToVps };
   }
 }
+
