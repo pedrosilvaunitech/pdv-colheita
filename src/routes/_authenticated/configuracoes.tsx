@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye, Archive } from "lucide-react";
 import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
+import { DrawerPinTest } from "@/components/pdv/drawer-pin-test";
 
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
