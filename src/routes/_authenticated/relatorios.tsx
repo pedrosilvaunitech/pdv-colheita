@@ -123,6 +123,9 @@ function RelatoriosPage() {
           <Kpi label="Ticket médio" value={brl(data.avgTicket)} icon={BarChart3} />
         </section>
 
+        {storeId && <ShiftReport storeId={storeId} />}
+
+
         <section className="grid gap-4 xl:grid-cols-3">
           <div className="xl:col-span-2 border border-border rounded-md bg-card p-4">
             <h2 className="text-sm font-semibold">Evolução de vendas</h2>
