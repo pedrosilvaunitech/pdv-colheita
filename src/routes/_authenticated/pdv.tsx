@@ -621,6 +621,8 @@ function PdvPage() {
             {storeId && <CaixaQuickActions storeId={storeId} />}
             <ScaleWidget onWeight={(kg) => applyWeightToLastWeighable(kg)} />
             <EscPosButton />
+            <CashDrawerButton storeId={storeId} compact />
+
             <Select value={docType} onValueChange={(v) => setDocType(v as "fiscal" | "nao_fiscal")}>
               <SelectTrigger className="w-56 h-9">
                 <SelectValue />
