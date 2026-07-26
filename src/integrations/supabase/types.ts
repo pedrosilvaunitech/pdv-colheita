@@ -1220,6 +1220,36 @@ export type Database = {
           },
         ]
       }
+      rpc_audit_log: {
+        Row: {
+          allowed: boolean
+          created_at: string
+          detail: string | null
+          function_name: string
+          id: string
+          store_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          allowed?: boolean
+          created_at?: string
+          detail?: string | null
+          function_name: string
+          id?: string
+          store_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          allowed?: boolean
+          created_at?: string
+          detail?: string | null
+          function_name?: string
+          id?: string
+          store_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       sale_items: {
         Row: {
           barcode: string | null
@@ -1734,6 +1764,15 @@ export type Database = {
           _store_id: string
         }
         Returns: string
+      }
+      log_rpc_attempt: {
+        Args: {
+          _allowed: boolean
+          _detail?: string
+          _function_name: string
+          _store_id: string
+        }
+        Returns: undefined
       }
       lookup_admin_code: {
         Args: { _code: string }
