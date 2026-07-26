@@ -357,3 +357,35 @@ export async function printHtmlViaAgent(
     throw new Error(msg);
   }
 }
+
+/**
+ * Dispara o pulso de abertura da gaveta pelo endpoint dedicado do agente.
+ * A gaveta fica ligada na porta RJ11/RJ12 da impressora térmica, então o
+ * agente traduz isso em um comando ESC/POS enviado à impressora selecionada.
+ * Lança quando o agente está offline ou recusa o pulso — o chamador decide
+ * se cai para WebUSB/Serial.
+ */
+export async function openDrawerViaAgent(
+  printerName?: string | null,
+  source?: PrinterSource | null,
+): Promise<void> {
+  const headers: Record<string, string> = {};
+  const sel = printerName || source
+    ? { name: printerName ?? "", source: source ?? "agent" as PrinterSource }
+    : getSelectedPrinterForStore(getCurrentStoreIdSync());
+  if (sel?.name) headers["X-Printer"] = sel.name;
+  if (sel?.source && sel.source !== "webusb") headers["X-Printer-Source"] = sel.source;
+  try {
+    const r = await fetchAgent("/open-drawer", { method: "POST", headers }, 15000);
+    if (!r.ok) {
+      const msg = await r.text().catch(() => r.statusText);
+      throw new Error(`Agente gaveta ${r.status}: ${msg}`);
+    }
+  } catch (e) {
+    const msg = e instanceof Error && e.message.startsWith("Agente gaveta")
+      ? e.message
+      : explainAgentNetworkError(e);
+    throw new Error(msg);
+  }
+}
+
