@@ -283,7 +283,9 @@ export function buildReceiptHTML(r: ReceiptData, tpl?: ReceiptTemplate): string 
       .totals .val { text-align:right; font-weight:800; }
       .totals .grand td { font-size:${widthMm === 58 ? 12 : 14}px; font-weight:900; padding:3px 0; }
       .chave { font-family:'Courier New',monospace; font-size:${widthMm === 58 ? 9 : 10}px; letter-spacing:0.5px; word-break:break-all; }
+      .qrimg { display:block; width:${widthMm === 58 ? 32 : 40}mm; height:${widthMm === 58 ? 32 : 40}mm; margin:4px auto; image-rendering: pixelated; }
       .qr { width:${widthMm === 58 ? 32 : 40}mm; height:${widthMm === 58 ? 32 : 40}mm; margin:4px auto; border:1px solid #000;
+
             background: repeating-linear-gradient(45deg, #000 0 2px, #fff 2px 4px), #fff;
             display:flex; align-items:center; justify-content:center; }
       .qr .placeholder { background:#fff; padding:2px 4px; font-size:7px; font-weight:700; text-align:center; }
