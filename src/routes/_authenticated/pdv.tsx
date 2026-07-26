@@ -32,10 +32,11 @@ import {
 
 export const Route = createFileRoute("/_authenticated/pdv")({
   component: PdvPage,
-  validateSearch: (s: Record<string, unknown>) => ({
-    kiosk: s.kiosk === "1" || s.kiosk === 1 ? "1" as const : undefined,
+  validateSearch: (s: Record<string, unknown>): { kiosk?: "1"; comanda?: number } => ({
+    kiosk: s.kiosk === "1" || s.kiosk === 1 ? ("1" as const) : undefined,
     comanda: s.comanda != null && s.comanda !== "" ? Number(s.comanda) : undefined,
   }),
+
 });
 
 interface CartItem {
