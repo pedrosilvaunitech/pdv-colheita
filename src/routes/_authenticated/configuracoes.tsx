@@ -395,7 +395,7 @@ function SettingsPage() {
                   <DrawerPinTest
                     storeId={storeId}
                     className="mt-2"
-                    onWorkingPin={(pin) => setForm((f) => ({ ...f, drawer_pulse_pin: pin }))}
+                    onWorkingPin={(pin) => setForm({ ...form, drawer_pulse_pin: pin })}
                   />
                 </div>
                 {storeId && <CashDrawerButton storeId={storeId} className="w-full" />}
