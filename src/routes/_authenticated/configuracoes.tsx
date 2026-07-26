@@ -42,7 +42,11 @@ interface ReceiptSettings {
   font_size: "small" | "medium" | "large";
   thank_you_text: string | null;
   extra_info: string | null;
+  drawer_auto: boolean;
+  drawer_cash_only: boolean;
+  drawer_pulse_pin: 0 | 1;
 }
+
 
 interface FiscalConfig {
   store_id: string;
