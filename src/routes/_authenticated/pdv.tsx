@@ -18,6 +18,9 @@ import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 import { ScaleWidget } from "@/components/pdv/scale-widget";
 import { getToledoScale } from "@/lib/toledo-scale";
+import { TefPaymentDialog } from "@/components/pdv/tef-payment-dialog";
+import { isTefEnabled, setTefEnabled, type TefResult, type TefPaymentType } from "@/lib/tef-agent";
+
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
