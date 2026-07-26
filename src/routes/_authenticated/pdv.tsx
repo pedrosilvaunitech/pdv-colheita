@@ -318,6 +318,17 @@ function PdvPage() {
       setPixOpen(true);
       return;
     }
+    // Cartão com TEF ativo: o valor só entra na venda depois da aprovação no PIN Pad.
+    if ((payMethod === "debito" || payMethod === "credito") && isTefEnabled()) {
+      if (!openReg.data) { toast.error("Abra o caixa antes"); return; }
+      setTefRequest({
+        amount: value,
+        paymentType: payMethod === "credito" ? "credit" : "debit",
+        installments: installments ?? 1,
+        orderId: `PDV-${Date.now().toString(36).toUpperCase()}`,
+      });
+      return;
+    }
     const label = installments && installments > 1
       ? `Crédito ${installments}x de ${brl(value / installments)}`
       : METHOD_LABEL[payMethod];
@@ -325,6 +336,23 @@ function PdvPage() {
     setPayAmount("");
     setPayInstallments(1);
   };
+
+  /** Confirma o pagamento no carrinho somente após aprovação real do TEF. */
+  const onTefApproved = (r: TefResult) => {
+    const method: PayMethod = r.cardType === "credit" ? "credito" : "debito";
+    const inst = Math.max(1, Number(r.installments || 1));
+    const base = inst > 1 ? `Crédito ${inst}x de ${brl(r.amount / inst)}` : METHOD_LABEL[method];
+    setPayments((p) => [...p, {
+      method,
+      amount: r.amount,
+      installments: inst > 1 ? inst : undefined,
+      label: `${base} · NSU ${r.nsu ?? "—"}`,
+    }]);
+    setPayAmount("");
+    setPayInstallments(1);
+    setTefRequest(null);
+  };
+
 
   const removePayment = (idx: number) => setPayments((p) => p.filter((_, i) => i !== idx));
 
