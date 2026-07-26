@@ -17,7 +17,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { sendRawEscPos } from "@/lib/escpos";
 import { openDrawerViaAgent, getTerminalId, isPrintAgentEnabled } from "@/lib/print-agent";
 
-export type DrawerReason = "manual" | "venda" | "sangria" | "suprimento" | "troca" | "teste";
+export type DrawerReason =
+  | "manual"
+  | "venda"
+  | "sangria"
+  | "suprimento"
+  | "troca"
+  | "teste"
+  | "cancelamento";
 
 export interface DrawerSettings {
   /** Abre a gaveta sozinha ao concluir a venda. */
