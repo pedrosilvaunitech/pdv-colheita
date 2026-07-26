@@ -1,8 +1,9 @@
 {
   "name": "bastion-pos-agent",
   "productName": "Bastion POS Agent",
-  "version": "1.4.0",
-  "description": "Agente de Impressão Local + Wrapper Desktop do Bastion POS. Escuta em 127.0.0.1:9100 e imprime ESC/POS via USB sem tela de diálogo.",
+  "version": "1.5.0",
+  "description": "Agente Local do Bastion POS: impressão ESC/POS (USB/spooler), emissão NFC-e direta SEFAZ e TEF multiprovedor (SiTef, PayGo, Cappta, Getnet, Cielo, Rede, Stone, BIN). Escuta em 127.0.0.1:9100.",
+
   "main": "main.cjs",
   "author": "Bastion POS",
   "license": "MIT",
