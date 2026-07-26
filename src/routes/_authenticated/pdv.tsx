@@ -15,6 +15,9 @@ import { tryPrintEscPos } from "@/lib/escpos";
 import { emitDirectFiscal } from "@/lib/direct-fiscal";
 import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
 import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
+import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
+import { openCashDrawer, shouldAutoOpen } from "@/lib/cash-drawer";
+
 import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 import { ScaleWidget } from "@/components/pdv/scale-widget";
@@ -447,8 +450,22 @@ function PdvPage() {
           qc.invalidateQueries({ queryKey: ["invoices"] });
         })();
       }
+      // Gaveta: abre junto com o cupom quando houver dinheiro/troco envolvido.
+      // Best-effort — nunca bloqueia a conclusão da venda.
+      {
+        const hasCash = payments.some((p) => p.method === "dinheiro") || overpaid > 0;
+        if (shouldAutoOpen(settings.data as never, hasCash)) {
+          void openCashDrawer({
+            storeId, saleId, reason: "venda", automatic: true,
+            pin: ((settings.data as never as { drawer_pulse_pin?: 0 | 1 })?.drawer_pulse_pin ?? 0),
+          }).then((res: { ok: boolean; error?: string }) => {
+            if (!res.ok) toast.warning(`Gaveta não abriu: ${res.error ?? "sem canal"}`);
+          });
+        }
+      }
       const shouldPrint = settings.data?.print_auto ?? true;
       if (shouldPrint && store) {
+
         const change = overpaid;
         // pagamentos "efetivos" (com troco descontado do último dinheiro) para o recibo
         const effective = payments.map((p) => ({ ...p }));
@@ -604,6 +621,8 @@ function PdvPage() {
             {storeId && <CaixaQuickActions storeId={storeId} />}
             <ScaleWidget onWeight={(kg) => applyWeightToLastWeighable(kg)} />
             <EscPosButton />
+            <CashDrawerButton storeId={storeId} compact />
+
             <Select value={docType} onValueChange={(v) => setDocType(v as "fiscal" | "nao_fiscal")}>
               <SelectTrigger className="w-56 h-9">
                 <SelectValue />

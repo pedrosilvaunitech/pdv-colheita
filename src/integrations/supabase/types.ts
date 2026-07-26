@@ -326,6 +326,63 @@ export type Database = {
           },
         ]
       }
+      drawer_events: {
+        Row: {
+          automatic: boolean
+          channel: string | null
+          created_at: string
+          created_by: string
+          error_message: string | null
+          id: string
+          reason: string
+          sale_id: string | null
+          store_id: string
+          success: boolean
+          terminal_id: string | null
+        }
+        Insert: {
+          automatic?: boolean
+          channel?: string | null
+          created_at?: string
+          created_by: string
+          error_message?: string | null
+          id?: string
+          reason?: string
+          sale_id?: string | null
+          store_id: string
+          success?: boolean
+          terminal_id?: string | null
+        }
+        Update: {
+          automatic?: boolean
+          channel?: string | null
+          created_at?: string
+          created_by?: string
+          error_message?: string | null
+          id?: string
+          reason?: string
+          sale_id?: string | null
+          store_id?: string
+          success?: boolean
+          terminal_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawer_events_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawer_events_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fiscal_checklist: {
         Row: {
           done: boolean
@@ -1082,6 +1139,9 @@ export type Database = {
           ask_customer: boolean
           created_at: string
           default_document: string
+          drawer_auto: boolean
+          drawer_cash_only: boolean
+          drawer_pulse_pin: number
           extra_info: string | null
           font_size: string
           footer_text: string | null
@@ -1104,6 +1164,9 @@ export type Database = {
           ask_customer?: boolean
           created_at?: string
           default_document?: string
+          drawer_auto?: boolean
+          drawer_cash_only?: boolean
+          drawer_pulse_pin?: number
           extra_info?: string | null
           font_size?: string
           footer_text?: string | null
@@ -1126,6 +1189,9 @@ export type Database = {
           ask_customer?: boolean
           created_at?: string
           default_document?: string
+          drawer_auto?: boolean
+          drawer_cash_only?: boolean
+          drawer_pulse_pin?: number
           extra_info?: string | null
           font_size?: string
           footer_text?: string | null

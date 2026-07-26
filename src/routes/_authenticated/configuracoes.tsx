@@ -13,7 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye } from "lucide-react";
+import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye, Archive } from "lucide-react";
+import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
+
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
 import { DENSITY_LABELS, getPrintDensity, setPrintDensity, type PrintDensity } from "@/lib/print-density";
@@ -42,7 +44,11 @@ interface ReceiptSettings {
   font_size: "small" | "medium" | "large";
   thank_you_text: string | null;
   extra_info: string | null;
+  drawer_auto: boolean;
+  drawer_cash_only: boolean;
+  drawer_pulse_pin: 0 | 1;
 }
+
 
 interface FiscalConfig {
   store_id: string;
@@ -122,6 +128,8 @@ function SettingsPage() {
         show_logo: true, show_cnpj: true, show_address: true, show_operator: true,
         show_customer: true, show_item_code: true, show_qrcode: true,
         font_size: "medium", thank_you_text: "Volte sempre!", extra_info: null,
+        drawer_auto: true, drawer_cash_only: true, drawer_pulse_pin: 0,
+
       };
     },
   });
@@ -349,6 +357,42 @@ function SettingsPage() {
                   <Switch checked={form.ask_customer} onCheckedChange={(c) => setForm({ ...form, ask_customer: c })} />
                 </div>
               </div>
+
+              <div className="border border-border rounded-md bg-card p-4 space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2"><Archive className="size-4" /> Gaveta de dinheiro</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  A gaveta é aberta por um pulso enviado à impressora térmica (conector RJ11/RJ12). Funciona pelo Agente Local e, como reserva, por WebUSB/Serial.
+                </p>
+                <div className="flex items-center justify-between">
+                  <div><Label>Abrir automaticamente</Label><p className="text-xs text-muted-foreground">Ao finalizar a venda</p></div>
+                  <Switch checked={form.drawer_auto} onCheckedChange={(c) => setForm({ ...form, drawer_auto: c })} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div><Label>Somente com dinheiro</Label><p className="text-xs text-muted-foreground">Não abre em cartão/PIX sem troco</p></div>
+                  <Switch
+                    checked={form.drawer_cash_only}
+                    disabled={!form.drawer_auto}
+                    onCheckedChange={(c) => setForm({ ...form, drawer_cash_only: c })}
+                  />
+                </div>
+                <div>
+                  <Label>Pino do conector</Label>
+                  <Select
+                    value={String(form.drawer_pulse_pin)}
+                    onValueChange={(v) => setForm({ ...form, drawer_pulse_pin: Number(v) as 0 | 1 })}
+                  >
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Pino 2 (padrão)</SelectItem>
+                      <SelectItem value="1">Pino 5 (alternativo)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">Se a gaveta não abrir com o padrão, troque para o pino 5.</p>
+                </div>
+                {storeId && <CashDrawerButton storeId={storeId} className="w-full" />}
+              </div>
+
+
 
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
