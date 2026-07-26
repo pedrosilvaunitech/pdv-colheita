@@ -368,7 +368,56 @@ function PdvPage() {
   };
 
 
-  const removePayment = (idx: number) => setPayments((p) => p.filter((_, i) => i !== idx));
+  /**
+   * Remover um pagamento em dinheiro significa devolver cédulas ao cliente —
+   * a gaveta precisa abrir para o operador conseguir fazer isso.
+   */
+  const removePayment = (idx: number) => {
+    const removed = payments[idx];
+    setPayments((p) => p.filter((_, i) => i !== idx));
+    if (removed?.method === "dinheiro" && removed.amount > 0) {
+      void openCashDrawer({
+        storeId, reason: "cancelamento", automatic: true,
+        pin: ((settings.data as never as { drawer_pulse_pin?: 0 | 1 })?.drawer_pulse_pin ?? 0),
+      }).then((res) => {
+        if (!res.ok) toast.warning(`Gaveta não abriu para devolução: ${res.error ?? "sem canal"}`);
+      });
+    }
+  };
+
+  /** Valor já recebido em dinheiro nesta venda (usado no cancelamento). */
+  const cashReceived = useMemo(
+    () => payments.filter((p) => p.method === "dinheiro").reduce((s, p) => s + p.amount, 0),
+    [payments],
+  );
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  /**
+   * Cancela a venda em andamento (nada foi gravado no banco ainda) e abre a
+   * gaveta quando há dinheiro a devolver, registrando o evento na auditoria.
+   */
+  const cancelSale = async () => {
+    setCancelling(true);
+    try {
+      if (cashReceived > 0) {
+        const res = await openCashDrawer({
+          storeId, reason: "cancelamento", automatic: false,
+          pin: ((settings.data as never as { drawer_pulse_pin?: 0 | 1 })?.drawer_pulse_pin ?? 0),
+        });
+        if (!res.ok) toast.warning(`Gaveta não abriu: ${res.error ?? "sem canal"} · devolva ${brl(cashReceived)} manualmente`);
+        else toast.success(`Gaveta aberta para devolver ${brl(cashReceived)}`);
+      }
+      setCart([]); setPayments([]); setDiscount("0"); setCustomerCpf(""); setCustomerName("");
+      setLinkedComandas([]);
+      toast.info("Venda cancelada");
+      inputRef.current?.focus();
+    } finally {
+      setCancelling(false);
+      setCancelOpen(false);
+    }
+  };
+
 
   const finalize = useMutation({
     mutationFn: async () => {
