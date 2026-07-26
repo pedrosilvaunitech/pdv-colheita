@@ -823,6 +823,18 @@ function PdvPage() {
         />
       )}
 
+      <TefPaymentDialog
+        open={!!tefRequest}
+        amount={tefRequest?.amount ?? 0}
+        paymentType={tefRequest?.paymentType ?? "debit"}
+        installments={tefRequest?.installments ?? 1}
+        orderId={tefRequest?.orderId ?? ""}
+        terminal={storeId ?? null}
+        onClose={() => setTefRequest(null)}
+        onApproved={onTefApproved}
+      />
+
+
       {/* Pós-impressão: pergunta se quer emitir o cupom fiscal também */}
       <AlertDialog open={!!pendingFiscal} onOpenChange={(o) => { if (!o) setPendingFiscal(null); }}>
         <AlertDialogContent>
