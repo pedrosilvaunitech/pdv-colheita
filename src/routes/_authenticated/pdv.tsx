@@ -922,6 +922,30 @@ function PdvPage() {
       />
 
 
+      {/* Cancelamento da venda em andamento — abre a gaveta se houver dinheiro a devolver */}
+      <AlertDialog open={cancelOpen} onOpenChange={(o) => { if (!o) setCancelOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta venda?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O carrinho ({cart.length} item(ns)) e os pagamentos lançados serão descartados.
+              {cashReceived > 0
+                ? ` A gaveta será aberta para devolver ${brl(cashReceived)} em dinheiro ao cliente, e a abertura ficará registrada na auditoria.`
+                : " Nenhum valor em dinheiro foi recebido, então a gaveta não será aberta."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelling}
+              onClick={(e) => { e.preventDefault(); void cancelSale(); }}
+            >
+              {cancelling ? "Cancelando…" : cashReceived > 0 ? "Cancelar e abrir gaveta" : "Cancelar venda"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Pós-impressão: pergunta se quer emitir o cupom fiscal também */}
       <AlertDialog open={!!pendingFiscal} onOpenChange={(o) => { if (!o) setPendingFiscal(null); }}>
         <AlertDialogContent>
