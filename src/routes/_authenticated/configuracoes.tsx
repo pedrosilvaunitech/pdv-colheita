@@ -126,6 +126,8 @@ function SettingsPage() {
         show_logo: true, show_cnpj: true, show_address: true, show_operator: true,
         show_customer: true, show_item_code: true, show_qrcode: true,
         font_size: "medium", thank_you_text: "Volte sempre!", extra_info: null,
+        drawer_auto: true, drawer_cash_only: true, drawer_pulse_pin: 0,
+
       };
     },
   });
