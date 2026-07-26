@@ -57,7 +57,7 @@ export function TefPaymentDialog({
   useEffect(() => {
     if (!open) return;
     return subscribeTefEvents((ev) => {
-      if (ev.hello_only) return;
+      if (!ev.state) return;
       setState(ev.state);
       if (ev.message) setMessage(ev.message);
     });
