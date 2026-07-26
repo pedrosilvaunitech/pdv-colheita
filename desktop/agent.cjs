@@ -29,12 +29,18 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 
 // Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
 let nfce = null;
 try { nfce = require("./nfce"); }
 catch (e) { console.warn("[agent] nfce module indisponível:", e.message); }
+
+// Módulo TEF (plugins carregados dinamicamente). Nunca derruba o agente.
+let tef = null;
+try { tef = require("./tef/manager.cjs"); }
+catch (e) { console.warn("[agent] módulo TEF indisponível:", e.message); }
+
 
 // Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
 // quando o driver não reporta e para exibir o modelo real na UI.
