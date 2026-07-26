@@ -36,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useBranding } from "@/lib/branding";
+import { useFiscalRetryScheduler } from "@/lib/fiscal-scheduler";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -50,6 +51,7 @@ const NAV = [
   { to: "/fornecedores", label: "Fornecedores", icon: Truck },
   { to: "/clientes", label: "Clientes", icon: UserSquare2 },
   { to: "/fiscal", label: "Nota Fiscal", icon: FileText },
+  { to: "/fiscal-erros", label: "Erros fiscais", icon: AlertTriangle },
   { to: "/lojas", label: "Lojas", icon: Store },
   { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
@@ -64,6 +66,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { store, stores, setStoreId, isLoading, isError } = useCurrentStore();
   const [email, setEmail] = useState<string>("");
   const branding = useBranding();
+
+  // Reemissão automática de NFC-e pendentes enquanto o app estiver aberto.
+  useFiscalRetryScheduler(store?.id);
 
   const kiosk = (() => {
     if (search && (search.kiosk === "1" || search.kiosk === 1 || search.kiosk === true)) return true;
