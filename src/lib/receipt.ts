@@ -191,25 +191,53 @@ function renderBlockHTML(b: ReceiptBlock, r: ReceiptData, widthMm: 58 | 80): str
       if (!isFiscal) return "";
       return wrap(`Tributos Totais Incidentes (Lei Federal 12.741/2012): <b>R$ 0,00</b>`);
 
-    case "nfce_info":
+    case "nfce_info": {
       if (!isFiscal) return "";
-      return wrap(`<b>NFC-e</b> nº ${escape(r.sale_id.slice(0, 9).toUpperCase())} · Série 001 · Emissão ${r.issued_at.toLocaleDateString("pt-BR")}`);
+      const f = r.fiscal;
+      const numero = f?.number != null ? String(f.number) : r.sale_id.slice(0, 9).toUpperCase();
+      const serie = String(f?.series ?? 1).padStart(3, "0");
+      const emissao = f?.issued_at ? new Date(f.issued_at) : r.issued_at;
+      const amb = f?.ambiente && f.ambiente !== "producao"
+        ? ` · <b>HOMOLOGAÇÃO — SEM VALOR FISCAL</b>` : "";
+      return wrap(`<b>NFC-e</b> nº ${escape(numero)} · Série ${serie} · Emissão ${emissao.toLocaleDateString("pt-BR")}${amb}`);
+    }
 
     case "consumer_via":
       if (!isFiscal) return "";
       return wrap("Via Consumidor");
 
-    case "sefaz_link":
+    case "sefaz_link": {
       if (!isFiscal) return "";
-      return wrap("Consulta pela Chave de Acesso em www.nfce.sefaz.uf.gov.br");
+      const prot = r.fiscal?.protocolo
+        ? `<br/>Protocolo de Autorização: <b>${escape(r.fiscal.protocolo)}</b>` : "";
+      return wrap(`Consulta pela Chave de Acesso em www.nfce.sefaz.uf.gov.br${prot}`);
+    }
 
-    case "qr":
+    case "qr": {
       if (!isFiscal) return "";
+      const png = r.fiscal?.qr_png;
+      if (png && /^data:image\//.test(png)) {
+        return `<div class="blk" style="${styleAttr}"><img class="qrimg" src="${escape(png)}" alt="QR Code NFC-e"/></div>`;
+      }
+      // Sem PNG pronto: renderiza via serviço público apenas se houver URL real.
+      const url = r.fiscal?.qr_url;
+      if (url) {
+        const src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=${encodeURIComponent(url)}`;
+        return `<div class="blk" style="${styleAttr}"><img class="qrimg" src="${escape(src)}" alt="QR Code NFC-e"/></div>`;
+      }
       return `<div class="blk" style="${styleAttr}"><div class="qr"><div class="placeholder">QR gerado<br/>após<br/>autorização<br/>SEFAZ</div></div></div>`;
+    }
 
-    case "chave":
+    case "chave": {
       if (!isFiscal) return "";
-      return `<div class="blk" style="${styleAttr}"><div class="chave">${chaveGrouped(fakeChave(r.sale_id))}</div>${r.document_type === "fiscal" ? `<div style="font-size:${sizeToPx("sm", widthMm)}px;font-weight:800;margin-top:2px">⚠ Aguardando autorização SEFAZ · reemitir em Fiscal</div>` : ""}</div>`;
+      const chave = r.fiscal?.chave ?? fakeChave(r.sale_id);
+      const pending = !r.fiscal?.chave;
+      const warn = pending
+        ? `<div style="font-size:${sizeToPx("sm", widthMm)}px;font-weight:800;margin-top:2px">⚠ Aguardando autorização SEFAZ · reemitir em Fiscal</div>`
+        : "";
+      return `<div class="blk" style="${styleAttr}"><div class="chave">${chaveGrouped(chave)}</div>${warn}</div>`;
+    }
+
 
     case "footer_msg": {
       const txt = b.text ?? r.footer ?? "";
