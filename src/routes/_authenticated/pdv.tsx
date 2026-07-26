@@ -18,6 +18,9 @@ import { PixChargeModal } from "@/components/pix-charge-modal";
 import { CaixaQuickActions } from "@/components/pdv/caixa-quick-actions";
 import { ScaleWidget } from "@/components/pdv/scale-widget";
 import { getToledoScale } from "@/lib/toledo-scale";
+import { TefPaymentDialog } from "@/components/pdv/tef-payment-dialog";
+import { isTefEnabled, setTefEnabled, type TefResult, type TefPaymentType } from "@/lib/tef-agent";
+
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -74,6 +77,13 @@ function PdvPage() {
   const [payInstallments, setPayInstallments] = useState<number>(1);
   const [pixOpen, setPixOpen] = useState(false);
   const [pixAmount, setPixAmount] = useState<number>(0);
+  // Requisição TEF pendente (null = nenhum pagamento com cartão em andamento).
+  const [tefRequest, setTefRequest] = useState<{
+    amount: number; paymentType: TefPaymentType; installments: number; orderId: string;
+  } | null>(null);
+  const [tefOn, setTefOn] = useState(false);
+  useEffect(() => { setTefOn(isTefEnabled()); }, []);
+
   // Após imprimir um recibo não-fiscal, guardamos os dados para oferecer
   // reemissão como cupom fiscal (NFC-e) sem refazer a venda.
   const [pendingFiscal, setPendingFiscal] = useState<ReceiptData | null>(null);
@@ -318,6 +328,17 @@ function PdvPage() {
       setPixOpen(true);
       return;
     }
+    // Cartão com TEF ativo: o valor só entra na venda depois da aprovação no PIN Pad.
+    if ((payMethod === "debito" || payMethod === "credito") && isTefEnabled()) {
+      if (!openReg.data) { toast.error("Abra o caixa antes"); return; }
+      setTefRequest({
+        amount: value,
+        paymentType: payMethod === "credito" ? "credit" : "debit",
+        installments: installments ?? 1,
+        orderId: `PDV-${Date.now().toString(36).toUpperCase()}`,
+      });
+      return;
+    }
     const label = installments && installments > 1
       ? `Crédito ${installments}x de ${brl(value / installments)}`
       : METHOD_LABEL[payMethod];
@@ -325,6 +346,23 @@ function PdvPage() {
     setPayAmount("");
     setPayInstallments(1);
   };
+
+  /** Confirma o pagamento no carrinho somente após aprovação real do TEF. */
+  const onTefApproved = (r: TefResult) => {
+    const method: PayMethod = r.cardType === "credit" ? "credito" : "debito";
+    const inst = Math.max(1, Number(r.installments || 1));
+    const base = inst > 1 ? `Crédito ${inst}x de ${brl(r.amount / inst)}` : METHOD_LABEL[method];
+    setPayments((p) => [...p, {
+      method,
+      amount: r.amount,
+      installments: inst > 1 ? inst : undefined,
+      label: `${base} · NSU ${r.nsu ?? "—"}`,
+    }]);
+    setPayAmount("");
+    setPayInstallments(1);
+    setTefRequest(null);
+  };
+
 
   const removePayment = (idx: number) => setPayments((p) => p.filter((_, i) => i !== idx));
 
@@ -697,6 +735,25 @@ function PdvPage() {
               <PayBtn active={payMethod === "credito"} onClick={() => setPayMethod("credito")} icon={CreditCard} label="Crédito · F5" />
             </div>
 
+            {(payMethod === "debito" || payMethod === "credito") && (
+              <label className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-xs cursor-pointer">
+                <span className="flex flex-col">
+                  <span className="font-medium">Cobrar na maquininha (TEF)</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {tefOn ? "PIN Pad via Agente Local" : "Lançamento manual"}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={tefOn}
+                  onChange={(e) => { setTefOn(e.target.checked); setTefEnabled(e.target.checked); }}
+                />
+              </label>
+            )}
+
+
+
 
             {payMethod === "credito" && (
               <div>
@@ -765,6 +822,18 @@ function PdvPage() {
           description={`Venda PDV · ${cart.length} item(ns)`}
         />
       )}
+
+      <TefPaymentDialog
+        open={!!tefRequest}
+        amount={tefRequest?.amount ?? 0}
+        paymentType={tefRequest?.paymentType ?? "debit"}
+        installments={tefRequest?.installments ?? 1}
+        orderId={tefRequest?.orderId ?? ""}
+        terminal={storeId ?? null}
+        onClose={() => setTefRequest(null)}
+        onApproved={onTefApproved}
+      />
+
 
       {/* Pós-impressão: pergunta se quer emitir o cupom fiscal também */}
       <AlertDialog open={!!pendingFiscal} onOpenChange={(o) => { if (!o) setPendingFiscal(null); }}>

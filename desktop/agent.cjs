@@ -29,12 +29,18 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 
 // Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
 let nfce = null;
 try { nfce = require("./nfce"); }
 catch (e) { console.warn("[agent] nfce module indisponível:", e.message); }
+
+// Módulo TEF (plugins carregados dinamicamente). Nunca derruba o agente.
+let tef = null;
+try { tef = require("./tef/manager.cjs"); }
+catch (e) { console.warn("[agent] módulo TEF indisponível:", e.message); }
+
 
 // Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
 // quando o driver não reporta e para exibir o modelo real na UI.
@@ -611,9 +617,104 @@ function startAgent(options = {}) {
     catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
 
-  const server = app.listen(PORT, "127.0.0.1", () => {
-    console.log(`[bastion-agent] http://127.0.0.1:${PORT} · v${VERSION} · spooler=${!!nodePrinter || process.platform === "win32"} usb=true nfce=${nfce?.isAvailable() ? "ready" : "off"}`);
+  // ────────────────────────────────────────────────────────────────
+  // TEF — pagamento com cartão via PIN Pad (multiprovedor por plugins)
+  // O PDV nunca acessa USB/DLL: só fala com estes endpoints.
+  // ────────────────────────────────────────────────────────────────
+  const requireTef = (res) => {
+    if (!tef) { res.status(501).json({ ok: false, error: "Módulo TEF não carregado no agente." }); return false; }
+    return true;
+  };
+
+  app.get("/health", (_req, res) => {
+    res.json({
+      ok: true,
+      version: VERSION,
+      platform: process.platform,
+      nfce: nfce?.isAvailable() ? "ready" : "off",
+      tef: tef ? tef.getStatus() : { ok: false, error: "off" },
+      uptime_s: Math.floor(process.uptime()),
+    });
   });
+
+  app.get("/devices", async (_req, res) => {
+    const printers = listAllPrinters();
+    const tefDevices = tef ? await tef.getDevices() : { devices: [] };
+    res.json({ ok: true, printers, tef: tefDevices.devices ?? [], drawer: { available: printers.length > 0 } });
+  });
+
+  app.get("/tef/providers", (_req, res) => {
+    if (!requireTef(res)) return;
+    res.json({ ok: true, providers: tef.listProviders(), config: tef.loadConfig() });
+  });
+
+  app.get("/tef/config", (_req, res) => {
+    if (!requireTef(res)) return;
+    res.json({ ok: true, config: tef.loadConfig() });
+  });
+
+  app.post("/tef/config", (req, res) => {
+    if (!requireTef(res)) return;
+    try { res.json({ ok: true, config: tef.saveConfig(req.body || {}) }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  app.get("/tef/status", (_req, res) => {
+    if (!requireTef(res)) return;
+    res.json(tef.getStatus());
+  });
+
+  app.get("/tef/log", (req, res) => {
+    if (!requireTef(res)) return;
+    res.json({ ok: true, entries: tef.readLog(Number(req.query.limit || 100)) });
+  });
+
+  // Stream de eventos do fluxo (SSE — funciona no navegador e no PWA).
+  app.get("/tef/events", (req, res) => {
+    if (!requireTef(res)) return;
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+    const send = (ev) => { try { res.write(`data: ${JSON.stringify(ev)}\n\n`); } catch { /* noop */ } };
+    send({ state: "idle", at: new Date().toISOString(), hello: true });
+    tef.bus.on("event", send);
+    const ka = setInterval(() => { try { res.write(": keep-alive\n\n"); } catch { /* noop */ } }, 15000);
+    req.on("close", () => { clearInterval(ka); tef.bus.off("event", send); });
+  });
+
+  app.post("/tef/sale", async (req, res) => {
+    if (!requireTef(res)) return;
+    try {
+      const body = req.body || {};
+      const amount = Number(body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ ok: false, error: "Valor inválido." });
+      const paymentType = body.paymentType === "credit" ? "credit" : "debit";
+      const installments = Math.max(1, Math.trunc(Number(body.installments || 1)));
+      const result = await tef.startSale({ ...body, amount, paymentType, installments });
+      res.status(result.success ? 200 : 402).json({ ok: result.success, ...result });
+    } catch (e) {
+      console.error("[agent] tef/sale:", e.message);
+      res.status(500).json({ ok: false, status: "ERROR", error: e.message, code: e.code || null });
+    }
+  });
+
+  app.post("/tef/cancel", async (req, res) => {
+    if (!requireTef(res)) return;
+    try { res.json({ ok: true, ...(await tef.cancelSale(req.body || {})) }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  app.post("/tef/reprint", async (req, res) => {
+    if (!requireTef(res)) return;
+    try { res.json(await tef.reprintReceipt(req.body || {})); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  const server = app.listen(PORT, "127.0.0.1", () => {
+    console.log(`[bastion-agent] http://127.0.0.1:${PORT} · v${VERSION} · spooler=${!!nodePrinter || process.platform === "win32"} usb=true nfce=${nfce?.isAvailable() ? "ready" : "off"} tef=${tef ? tef.loadConfig().provider : "off"}`);
+  });
+
   return server;
 }
 
