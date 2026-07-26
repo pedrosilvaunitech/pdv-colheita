@@ -735,6 +735,25 @@ function PdvPage() {
               <PayBtn active={payMethod === "credito"} onClick={() => setPayMethod("credito")} icon={CreditCard} label="Crédito · F5" />
             </div>
 
+            {(payMethod === "debito" || payMethod === "credito") && (
+              <label className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-xs cursor-pointer">
+                <span className="flex flex-col">
+                  <span className="font-medium">Cobrar na maquininha (TEF)</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {tefOn ? "PIN Pad via Agente Local" : "Lançamento manual"}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={tefOn}
+                  onChange={(e) => { setTefOn(e.target.checked); setTefEnabled(e.target.checked); }}
+                />
+              </label>
+            )}
+
+
+
 
             {payMethod === "credito" && (
               <div>
