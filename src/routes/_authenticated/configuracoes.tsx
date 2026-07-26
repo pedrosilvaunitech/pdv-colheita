@@ -389,6 +389,14 @@ function SettingsPage() {
                   </Select>
                   <p className="text-[11px] text-muted-foreground mt-1">Se a gaveta não abrir com o padrão, troque para o pino 5.</p>
                 </div>
+                <div className="border-t border-border pt-3">
+                  <Label className="text-xs">Teste de pinos</Label>
+                  <DrawerPinTest
+                    storeId={storeId}
+                    className="mt-2"
+                    onWorkingPin={(pin) => setForm((f) => ({ ...f, drawer_pulse_pin: pin }))}
+                  />
+                </div>
                 {storeId && <CashDrawerButton storeId={storeId} className="w-full" />}
               </div>
 
