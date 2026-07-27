@@ -26,6 +26,15 @@ interface AuditRow {
   created_at: string;
 }
 
+interface RateLimitRow {
+  id: string;
+  user_id: string;
+  function_name: string;
+  attempts: number;
+  blocked_until: string | null;
+}
+
+
 type FilterMode = "all" | "denied" | "allowed";
 
 const FUNCTION_LABEL: Record<string, string> = {
@@ -60,6 +69,24 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
       return (data ?? []) as AuditRow[];
     },
   });
+
+  /** Bloqueios de rate limit ativos nesta loja (visível a gestores pela RLS). */
+  const blocks = useQuery({
+    queryKey: ["rpc-rate-limits", storeId],
+    enabled: Boolean(storeId),
+    refetchInterval: 30_000,
+    queryFn: async (): Promise<RateLimitRow[]> => {
+      const { data, error } = await supabase
+        .from("rpc_rate_limits")
+        .select("id, user_id, function_name, attempts, blocked_until")
+        .eq("store_id", storeId!)
+        .gt("blocked_until", new Date().toISOString())
+        .order("blocked_until", { ascending: false });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RateLimitRow[];
+    },
+  });
+
 
   const rows = useMemo(() => {
     const all = query.data ?? [];
