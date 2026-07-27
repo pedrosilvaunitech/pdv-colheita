@@ -96,6 +96,34 @@ export function ScaleAgentCard() {
     }
   };
 
+  /**
+   * Varre todas as portas COM procurando a balança. É a saída para o caso
+   * mais comum de suporte: o operador não sabe em qual COM o conversor
+   * USB-Serial foi montado nem qual protocolo o modelo usa.
+   */
+  const autodetect = async () => {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const r = await autodetectScale({ apply: true });
+      setScanResult(r);
+      if (r.ok && r.candidates[0]) {
+        const best = r.candidates[0];
+        toast.success(
+          `Balança encontrada em ${best.path} (${best.protocol} · ${best.baudRate} baud) — ${best.reading.weightKg.toFixed(3)} kg`,
+        );
+      } else {
+        toast.error(r.error ?? "Nenhuma balança encontrada nas portas seriais.");
+      }
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3">
