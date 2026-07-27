@@ -711,6 +711,65 @@ function startAgent(options = {}) {
     res.json(await scale.test(req.body || {}));
   });
 
+  // Varredura automática de portas COM/tty procurando a balança.
+  // Pode demorar (n portas × combinações); o cliente usa timeout alto.
+  app.post("/scale/autodetect", async (req, res) => {
+    if (!requireScale(res)) return;
+    try { res.json(await scale.autodetect(req.body || {})); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // DIAGNÓSTICO — visão única do ambiente para suporte no caixa
+  // ────────────────────────────────────────────────────────────────
+  app.get("/diagnostics", async (_req, res) => {
+    const printers = listAllPrinters();
+    let scaleInfo = { loaded: false };
+    if (scale) {
+      const st = scale.getStatus();
+      scaleInfo = {
+        loaded: true,
+        driverInstalled: scale.isAvailable(),
+        reason: scale.unavailableReason(),
+        connected: st.connected,
+        config: st.config,
+        lastError: st.lastError,
+        ports: await scale.listPorts(),
+      };
+    }
+
+    res.json({
+      ok: true,
+      version: VERSION,
+      system: {
+        platform: process.platform,
+        arch: process.arch,
+        release: os.release(),
+        hostname: os.hostname(),
+        node: process.versions.node,
+        elevated: isElevated(),
+        uptime_s: Math.floor(process.uptime()),
+        dataDir: DATA_DIR_PATH,
+        dataDirWritable: isDataDirWritable(),
+      },
+      modules: {
+        spooler: !!nodePrinter || process.platform === "win32",
+        usb: hasUsbModule(),
+        scale: scale ? scale.isAvailable() : false,
+        nfce: nfce ? nfce.isAvailable() : false,
+        tef: !!tef,
+      },
+      printers,
+      scale: scaleInfo,
+      tef: tef ? tef.getStatus() : { ok: false, error: "Módulo TEF não carregado." },
+      nfce: nfce
+        ? { available: nfce.isAvailable(), config: nfce.maskFiscalConfig(nfce.loadFiscalConfig()) }
+        : { available: false },
+    });
+  });
+
+
+
   app.get("/tef/providers", (_req, res) => {
     if (!requireTef(res)) return;
     res.json({ ok: true, providers: tef.listProviders(), config: tef.loadConfig() });
