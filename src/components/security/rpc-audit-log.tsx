@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldAlert, ShieldCheck, RefreshCw, Loader2 } from "lucide-react";
+import { ShieldAlert, ShieldCheck, RefreshCw, Loader2, Download } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+
 
 export interface RpcAuditLogProps {
   storeId: string | null | undefined;
@@ -68,6 +70,47 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
 
   const deniedCount = (query.data ?? []).filter((r) => !r.allowed).length;
 
+  /**
+   * Exporta exatamente o que está em tela (respeitando o filtro ativo).
+   * Campos são escapados no padrão RFC 4180 e o arquivo leva BOM UTF-8
+   * para o Excel pt-BR abrir acentuação corretamente.
+   */
+  const exportCsv = () => {
+    if (rows.length === 0) {
+      toast.error("Nada para exportar com este filtro.");
+      return;
+    }
+    const esc = (value: unknown): string => {
+      const s = value === null || value === undefined ? "" : String(value);
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+    const header = ["data_hora", "funcao", "resultado", "usuario", "loja", "detalhe"];
+    const lines = rows.map((r) =>
+      [
+        new Date(r.created_at).toLocaleString("pt-BR"),
+        FUNCTION_LABEL[r.function_name] ?? r.function_name,
+        r.allowed ? "permitida" : "negada",
+        r.user_id ?? "",
+        r.store_id ?? "",
+        r.detail ?? "",
+      ]
+        .map(esc)
+        .join(";"),
+    );
+    const csv = "\uFEFF" + [header.map(esc).join(";"), ...lines].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `auditoria-rpc-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`${rows.length} registro(s) exportado(s).`);
+  };
+
+
   if (!storeId) {
     return <p className={cn("text-sm text-muted-foreground", className)}>Selecione uma loja para ver a auditoria.</p>;
   }
@@ -95,12 +138,23 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
             variant="outline"
             size="sm"
             className="gap-2"
+            onClick={exportCsv}
+            disabled={query.isLoading || rows.length === 0}
+          >
+            <Download className="size-3.5" />
+            Exportar CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
             onClick={() => query.refetch()}
             disabled={query.isFetching}
           >
             {query.isFetching ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
             Atualizar
           </Button>
+
         </div>
       </div>
 
