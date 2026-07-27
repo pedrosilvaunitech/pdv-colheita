@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Scale, RefreshCw, Plug, PlugZap, FlaskConical } from "lucide-react";
+import { Scale, RefreshCw, Plug, PlugZap, FlaskConical, Radar } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,16 +15,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  autodetectScale,
   connectScale,
   disconnectScale,
   listScalePorts,
   saveScaleConfig,
   testScale,
+  type AgentScaleAutodetectResult,
   type AgentScaleConfig,
   type AgentScalePreset,
   type AgentSerialPort,
   type AgentScaleProtocol,
 } from "@/lib/scale-agent";
+
 
 /**
  * Configuração da balança serial pelo Agente Local.
@@ -40,6 +43,9 @@ export function ScaleAgentCard() {
   const [cfg, setCfg] = useState<AgentScaleConfig | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<AgentScaleAutodetectResult | null>(null);
+
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -96,6 +102,34 @@ export function ScaleAgentCard() {
     }
   };
 
+  /**
+   * Varre todas as portas COM procurando a balança. É a saída para o caso
+   * mais comum de suporte: o operador não sabe em qual COM o conversor
+   * USB-Serial foi montado nem qual protocolo o modelo usa.
+   */
+  const autodetect = async () => {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const r = await autodetectScale({ apply: true });
+      setScanResult(r);
+      if (r.ok && r.candidates[0]) {
+        const best = r.candidates[0];
+        toast.success(
+          `Balança encontrada em ${best.path} (${best.protocol} · ${best.baudRate} baud) — ${best.reading.weightKg.toFixed(3)} kg`,
+        );
+      } else {
+        toast.error(r.error ?? "Nenhuma balança encontrada nas portas seriais.");
+      }
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3">
@@ -108,9 +142,20 @@ export function ScaleAgentCard() {
             USB-Serial.
           </CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
-          <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} /> Atualizar
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => void autodetect()}
+            disabled={scanning || !available}
+            className="gap-1"
+          >
+            <Radar className={scanning ? "size-4 animate-spin" : "size-4"} />
+            {scanning ? "Varrendo portas…" : "Detectar automaticamente"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
+            <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} /> Atualizar
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {agentError && (
@@ -121,9 +166,55 @@ export function ScaleAgentCard() {
         {!agentError && !available && (
           <p className="text-xs rounded border border-border bg-muted/40 p-3 text-muted-foreground">
             {reason ?? "Driver serial indisponível no agente."} Rode <code>npm i serialport</code>{" "}
-            na pasta do agente (ou reinstale o Bastion POS Agent 1.6.0+) e reinicie o agente.
+            na pasta do agente (ou reinstale o Bastion POS Agent 1.7.0+) e reinicie o agente.
           </p>
         )}
+
+        {scanning && (
+          <p className="text-xs rounded border border-border bg-muted/40 p-3 text-muted-foreground">
+            Testando cada porta com os protocolos Toledo Prix, Filizola, Urano e genérico. Isso pode
+            levar até 1 minuto — mantenha a balança ligada e com peso sobre o prato.
+          </p>
+        )}
+
+        {scanResult && !scanning && (
+          <div
+            className={
+              scanResult.ok
+                ? "rounded border border-primary/40 bg-primary/5 p-3 text-xs space-y-2"
+                : "rounded border border-destructive/40 bg-destructive/10 p-3 text-xs space-y-2"
+            }
+          >
+            {scanResult.ok && scanResult.candidates[0] ? (
+              <p className="font-medium text-foreground">
+                Detectada em {scanResult.candidates[0].path} · {scanResult.candidates[0].protocol} ·{" "}
+                {scanResult.candidates[0].baudRate} baud — leitura de{" "}
+                {scanResult.candidates[0].reading.weightKg.toFixed(3)} kg
+                {scanResult.applied ? " (configuração aplicada)" : ""}
+              </p>
+            ) : (
+              <p className="font-medium text-destructive">{scanResult.error}</p>
+            )}
+            <details>
+              <summary className="cursor-pointer text-muted-foreground">
+                Ver tentativas ({scanResult.attempts.length} em {scanResult.scannedPorts ?? 0} porta
+                {(scanResult.scannedPorts ?? 0) === 1 ? "" : "s"})
+              </summary>
+              <ul className="mt-2 space-y-1 max-h-48 overflow-auto font-mono text-[11px]">
+                {scanResult.attempts.map((a, i) => (
+                  <li
+                    key={`${a.label}-${i}`}
+                    className={a.ok ? "text-foreground" : "text-muted-foreground"}
+                  >
+                    {a.ok ? "✓" : "×"} {a.label}
+                    {a.ok ? ` → ${a.weightKg?.toFixed(3)} kg` : ` — ${a.error}`}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )}
+
 
         {cfg && (
           <>

@@ -28,6 +28,7 @@ import { Route as AuthenticatedComprasRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedComandasRouteImport } from './routes/_authenticated/comandas'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 import { Route as AuthenticatedCaixaRouteImport } from './routes/_authenticated/caixa'
+import { Route as AuthenticatedAgenteDiagnosticoRouteImport } from './routes/_authenticated/agente-diagnostico'
 import { Route as ApiPublicPixWebhookProviderRouteImport } from './routes/api/public/pix-webhook.$provider'
 
 const AuthRoute = AuthRouteImport.update({
@@ -127,6 +128,12 @@ const AuthenticatedCaixaRoute = AuthenticatedCaixaRouteImport.update({
   path: '/caixa',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAgenteDiagnosticoRoute =
+  AuthenticatedAgenteDiagnosticoRouteImport.update({
+    id: '/agente-diagnostico',
+    path: '/agente-diagnostico',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicPixWebhookProviderRoute =
   ApiPublicPixWebhookProviderRouteImport.update({
     id: '/api/public/pix-webhook/$provider',
@@ -137,6 +144,7 @@ const ApiPublicPixWebhookProviderRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/agente-diagnostico': typeof AuthenticatedAgenteDiagnosticoRoute
   '/caixa': typeof AuthenticatedCaixaRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/comandas': typeof AuthenticatedComandasRoute
@@ -158,6 +166,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/agente-diagnostico': typeof AuthenticatedAgenteDiagnosticoRoute
   '/caixa': typeof AuthenticatedCaixaRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/comandas': typeof AuthenticatedComandasRoute
@@ -181,6 +190,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/agente-diagnostico': typeof AuthenticatedAgenteDiagnosticoRoute
   '/_authenticated/caixa': typeof AuthenticatedCaixaRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
   '/_authenticated/comandas': typeof AuthenticatedComandasRoute
@@ -204,6 +214,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/agente-diagnostico'
     | '/caixa'
     | '/clientes'
     | '/comandas'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/agente-diagnostico'
     | '/caixa'
     | '/clientes'
     | '/comandas'
@@ -247,6 +259,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/agente-diagnostico'
     | '/_authenticated/caixa'
     | '/_authenticated/clientes'
     | '/_authenticated/comandas'
@@ -408,6 +421,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCaixaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/agente-diagnostico': {
+      id: '/_authenticated/agente-diagnostico'
+      path: '/agente-diagnostico'
+      fullPath: '/agente-diagnostico'
+      preLoaderRoute: typeof AuthenticatedAgenteDiagnosticoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/pix-webhook/$provider': {
       id: '/api/public/pix-webhook/$provider'
       path: '/api/public/pix-webhook/$provider'
@@ -419,6 +439,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAgenteDiagnosticoRoute: typeof AuthenticatedAgenteDiagnosticoRoute
   AuthenticatedCaixaRoute: typeof AuthenticatedCaixaRoute
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
   AuthenticatedComandasRoute: typeof AuthenticatedComandasRoute
@@ -438,6 +459,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAgenteDiagnosticoRoute: AuthenticatedAgenteDiagnosticoRoute,
   AuthenticatedCaixaRoute: AuthenticatedCaixaRoute,
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
   AuthenticatedComandasRoute: AuthenticatedComandasRoute,

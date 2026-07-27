@@ -139,6 +139,45 @@ export function testScale(patch?: Partial<AgentScaleConfig>) {
   );
 }
 
+export interface AgentScaleCandidate {
+  path: string;
+  friendly: string;
+  manufacturer: string | null;
+  protocol: AgentScaleProtocol;
+  baudRate: number;
+  dataBits: number;
+  stopBits: number;
+  parity: "none" | "even" | "odd";
+  reading: AgentScaleReading;
+  score: number;
+}
+
+export interface AgentScaleAutodetectResult {
+  ok: boolean;
+  available: boolean;
+  applied?: boolean;
+  scannedPorts?: number;
+  candidates: AgentScaleCandidate[];
+  attempts: Array<{ path: string; label: string; ok: boolean; error?: string; weightKg?: number }>;
+  config?: AgentScaleConfig;
+  error: string | null;
+}
+
+/**
+ * Varredura automática: o agente testa cada porta COM com as combinações de
+ * protocolo/baud mais comuns. Pode levar dezenas de segundos em máquinas com
+ * muitas portas virtuais, por isso o timeout é generoso (3 min).
+ */
+export function autodetectScale(opts?: { apply?: boolean; timeoutMs?: number; ports?: string[] }) {
+  return call<AgentScaleAutodetectResult>(
+    "/scale/autodetect",
+    { method: "POST", body: JSON.stringify(opts ?? {}) },
+    180000,
+  );
+}
+
+
+
 /** true se o agente estiver instalado, com driver serial e porta aberta. */
 export async function isAgentScaleReady(): Promise<boolean> {
   try {
