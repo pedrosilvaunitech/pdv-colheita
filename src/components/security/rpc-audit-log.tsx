@@ -1,13 +1,27 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldAlert, ShieldCheck, RefreshCw, Loader2, Download } from "lucide-react";
+import { ShieldAlert, ShieldCheck, RefreshCw, Loader2, Download, FileSpreadsheet, FileText, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { buildAuditCsv, buildRateLimitCsv, csvFilename, downloadCsv } from "@/lib/audit-csv";
+import {
+  buildAuditWorkbook,
+  buildRateLimitWorkbook,
+  downloadWorkbook,
+  xlsxFilename,
+  type XlsxStoreInfo,
+} from "@/lib/audit-xlsx";
+
 
 
 
@@ -100,6 +114,34 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
   const deniedCount = (query.data ?? []).filter((r) => !r.allowed).length;
 
   /**
+   * Identidade da loja usada no cabeçalho da planilha: nome/CNPJ vêm de
+   * `stores` e a logo da configuração de cupom (`receipt_settings.logo_url`).
+   * Falhas aqui não impedem exportar — o arquivo sai sem a marca.
+   */
+  const identity = useQuery({
+    queryKey: ["audit-export-identity", storeId],
+    enabled: Boolean(storeId),
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<XlsxStoreInfo> => {
+      const [store, receipt] = await Promise.all([
+        supabase.from("stores").select("name, fantasy_name, cnpj").eq("id", storeId!).maybeSingle(),
+        supabase.from("receipt_settings").select("logo_url, show_logo").eq("store_id", storeId!).maybeSingle(),
+      ]);
+      return {
+        name: store.data?.fantasy_name || store.data?.name || null,
+        cnpj: store.data?.cnpj ?? null,
+        logoUrl: receipt.data?.logo_url ?? null,
+      };
+    },
+  });
+
+  const [exporting, setExporting] = useState(false);
+
+  const labelFor = (fn: string) => FUNCTION_LABEL[fn] ?? fn;
+  const filterSuffix = mode === "denied" ? "negadas" : mode === "allowed" ? "permitidas" : "todas";
+  const filterLabel = mode === "denied" ? "Somente negadas" : mode === "allowed" ? "Somente permitidas" : "Todas";
+
+  /**
    * Exporta exatamente o que está em tela (respeitando o filtro ativo).
    * A geração fica em `@/lib/audit-csv` (pura e coberta por testes).
    */
@@ -108,12 +150,30 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
       toast.error("Nada para exportar com este filtro.");
       return;
     }
-    const suffix = mode === "denied" ? "negadas" : mode === "allowed" ? "permitidas" : "todas";
-    downloadCsv(
-      csvFilename("auditoria-rpc", suffix),
-      buildAuditCsv(rows, (fn) => FUNCTION_LABEL[fn] ?? fn),
-    );
-    toast.success(`${rows.length} registro(s) exportado(s).`);
+    downloadCsv(csvFilename("auditoria-rpc", filterSuffix), buildAuditCsv(rows, labelFor));
+    toast.success(`${rows.length} registro(s) exportado(s) em CSV.`);
+  };
+
+  /** Exporta a auditoria em XLSX formatado, com a logo da loja. */
+  const exportXlsx = async () => {
+    if (rows.length === 0) {
+      toast.error("Nada para exportar com este filtro.");
+      return;
+    }
+    setExporting(true);
+    try {
+      const wb = await buildAuditWorkbook(rows, {
+        store: identity.data,
+        filterLabel,
+        labelFor,
+      });
+      await downloadWorkbook(xlsxFilename("auditoria-rpc", filterSuffix), wb);
+      toast.success(`${rows.length} registro(s) exportado(s) em XLSX.`);
+    } catch (e) {
+      toast.error(`Falha ao gerar a planilha: ${(e as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
   };
 
   /** Exporta os bloqueios de rate limit ativos. */
@@ -123,12 +183,29 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
       toast.error("Nenhum bloqueio ativo.");
       return;
     }
-    downloadCsv(
-      csvFilename("bloqueios-rate-limit"),
-      buildRateLimitCsv(list, (fn) => FUNCTION_LABEL[fn] ?? fn),
-    );
-    toast.success(`${list.length} bloqueio(s) exportado(s).`);
+    downloadCsv(csvFilename("bloqueios-rate-limit"), buildRateLimitCsv(list, labelFor));
+    toast.success(`${list.length} bloqueio(s) exportado(s) em CSV.`);
   };
+
+  /** Exporta os bloqueios em XLSX formatado, com a logo da loja. */
+  const exportBlocksXlsx = async () => {
+    const list = blocks.data ?? [];
+    if (list.length === 0) {
+      toast.error("Nenhum bloqueio ativo.");
+      return;
+    }
+    setExporting(true);
+    try {
+      const wb = await buildRateLimitWorkbook(list, { store: identity.data, labelFor });
+      await downloadWorkbook(xlsxFilename("bloqueios-rate-limit"), wb);
+      toast.success(`${list.length} bloqueio(s) exportado(s) em XLSX.`);
+    } catch (e) {
+      toast.error(`Falha ao gerar a planilha: ${(e as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
 
 
 
@@ -147,10 +224,24 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
               <ShieldAlert className="size-4" />
               {activeBlocks.length} bloqueio(s) por excesso de tentativas
             </p>
-            <Button variant="outline" size="sm" className="gap-2 h-7" onClick={exportBlocksCsv}>
-              <Download className="size-3.5" />
-              Exportar bloqueios
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 h-7" disabled={exporting}>
+                  {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                  Exportar bloqueios
+                  <ChevronDown className="size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportBlocksXlsx} className="gap-2">
+                  <FileSpreadsheet className="size-4" /> Excel (.xlsx) com logo
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportBlocksCsv} className="gap-2">
+                  <FileText className="size-4" /> CSV (separado por ;)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
           </div>
 
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -182,16 +273,29 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
               <SelectItem value="allowed">Somente permitidas</SelectItem>
             </SelectContent>
           </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={exportCsv}
-            disabled={query.isLoading || rows.length === 0}
-          >
-            <Download className="size-3.5" />
-            Exportar CSV
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={query.isLoading || rows.length === 0 || exporting}
+              >
+                {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                Exportar
+                <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportXlsx} className="gap-2">
+                <FileSpreadsheet className="size-4" /> Excel (.xlsx) com logo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportCsv} className="gap-2">
+                <FileText className="size-4" /> CSV (separado por ;)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             variant="outline"
             size="sm"
