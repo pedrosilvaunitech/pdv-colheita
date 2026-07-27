@@ -273,16 +273,29 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
               <SelectItem value="allowed">Somente permitidas</SelectItem>
             </SelectContent>
           </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={exportCsv}
-            disabled={query.isLoading || rows.length === 0}
-          >
-            <Download className="size-3.5" />
-            Exportar CSV
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={query.isLoading || rows.length === 0 || exporting}
+              >
+                {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                Exportar
+                <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportXlsx} className="gap-2">
+                <FileSpreadsheet className="size-4" /> Excel (.xlsx) com logo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportCsv} className="gap-2">
+                <FileText className="size-4" /> CSV (separado por ;)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             variant="outline"
             size="sm"
