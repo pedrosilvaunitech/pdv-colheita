@@ -54,6 +54,7 @@ const NAV = [
   { to: "/fiscal-erros", label: "Erros fiscais", icon: AlertTriangle },
   { to: "/lojas", label: "Lojas", icon: Store },
   { to: "/usuarios", label: "Usuários", icon: Users },
+  { to: "/agente-diagnostico", label: "Diagnóstico do Agente", icon: Activity },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
