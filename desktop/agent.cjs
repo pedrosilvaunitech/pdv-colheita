@@ -29,7 +29,7 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.6.0";
+const VERSION = "1.7.0";
 
 // Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
 let nfce = null;
@@ -45,6 +45,47 @@ catch (e) { console.warn("[agent] módulo TEF indisponível:", e.message); }
 let scale = null;
 try { scale = require("./scale.cjs"); scale.autoStart(); }
 catch (e) { console.warn("[agent] módulo Balança indisponível:", e.message); }
+
+// ── Helpers de diagnóstico ────────────────────────────────────────────────
+const DATA_DIR_PATH = path.join(os.homedir(), ".bastion-pos");
+
+/** Escrita no diretório de configuração (falha típica em perfil roaming/GPO). */
+function isDataDirWritable() {
+  try {
+    if (!fs.existsSync(DATA_DIR_PATH)) fs.mkdirSync(DATA_DIR_PATH, { recursive: true });
+    const probe = path.join(DATA_DIR_PATH, ".write-test");
+    fs.writeFileSync(probe, "ok");
+    fs.unlinkSync(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * O agente está rodando como administrador? No Windows isso decide se o
+ * acesso USB bruto (WinUSB) e a instalação de driver vão funcionar.
+ */
+function isElevated() {
+  try {
+    if (process.platform === "win32") {
+      // `net session` só retorna 0 em processo elevado.
+      const r = spawnSync("net", ["session"], { windowsHide: true, timeout: 3000 });
+      return r.status === 0;
+    }
+    return typeof process.getuid === "function" && process.getuid() === 0;
+  } catch {
+    return false;
+  }
+}
+
+/** libusb carregado e capaz de enumerar (falha sem WinUSB instalado). */
+function hasUsbModule() {
+  try { return Array.isArray(usb.getDeviceList()); }
+  catch { return false; }
+}
+
+
 
 
 // Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
