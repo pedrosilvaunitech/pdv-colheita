@@ -138,12 +138,23 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
             variant="outline"
             size="sm"
             className="gap-2"
+            onClick={exportCsv}
+            disabled={query.isLoading || rows.length === 0}
+          >
+            <Download className="size-3.5" />
+            Exportar CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
             onClick={() => query.refetch()}
             disabled={query.isFetching}
           >
             {query.isFetching ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
             Atualizar
           </Button>
+
         </div>
       </div>
 
