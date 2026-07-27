@@ -7,6 +7,9 @@ import { defineConfig } from "vitest/config";
  * Os specs de `e2e/` pertencem ao Playwright (`bun run test:e2e`).
  */
 export default defineConfig({
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
   test: {
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["e2e/**", "node_modules/**", "dist/**", ".output/**"],
