@@ -99,43 +99,35 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
 
   /**
    * Exporta exatamente o que está em tela (respeitando o filtro ativo).
-   * Campos são escapados no padrão RFC 4180 e o arquivo leva BOM UTF-8
-   * para o Excel pt-BR abrir acentuação corretamente.
+   * A geração fica em `@/lib/audit-csv` (pura e coberta por testes).
    */
   const exportCsv = () => {
     if (rows.length === 0) {
       toast.error("Nada para exportar com este filtro.");
       return;
     }
-    const esc = (value: unknown): string => {
-      const s = value === null || value === undefined ? "" : String(value);
-      return `"${s.replace(/"/g, '""')}"`;
-    };
-    const header = ["data_hora", "funcao", "resultado", "usuario", "loja", "detalhe"];
-    const lines = rows.map((r) =>
-      [
-        new Date(r.created_at).toLocaleString("pt-BR"),
-        FUNCTION_LABEL[r.function_name] ?? r.function_name,
-        r.allowed ? "permitida" : "negada",
-        r.user_id ?? "",
-        r.store_id ?? "",
-        r.detail ?? "",
-      ]
-        .map(esc)
-        .join(";"),
+    const suffix = mode === "denied" ? "negadas" : mode === "allowed" ? "permitidas" : "todas";
+    downloadCsv(
+      csvFilename("auditoria-rpc", suffix),
+      buildAuditCsv(rows, (fn) => FUNCTION_LABEL[fn] ?? fn),
     );
-    const csv = "\uFEFF" + [header.map(esc).join(";"), ...lines].join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `auditoria-rpc-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
     toast.success(`${rows.length} registro(s) exportado(s).`);
   };
+
+  /** Exporta os bloqueios de rate limit ativos. */
+  const exportBlocksCsv = () => {
+    const list = blocks.data ?? [];
+    if (list.length === 0) {
+      toast.error("Nenhum bloqueio ativo.");
+      return;
+    }
+    downloadCsv(
+      csvFilename("bloqueios-rate-limit"),
+      buildRateLimitCsv(list, (fn) => FUNCTION_LABEL[fn] ?? fn),
+    );
+    toast.success(`${list.length} bloqueio(s) exportado(s).`);
+  };
+
 
 
   if (!storeId) {
