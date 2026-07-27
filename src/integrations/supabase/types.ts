@@ -1834,6 +1834,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      purge_print_logs: {
+        Args: { _older_than_days?: number; _store_id: string }
+        Returns: number
+      }
       record_homologacao_test: {
         Args: { _result: Json; _store_id: string }
         Returns: undefined
