@@ -9,11 +9,37 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye, Archive, Cable } from "lucide-react";
+import {
+  Save,
+  Printer,
+  Upload,
+  ShieldCheck,
+  ShieldAlert,
+  Image as ImageIcon,
+  Trash2,
+  BookOpen,
+  KeyRound,
+  Clock,
+  QrCode,
+  Palette,
+  RotateCcw,
+  Sun,
+  Moon,
+  Monitor,
+  Eye,
+  Archive,
+  Cable,
+} from "lucide-react";
 import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
 import { RpcAuditLog } from "@/components/security/rpc-audit-log";
 
@@ -22,8 +48,20 @@ import { DrawerPinTest } from "@/components/pdv/drawer-pin-test";
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { ScaleAgentCard } from "@/components/settings/scale-agent-card";
 import { TefConfigCard } from "@/components/settings/tef-config-card";
-import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
-import { DENSITY_LABELS, getPrintDensity, setPrintDensity, type PrintDensity } from "@/lib/print-density";
+import {
+  DEFAULT_BRANDING,
+  loadBranding,
+  saveBranding,
+  resetBranding,
+  type Branding,
+  type ThemeMode,
+} from "@/lib/branding";
+import {
+  DENSITY_LABELS,
+  getPrintDensity,
+  setPrintDensity,
+  type PrintDensity,
+} from "@/lib/print-density";
 import { tryPrintEscPos } from "@/lib/escpos";
 import { ReceiptPreviewDialog } from "@/components/receipt-preview-dialog";
 import type { ReceiptData } from "@/lib/receipt";
@@ -54,7 +92,6 @@ interface ReceiptSettings {
   drawer_pulse_pin: 0 | 1;
 }
 
-
 interface FiscalConfig {
   store_id: string;
   provider: string;
@@ -79,14 +116,45 @@ interface FiscalConfig {
   credentials_note: string | null;
 }
 
-const PROVIDER_INFO: Record<string, { label: string; secret: string; url: string; note: string }> = {
-  focus_nfe:    { label: "Focus NFe",   secret: "FISCAL_FOCUS_NFE_TOKEN",   url: "https://focusnfe.com.br/doc/",           note: "Token em Empresas → Tokens de acesso." },
-  plugnotas:    { label: "PlugNotas",   secret: "FISCAL_PLUGNOTAS_API_KEY", url: "https://plugnotas.com.br/docs",          note: "API Key em API → Chaves de acesso." },
-  nfe_io:       { label: "NFe.io",      secret: "FISCAL_NFE_IO_API_KEY",    url: "https://nfe.io/docs",                    note: "Token da conta em Configurações → API." },
-  webmania:     { label: "WebmaniaBR",  secret: "FISCAL_WEBMANIA_API_KEY",  url: "https://webmaniabr.com/docs/rest-api-nfe", note: "Concatene consumer_key:consumer_secret:token:token_secret." },
-  tecnospeed:   { label: "TecnoSpeed",  secret: "FISCAL_TECNOSPEED_API_KEY", url: "https://tecnospeed.com.br",             note: "Token fornecido pelo comercial após contrato." },
-  direto_sefaz: { label: "Direto SEFAZ", secret: "—",                       url: "https://www.nfe.fazenda.gov.br/portal/",  note: "Sem provedor — assina localmente com o .pfx (avançado)." },
-};
+const PROVIDER_INFO: Record<string, { label: string; secret: string; url: string; note: string }> =
+  {
+    focus_nfe: {
+      label: "Focus NFe",
+      secret: "FISCAL_FOCUS_NFE_TOKEN",
+      url: "https://focusnfe.com.br/doc/",
+      note: "Token em Empresas → Tokens de acesso.",
+    },
+    plugnotas: {
+      label: "PlugNotas",
+      secret: "FISCAL_PLUGNOTAS_API_KEY",
+      url: "https://plugnotas.com.br/docs",
+      note: "API Key em API → Chaves de acesso.",
+    },
+    nfe_io: {
+      label: "NFe.io",
+      secret: "FISCAL_NFE_IO_API_KEY",
+      url: "https://nfe.io/docs",
+      note: "Token da conta em Configurações → API.",
+    },
+    webmania: {
+      label: "WebmaniaBR",
+      secret: "FISCAL_WEBMANIA_API_KEY",
+      url: "https://webmaniabr.com/docs/rest-api-nfe",
+      note: "Concatene consumer_key:consumer_secret:token:token_secret.",
+    },
+    tecnospeed: {
+      label: "TecnoSpeed",
+      secret: "FISCAL_TECNOSPEED_API_KEY",
+      url: "https://tecnospeed.com.br",
+      note: "Token fornecido pelo comercial após contrato.",
+    },
+    direto_sefaz: {
+      label: "Direto SEFAZ",
+      secret: "—",
+      url: "https://www.nfe.fazenda.gov.br/portal/",
+      note: "Sem provedor — assina localmente com o .pfx (avançado).",
+    },
+  };
 
 function SettingsPage() {
   const { store, storeId } = useCurrentStore();
@@ -99,24 +167,50 @@ function SettingsPage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const certInputRef = useRef<HTMLInputElement>(null);
 
-  const changeDensity = (v: PrintDensity) => { setPrintDensity(v); setDensityState(v); toast.success(`Intensidade: ${DENSITY_LABELS[v]}`); };
+  const changeDensity = (v: PrintDensity) => {
+    setPrintDensity(v);
+    setDensityState(v);
+    toast.success(`Intensidade: ${DENSITY_LABELS[v]}`);
+  };
 
   const testPrint = async () => {
     if (!form || !store) return;
-    const ok = await tryPrintEscPos({
-      store: { name: store.fantasy_name || store.name, cnpj: store.cnpj, address: null, phone: null },
-      header: `TESTE DE IMPRESSAO\nIntensidade: ${DENSITY_LABELS[density]}\nPapel: ${form.paper_width}mm`,
-      footer: "Se este texto estiver fraco, aumente a intensidade.",
-      paper_width: form.paper_width,
-      items: [
-        { name: "ITEM DE TESTE 1", quantity: 1, unit_price: 10, total: 10 },
-        { name: "ITEM DE TESTE 2 (nome longo para checar corte)", quantity: 2, unit_price: 5.5, total: 11 },
-      ],
-      subtotal: 21, discount: 0, total: 21, payment_method: "dinheiro",
-      received: 21, change: 0,
-      sale_id: "TEST0000", document_type: "nao_fiscal", issued_at: new Date(),
-    }, true);
-    if (!ok) toast.error("Nenhum canal ESC/POS ativo. Conecte via Agente Local, WebUSB ou Serial (botão Impressora no PDV).");
+    const ok = await tryPrintEscPos(
+      {
+        store: {
+          name: store.fantasy_name || store.name,
+          cnpj: store.cnpj,
+          address: null,
+          phone: null,
+        },
+        header: `TESTE DE IMPRESSAO\nIntensidade: ${DENSITY_LABELS[density]}\nPapel: ${form.paper_width}mm`,
+        footer: "Se este texto estiver fraco, aumente a intensidade.",
+        paper_width: form.paper_width,
+        items: [
+          { name: "ITEM DE TESTE 1", quantity: 1, unit_price: 10, total: 10 },
+          {
+            name: "ITEM DE TESTE 2 (nome longo para checar corte)",
+            quantity: 2,
+            unit_price: 5.5,
+            total: 11,
+          },
+        ],
+        subtotal: 21,
+        discount: 0,
+        total: 21,
+        payment_method: "dinheiro",
+        received: 21,
+        change: 0,
+        sale_id: "TEST0000",
+        document_type: "nao_fiscal",
+        issued_at: new Date(),
+      },
+      true,
+    );
+    if (!ok)
+      toast.error(
+        "Nenhum canal ESC/POS ativo. Conecte via Agente Local, WebUSB ou Serial (botão Impressora no PDV).",
+      );
     else toast.success("Teste enviado à impressora");
   };
 
@@ -124,18 +218,37 @@ function SettingsPage() {
     queryKey: ["receipt_settings", storeId],
     enabled: !!storeId,
     queryFn: async (): Promise<ReceiptSettings> => {
-      const { data, error } = await supabase.from("receipt_settings").select("*").eq("store_id", storeId!).maybeSingle();
+      const { data, error } = await supabase
+        .from("receipt_settings")
+        .select("*")
+        .eq("store_id", storeId!)
+        .maybeSingle();
       if (error) throw error;
-      return (data as ReceiptSettings | null) ?? {
-        store_id: storeId!, default_document: "nao_fiscal", paper_width: 80,
-        header_text: null, footer_text: "Obrigado pela preferência!", logo_url: null,
-        print_auto: true, ask_customer: false,
-        show_logo: true, show_cnpj: true, show_address: true, show_operator: true,
-        show_customer: true, show_item_code: true, show_qrcode: true,
-        font_size: "medium", thank_you_text: "Volte sempre!", extra_info: null,
-        drawer_auto: true, drawer_cash_only: true, drawer_pulse_pin: 0,
-
-      };
+      return (
+        (data as ReceiptSettings | null) ?? {
+          store_id: storeId!,
+          default_document: "nao_fiscal",
+          paper_width: 80,
+          header_text: null,
+          footer_text: "Obrigado pela preferência!",
+          logo_url: null,
+          print_auto: true,
+          ask_customer: false,
+          show_logo: true,
+          show_cnpj: true,
+          show_address: true,
+          show_operator: true,
+          show_customer: true,
+          show_item_code: true,
+          show_qrcode: true,
+          font_size: "medium",
+          thank_you_text: "Volte sempre!",
+          extra_info: null,
+          drawer_auto: true,
+          drawer_cash_only: true,
+          drawer_pulse_pin: 0,
+        }
+      );
     },
   });
 
@@ -143,41 +256,74 @@ function SettingsPage() {
     queryKey: ["fiscal_configs", storeId],
     enabled: !!storeId,
     queryFn: async (): Promise<FiscalConfig> => {
-      const { data, error } = await supabase.from("fiscal_configs").select("*").eq("store_id", storeId!).maybeSingle();
+      const { data, error } = await supabase
+        .from("fiscal_configs")
+        .select("*")
+        .eq("store_id", storeId!)
+        .maybeSingle();
       if (error) throw error;
-      return (data as FiscalConfig | null) ?? {
-        store_id: storeId!, provider: "focus_nfe", environment: "homologacao",
-        nfce_series: 1, nfce_next_number: 1, nfe_series: 1, nfe_next_number: 1,
-        csc_id: null, csc_token: null,
-        certificate_uploaded: false, certificate_expires_on: null,
-        certificate_path: null, certificate_filename: null, certificate_password_set: false,
-        certificate_subject: null, provider_api_key_set: false, provider_api_url: null,
-        cnae: null, crt: null,
-        defer_credentials: true, credentials_note: null,
-      };
+      return (
+        (data as FiscalConfig | null) ?? {
+          store_id: storeId!,
+          provider: "focus_nfe",
+          environment: "homologacao",
+          nfce_series: 1,
+          nfce_next_number: 1,
+          nfe_series: 1,
+          nfe_next_number: 1,
+          csc_id: null,
+          csc_token: null,
+          certificate_uploaded: false,
+          certificate_expires_on: null,
+          certificate_path: null,
+          certificate_filename: null,
+          certificate_password_set: false,
+          certificate_subject: null,
+          provider_api_key_set: false,
+          provider_api_url: null,
+          cnae: null,
+          crt: null,
+          defer_credentials: true,
+          credentials_note: null,
+        }
+      );
     },
   });
 
-  useEffect(() => { if (q.data) setForm(q.data); }, [q.data]);
-  useEffect(() => { if (qf.data) setFiscal(qf.data); }, [qf.data]);
+  useEffect(() => {
+    if (q.data) setForm(q.data);
+  }, [q.data]);
+  useEffect(() => {
+    if (qf.data) setFiscal(qf.data);
+  }, [qf.data]);
 
   const save = useMutation({
     mutationFn: async () => {
       if (!form) return;
-      const { error } = await supabase.from("receipt_settings").upsert(form, { onConflict: "store_id" });
+      const { error } = await supabase
+        .from("receipt_settings")
+        .upsert(form, { onConflict: "store_id" });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Configurações salvas"); qc.invalidateQueries({ queryKey: ["receipt_settings"] }); },
+    onSuccess: () => {
+      toast.success("Configurações salvas");
+      qc.invalidateQueries({ queryKey: ["receipt_settings"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const saveFiscal = useMutation({
     mutationFn: async () => {
       if (!fiscal) return;
-      const { error } = await supabase.from("fiscal_configs").upsert(fiscal as never, { onConflict: "store_id" });
+      const { error } = await supabase
+        .from("fiscal_configs")
+        .upsert(fiscal as never, { onConflict: "store_id" });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Configuração fiscal salva"); qc.invalidateQueries({ queryKey: ["fiscal_configs"] }); },
+    onSuccess: () => {
+      toast.success("Configuração fiscal salva");
+      qc.invalidateQueries({ queryKey: ["fiscal_configs"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -186,9 +332,13 @@ function SettingsPage() {
       if (!storeId) throw new Error("Sem loja");
       const ext = file.name.split(".").pop() || "png";
       const path = `${storeId}/logo.${ext}`;
-      const { error: upErr } = await supabase.storage.from("receipt-logos").upload(path, file, { upsert: true, contentType: file.type });
+      const { error: upErr } = await supabase.storage
+        .from("receipt-logos")
+        .upload(path, file, { upsert: true, contentType: file.type });
       if (upErr) throw upErr;
-      const { data } = await supabase.storage.from("receipt-logos").createSignedUrl(path, 60 * 60 * 24 * 365);
+      const { data } = await supabase.storage
+        .from("receipt-logos")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
       const url = data?.signedUrl ?? null;
       if (form) {
         const next = { ...form, logo_url: url };
@@ -206,7 +356,9 @@ function SettingsPage() {
       if (!storeId) throw new Error("Sem loja");
       if (!certPassword) throw new Error("Informe a senha do certificado");
       const path = `${storeId}/${file.name}`;
-      const { error: upErr } = await supabase.storage.from("fiscal-certificates").upload(path, file, { upsert: true, contentType: "application/x-pkcs12" });
+      const { error: upErr } = await supabase.storage
+        .from("fiscal-certificates")
+        .upload(path, file, { upsert: true, contentType: "application/x-pkcs12" });
       if (upErr) throw upErr;
       const next: FiscalConfig = {
         ...(fiscal as FiscalConfig),
@@ -216,7 +368,9 @@ function SettingsPage() {
         certificate_password_set: true,
         certificate_subject: fiscal?.certificate_subject ?? null,
       };
-      const { error } = await supabase.from("fiscal_configs").upsert(next as never, { onConflict: "store_id" });
+      const { error } = await supabase
+        .from("fiscal_configs")
+        .upsert(next as never, { onConflict: "store_id" });
       if (error) throw error;
       setFiscal(next);
       setCertPassword("");
@@ -229,8 +383,17 @@ function SettingsPage() {
     mutationFn: async () => {
       if (!fiscal?.certificate_path) return;
       await supabase.storage.from("fiscal-certificates").remove([fiscal.certificate_path]);
-      const next: FiscalConfig = { ...fiscal, certificate_uploaded: false, certificate_path: null, certificate_filename: null, certificate_password_set: false, certificate_subject: null };
-      const { error } = await supabase.from("fiscal_configs").upsert(next as never, { onConflict: "store_id" });
+      const next: FiscalConfig = {
+        ...fiscal,
+        certificate_uploaded: false,
+        certificate_path: null,
+        certificate_filename: null,
+        certificate_password_set: false,
+        certificate_subject: null,
+      };
+      const { error } = await supabase
+        .from("fiscal_configs")
+        .upsert(next as never, { onConflict: "store_id" });
       if (error) throw error;
       setFiscal(next);
     },
@@ -239,50 +402,78 @@ function SettingsPage() {
   });
 
   if (!store) return <StoreRequired />;
-  if (!form || !fiscal) return <div className="p-6 text-sm text-muted-foreground">Carregando...</div>;
+  if (!form || !fiscal)
+    return <div className="p-6 text-sm text-muted-foreground">Carregando...</div>;
 
   const buildPreviewData = (): ReceiptData => ({
     store: {
       name: store.fantasy_name || store.name,
       cnpj: form.show_cnpj ? store.cnpj : null,
-      address: form.show_address ? ([store.city, store.state].filter(Boolean).join(" · ") || null) : null,
+      address: form.show_address
+        ? [store.city, store.state].filter(Boolean).join(" · ") || null
+        : null,
       phone: null,
     },
     header: form.header_text,
     footer: [form.thank_you_text, form.footer_text, form.extra_info].filter(Boolean).join("\n"),
     paper_width: form.paper_width,
     items: [
-      { name: "REFRIGERANTE COLA 2L", quantity: 2, unit_price: 8.5, total: 17, barcode: form.show_item_code ? "7891234567890" : undefined },
+      {
+        name: "REFRIGERANTE COLA 2L",
+        quantity: 2,
+        unit_price: 8.5,
+        total: 17,
+        barcode: form.show_item_code ? "7891234567890" : undefined,
+      },
       { name: "PAO FRANCES KG", quantity: 0.42, unit_price: 15.9, total: 6.68 },
     ],
-    subtotal: 23.68, discount: 0, total: 23.68, payment_method: "dinheiro",
-    received: 30, change: 6.32,
+    subtotal: 23.68,
+    discount: 0,
+    total: 23.68,
+    payment_method: "dinheiro",
+    received: 30,
+    change: 6.32,
     operator: form.show_operator ? "Operador exemplo" : undefined,
     customer: form.show_customer ? { name: "Cliente exemplo", doc: null } : undefined,
-    sale_id: "PREVIEW00", document_type: form.default_document, issued_at: new Date(),
+    sale_id: "PREVIEW00",
+    document_type: form.default_document,
+    issued_at: new Date(),
   });
 
   const printTestReceipt = async () => {
     const ok = await tryPrintEscPos(buildPreviewData(), true);
-    if (!ok) toast.error("Impressão direta não conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora do PDV.");
+    if (!ok)
+      toast.error(
+        "Impressão direta não conectada. Ative o Agente Local ou autorize USB/Serial no botão Impressora do PDV.",
+      );
     else toast.success("Cupom teste enviado à impressora");
   };
 
-
   return (
     <div>
-      <PageHeader title="Configurações · Fiscal, PDV e recibos" description="Certificado digital, personalização de nota, papel, cabeçalho e rodapé" />
+      <PageHeader
+        title="Configurações · Fiscal, PDV e recibos"
+        description="Certificado digital, personalização de nota, papel, cabeçalho e rodapé"
+      />
 
       <div className="p-6 max-w-5xl">
         <Tabs defaultValue="recibo">
           <TabsList>
-            <TabsTrigger value="aparencia" className="gap-1"><Palette className="size-3" /> Aparência</TabsTrigger>
+            <TabsTrigger value="aparencia" className="gap-1">
+              <Palette className="size-3" /> Aparência
+            </TabsTrigger>
             <TabsTrigger value="recibo">Cupom / Nota</TabsTrigger>
             <TabsTrigger value="fiscal">Fiscal & Certificado A1</TabsTrigger>
             <TabsTrigger value="numeracao">Numeração NFC-e/NF-e</TabsTrigger>
-            <TabsTrigger value="pix" className="gap-1"><QrCode className="size-3" /> PIX</TabsTrigger>
-            <TabsTrigger value="hardware" className="gap-1"><Cable className="size-3" /> Hardware (Balança / Maquininha)</TabsTrigger>
-            <TabsTrigger value="seguranca" className="gap-1"><ShieldCheck className="size-3" /> Segurança</TabsTrigger>
+            <TabsTrigger value="pix" className="gap-1">
+              <QrCode className="size-3" /> PIX
+            </TabsTrigger>
+            <TabsTrigger value="hardware" className="gap-1">
+              <Cable className="size-3" /> Hardware (Balança / Maquininha)
+            </TabsTrigger>
+            <TabsTrigger value="seguranca" className="gap-1">
+              <ShieldCheck className="size-3" /> Segurança
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="aparencia" className="mt-4">
@@ -300,12 +491,20 @@ function SettingsPage() {
             </div>
           </TabsContent>
 
-
           <TabsContent value="recibo" className="mt-4">
             <div className="flex justify-end gap-2 mb-4 flex-wrap">
-              <Button variant="outline" className="gap-2" onClick={() => setPreviewOpen(true)}><Eye className="size-4" />Prévia na tela</Button>
-              <Button variant="outline" className="gap-2" onClick={printTestReceipt}><Printer className="size-4" />Imprimir teste</Button>
-              <Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-2"><Save className="size-4" />Salvar</Button>
+              <Button variant="outline" className="gap-2" onClick={() => setPreviewOpen(true)}>
+                <Eye className="size-4" />
+                Prévia na tela
+              </Button>
+              <Button variant="outline" className="gap-2" onClick={printTestReceipt}>
+                <Printer className="size-4" />
+                Imprimir teste
+              </Button>
+              <Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-2">
+                <Save className="size-4" />
+                Salvar
+              </Button>
             </div>
 
             <ReceiptPreviewDialog
@@ -318,22 +517,36 @@ function SettingsPage() {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="border border-border rounded-md bg-card p-4 space-y-3 md:col-span-2">
                 <h3 className="text-sm font-semibold">Documento padrão emitido pelo PDV</h3>
-                <Select value={form.default_document} onValueChange={(v) => setForm({ ...form, default_document: v as ReceiptSettings["default_document"] })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={form.default_document}
+                  onValueChange={(v) =>
+                    setForm({ ...form, default_document: v as ReceiptSettings["default_document"] })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="nao_fiscal">Recibo não-fiscal (rápido)</SelectItem>
                     <SelectItem value="fiscal">NFC-e (fiscal — requer certificado A1)</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">O operador poderá trocar caso-a-caso no PDV.</p>
+                <p className="text-xs text-muted-foreground">
+                  O operador poderá trocar caso-a-caso no PDV.
+                </p>
               </div>
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
                 <h3 className="text-sm font-semibold">Papel e comportamento</h3>
                 <div>
                   <Label className="text-xs">Largura do papel</Label>
-                  <Select value={String(form.paper_width)} onValueChange={(v) => setForm({ ...form, paper_width: Number(v) as 58 | 80 })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={String(form.paper_width)}
+                    onValueChange={(v) => setForm({ ...form, paper_width: Number(v) as 58 | 80 })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="80">80mm (padrão)</SelectItem>
                       <SelectItem value="58">58mm (portátil)</SelectItem>
@@ -342,8 +555,15 @@ function SettingsPage() {
                 </div>
                 <div>
                   <Label className="text-xs">Tamanho da fonte</Label>
-                  <Select value={form.font_size} onValueChange={(v) => setForm({ ...form, font_size: v as ReceiptSettings["font_size"] })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={form.font_size}
+                    onValueChange={(v) =>
+                      setForm({ ...form, font_size: v as ReceiptSettings["font_size"] })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="small">Fonte pequena</SelectItem>
                       <SelectItem value="medium">Fonte média</SelectItem>
@@ -352,9 +572,13 @@ function SettingsPage() {
                   </Select>
                 </div>
                 <div className="border-t border-border pt-3">
-                  <Label className="text-xs flex items-center gap-1"><Printer className="size-3" /> Intensidade de impressão (escurecimento)</Label>
+                  <Label className="text-xs flex items-center gap-1">
+                    <Printer className="size-3" /> Intensidade de impressão (escurecimento)
+                  </Label>
                   <Select value={density} onValueChange={(v) => changeDensity(v as PrintDensity)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="light">{DENSITY_LABELS.light}</SelectItem>
                       <SelectItem value="medium">{DENSITY_LABELS.medium}</SelectItem>
@@ -362,32 +586,68 @@ function SettingsPage() {
                       <SelectItem value="extra_dark">{DENSITY_LABELS.extra_dark}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-[11px] text-muted-foreground mt-1">Se o cupom estiver muito claro, use "Escura" ou "Muito escura". Configuração salva neste dispositivo.</p>
-                  <Button variant="outline" size="sm" className="w-full mt-2 gap-2" onClick={testPrint}>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Se o cupom estiver muito claro, use "Escura" ou "Muito escura". Configuração
+                    salva neste dispositivo.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-2 gap-2"
+                    onClick={testPrint}
+                  >
                     <Printer className="size-4" /> Imprimir teste de intensidade
                   </Button>
                 </div>
                 <div className="flex items-center justify-between border-t border-border pt-3">
-                  <div><Label>Imprimir automaticamente</Label><p className="text-xs text-muted-foreground">Abre a impressão ao finalizar venda</p></div>
-                  <Switch checked={form.print_auto} onCheckedChange={(c) => setForm({ ...form, print_auto: c })} />
+                  <div>
+                    <Label>Imprimir automaticamente</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Abre a impressão ao finalizar venda
+                    </p>
+                  </div>
+                  <Switch
+                    checked={form.print_auto}
+                    onCheckedChange={(c) => setForm({ ...form, print_auto: c })}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
-                  <div><Label>Perguntar CPF do cliente</Label><p className="text-xs text-muted-foreground">Antes de finalizar</p></div>
-                  <Switch checked={form.ask_customer} onCheckedChange={(c) => setForm({ ...form, ask_customer: c })} />
+                  <div>
+                    <Label>Perguntar CPF do cliente</Label>
+                    <p className="text-xs text-muted-foreground">Antes de finalizar</p>
+                  </div>
+                  <Switch
+                    checked={form.ask_customer}
+                    onCheckedChange={(c) => setForm({ ...form, ask_customer: c })}
+                  />
                 </div>
               </div>
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
-                <h3 className="text-sm font-semibold flex items-center gap-2"><Archive className="size-4" /> Gaveta de dinheiro</h3>
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Archive className="size-4" /> Gaveta de dinheiro
+                </h3>
                 <p className="text-[11px] text-muted-foreground">
-                  A gaveta é aberta por um pulso enviado à impressora térmica (conector RJ11/RJ12). Funciona pelo Agente Local e, como reserva, por WebUSB/Serial.
+                  A gaveta é aberta por um pulso enviado à impressora térmica (conector RJ11/RJ12).
+                  Funciona pelo Agente Local e, como reserva, por WebUSB/Serial.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div><Label>Abrir automaticamente</Label><p className="text-xs text-muted-foreground">Ao finalizar a venda</p></div>
-                  <Switch checked={form.drawer_auto} onCheckedChange={(c) => setForm({ ...form, drawer_auto: c })} />
+                  <div>
+                    <Label>Abrir automaticamente</Label>
+                    <p className="text-xs text-muted-foreground">Ao finalizar a venda</p>
+                  </div>
+                  <Switch
+                    checked={form.drawer_auto}
+                    onCheckedChange={(c) => setForm({ ...form, drawer_auto: c })}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
-                  <div><Label>Somente com dinheiro</Label><p className="text-xs text-muted-foreground">Não abre em cartão/PIX sem troco</p></div>
+                  <div>
+                    <Label>Somente com dinheiro</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Não abre em cartão/PIX sem troco
+                    </p>
+                  </div>
                   <Switch
                     checked={form.drawer_cash_only}
                     disabled={!form.drawer_auto}
@@ -398,15 +658,21 @@ function SettingsPage() {
                   <Label>Pino do conector</Label>
                   <Select
                     value={String(form.drawer_pulse_pin)}
-                    onValueChange={(v) => setForm({ ...form, drawer_pulse_pin: Number(v) as 0 | 1 })}
+                    onValueChange={(v) =>
+                      setForm({ ...form, drawer_pulse_pin: Number(v) as 0 | 1 })
+                    }
                   >
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">Pino 2 (padrão)</SelectItem>
                       <SelectItem value="1">Pino 5 (alternativo)</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-[11px] text-muted-foreground mt-1">Se a gaveta não abrir com o padrão, troque para o pino 5.</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Se a gaveta não abrir com o padrão, troque para o pino 5.
+                  </p>
                 </div>
                 <div className="border-t border-border pt-3">
                   <Label className="text-xs">Teste de pinos</Label>
@@ -419,38 +685,80 @@ function SettingsPage() {
                 {storeId && <CashDrawerButton storeId={storeId} className="w-full" />}
               </div>
 
-
-
-
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
-                <h3 className="text-sm font-semibold flex items-center gap-2"><ImageIcon className="size-4" /> Logo da empresa</h3>
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <ImageIcon className="size-4" /> Logo da empresa
+                </h3>
                 {form.logo_url ? (
                   <div className="border border-border rounded p-3 flex items-center gap-3">
                     <img src={form.logo_url} alt="Logo" className="h-12 w-auto bg-white rounded" />
-                    <div className="flex-1 text-xs text-muted-foreground truncate">Logo enviado</div>
-                    <Button size="sm" variant="ghost" onClick={() => setForm({ ...form, logo_url: null })}><Trash2 className="size-4" /></Button>
+                    <div className="flex-1 text-xs text-muted-foreground truncate">
+                      Logo enviado
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setForm({ ...form, logo_url: null })}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">Nenhum logo enviado.</p>
                 )}
-                <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo.mutate(f); }} />
-                <Button variant="outline" size="sm" className="gap-2 w-full" onClick={() => logoInputRef.current?.click()} disabled={uploadLogo.isPending}>
-                  <Upload className="size-4" /> {uploadLogo.isPending ? "Enviando..." : "Enviar logo (PNG/JPG)"}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadLogo.mutate(f);
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 w-full"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={uploadLogo.isPending}
+                >
+                  <Upload className="size-4" />{" "}
+                  {uploadLogo.isPending ? "Enviando..." : "Enviar logo (PNG/JPG)"}
                 </Button>
-                <div><Label>Ou URL externa</Label><Input value={form.logo_url ?? ""} onChange={(e) => setForm({ ...form, logo_url: e.target.value || null })} placeholder="https://..." /></div>
+                <div>
+                  <Label>Ou URL externa</Label>
+                  <Input
+                    value={form.logo_url ?? ""}
+                    onChange={(e) => setForm({ ...form, logo_url: e.target.value || null })}
+                    placeholder="https://..."
+                  />
+                </div>
               </div>
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3 md:col-span-2">
                 <h3 className="text-sm font-semibold">O que exibir no cupom</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {([
-                    ["show_logo", "Logo"], ["show_cnpj", "CNPJ"], ["show_address", "Endereço"],
-                    ["show_operator", "Operador"], ["show_customer", "Cliente"],
-                    ["show_item_code", "Código do item"], ["show_qrcode", "QR Code"],
-                  ] as const).map(([k, label]) => (
-                    <label key={k} className="flex items-center justify-between border border-border rounded p-2 text-sm">
+                  {(
+                    [
+                      ["show_logo", "Logo"],
+                      ["show_cnpj", "CNPJ"],
+                      ["show_address", "Endereço"],
+                      ["show_operator", "Operador"],
+                      ["show_customer", "Cliente"],
+                      ["show_item_code", "Código do item"],
+                      ["show_qrcode", "QR Code"],
+                    ] as const
+                  ).map(([k, label]) => (
+                    <label
+                      key={k}
+                      className="flex items-center justify-between border border-border rounded p-2 text-sm"
+                    >
                       <span>{label}</span>
-                      <Switch checked={form[k]} onCheckedChange={(c) => setForm({ ...form, [k]: c })} />
+                      <Switch
+                        checked={form[k]}
+                        onCheckedChange={(c) => setForm({ ...form, [k]: c })}
+                      />
                     </label>
                   ))}
                 </div>
@@ -458,41 +766,127 @@ function SettingsPage() {
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3 md:col-span-2">
                 <h3 className="text-sm font-semibold">Textos personalizados</h3>
-                <div><Label>Cabeçalho</Label><Textarea rows={2} value={form.header_text ?? ""} onChange={(e) => setForm({ ...form, header_text: e.target.value || null })} placeholder="Ex: promoção da semana" /></div>
-                <div><Label>Agradecimento</Label><Input value={form.thank_you_text ?? ""} onChange={(e) => setForm({ ...form, thank_you_text: e.target.value || null })} placeholder="Volte sempre!" /></div>
-                <div><Label>Rodapé</Label><Textarea rows={2} value={form.footer_text ?? ""} onChange={(e) => setForm({ ...form, footer_text: e.target.value || null })} /></div>
-                <div><Label>Informações extras (redes sociais, política de troca...)</Label><Textarea rows={2} value={form.extra_info ?? ""} onChange={(e) => setForm({ ...form, extra_info: e.target.value || null })} /></div>
+                <div>
+                  <Label>Cabeçalho</Label>
+                  <Textarea
+                    rows={2}
+                    value={form.header_text ?? ""}
+                    onChange={(e) => setForm({ ...form, header_text: e.target.value || null })}
+                    placeholder="Ex: promoção da semana"
+                  />
+                </div>
+                <div>
+                  <Label>Agradecimento</Label>
+                  <Input
+                    value={form.thank_you_text ?? ""}
+                    onChange={(e) => setForm({ ...form, thank_you_text: e.target.value || null })}
+                    placeholder="Volte sempre!"
+                  />
+                </div>
+                <div>
+                  <Label>Rodapé</Label>
+                  <Textarea
+                    rows={2}
+                    value={form.footer_text ?? ""}
+                    onChange={(e) => setForm({ ...form, footer_text: e.target.value || null })}
+                  />
+                </div>
+                <div>
+                  <Label>Informações extras (redes sociais, política de troca...)</Label>
+                  <Textarea
+                    rows={2}
+                    value={form.extra_info ?? ""}
+                    onChange={(e) => setForm({ ...form, extra_info: e.target.value || null })}
+                  />
+                </div>
               </div>
             </div>
           </TabsContent>
 
           <TabsContent value="fiscal" className="mt-4">
             <div className="flex justify-end gap-2 mb-4">
-              <Button onClick={() => saveFiscal.mutate()} disabled={saveFiscal.isPending} className="gap-2"><Save className="size-4" />Salvar</Button>
+              <Button
+                onClick={() => saveFiscal.mutate()}
+                disabled={saveFiscal.isPending}
+                className="gap-2"
+              >
+                <Save className="size-4" />
+                Salvar
+              </Button>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="border border-border rounded-md bg-card p-4 space-y-3 md:col-span-2">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold">Certificado Digital A1 (.pfx)</h3>
-                  {fiscal.certificate_uploaded
-                    ? <Badge variant="outline" className="border-primary/40 text-primary gap-1"><ShieldCheck className="size-3" /> Configurado</Badge>
-                    : <Badge variant="outline" className="border-warning/40 text-warning gap-1"><ShieldAlert className="size-3" /> Não configurado</Badge>}
+                  {fiscal.certificate_uploaded ? (
+                    <Badge variant="outline" className="border-primary/40 text-primary gap-1">
+                      <ShieldCheck className="size-3" /> Configurado
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-warning/40 text-warning gap-1">
+                      <ShieldAlert className="size-3" /> Não configurado
+                    </Badge>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">Armazenado com segurança em bucket privado. Necessário para transmitir NFC-e/NF-e para a SEFAZ.</p>
+                <p className="text-xs text-muted-foreground">
+                  Armazenado com segurança em bucket privado. Necessário para transmitir NFC-e/NF-e
+                  para a SEFAZ.
+                </p>
                 {fiscal.certificate_uploaded && (
                   <div className="border border-border rounded p-3 text-xs space-y-1">
-                    <div><b>Arquivo:</b> {fiscal.certificate_filename}</div>
-                    {fiscal.certificate_subject && <div><b>Titular:</b> {fiscal.certificate_subject}</div>}
-                    {fiscal.certificate_expires_on && <div><b>Válido até:</b> {new Date(fiscal.certificate_expires_on).toLocaleDateString("pt-BR")}</div>}
-                    <Button size="sm" variant="ghost" className="text-destructive gap-1 mt-2" onClick={() => removeCert.mutate()}><Trash2 className="size-3" /> Remover</Button>
+                    <div>
+                      <b>Arquivo:</b> {fiscal.certificate_filename}
+                    </div>
+                    {fiscal.certificate_subject && (
+                      <div>
+                        <b>Titular:</b> {fiscal.certificate_subject}
+                      </div>
+                    )}
+                    {fiscal.certificate_expires_on && (
+                      <div>
+                        <b>Válido até:</b>{" "}
+                        {new Date(fiscal.certificate_expires_on).toLocaleDateString("pt-BR")}
+                      </div>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive gap-1 mt-2"
+                      onClick={() => removeCert.mutate()}
+                    >
+                      <Trash2 className="size-3" /> Remover
+                    </Button>
                   </div>
                 )}
                 <div className="grid md:grid-cols-2 gap-3">
-                  <div><Label>Senha do certificado</Label><Input type="password" value={certPassword} onChange={(e) => setCertPassword(e.target.value)} placeholder="•••••••" /></div>
+                  <div>
+                    <Label>Senha do certificado</Label>
+                    <Input
+                      type="password"
+                      value={certPassword}
+                      onChange={(e) => setCertPassword(e.target.value)}
+                      placeholder="•••••••"
+                    />
+                  </div>
                   <div className="flex items-end">
-                    <input ref={certInputRef} type="file" accept=".pfx,.p12" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCert.mutate(f); }} />
-                    <Button variant="outline" className="gap-2 w-full" onClick={() => certInputRef.current?.click()} disabled={uploadCert.isPending || !certPassword}>
-                      <Upload className="size-4" /> {uploadCert.isPending ? "Enviando..." : "Enviar .pfx / .p12"}
+                    <input
+                      ref={certInputRef}
+                      type="file"
+                      accept=".pfx,.p12"
+                      hidden
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadCert.mutate(f);
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      className="gap-2 w-full"
+                      onClick={() => certInputRef.current?.click()}
+                      disabled={uploadCert.isPending || !certPassword}
+                    >
+                      <Upload className="size-4" />{" "}
+                      {uploadCert.isPending ? "Enviando..." : "Enviar .pfx / .p12"}
                     </Button>
                   </div>
                 </div>
@@ -500,8 +894,13 @@ function SettingsPage() {
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
                 <h3 className="text-sm font-semibold">Provedor de emissão</h3>
-                <Select value={fiscal.provider} onValueChange={(v) => setFiscal({ ...fiscal, provider: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={fiscal.provider}
+                  onValueChange={(v) => setFiscal({ ...fiscal, provider: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="focus_nfe">Focus NFe</SelectItem>
                     <SelectItem value="plugnotas">PlugNotas</SelectItem>
@@ -511,22 +910,49 @@ function SettingsPage() {
                     <SelectItem value="direto_sefaz">Direto SEFAZ (avançado)</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={fiscal.environment} onValueChange={(v) => setFiscal({ ...fiscal, environment: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={fiscal.environment}
+                  onValueChange={(v) => setFiscal({ ...fiscal, environment: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="homologacao">Homologação (testes)</SelectItem>
                     <SelectItem value="producao">Produção</SelectItem>
                   </SelectContent>
                 </Select>
-                <div><Label>URL da API (opcional)</Label><Input value={fiscal.provider_api_url ?? ""} onChange={(e) => setFiscal({ ...fiscal, provider_api_url: e.target.value || null })} placeholder="https://api.provedor.com/v2" /></div>
+                <div>
+                  <Label>URL da API (opcional)</Label>
+                  <Input
+                    value={fiscal.provider_api_url ?? ""}
+                    onChange={(e) =>
+                      setFiscal({ ...fiscal, provider_api_url: e.target.value || null })
+                    }
+                    placeholder="https://api.provedor.com/v2"
+                  />
+                </div>
               </div>
 
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
                 <h3 className="text-sm font-semibold">Dados do emitente</h3>
-                <div><Label>CNAE principal</Label><Input value={fiscal.cnae ?? ""} onChange={(e) => setFiscal({ ...fiscal, cnae: e.target.value || null })} placeholder="4711-3/02" /></div>
-                <div><Label>CRT (Código de Regime Tributário)</Label>
-                  <Select value={fiscal.crt ?? ""} onValueChange={(v) => setFiscal({ ...fiscal, crt: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <div>
+                  <Label>CNAE principal</Label>
+                  <Input
+                    value={fiscal.cnae ?? ""}
+                    onChange={(e) => setFiscal({ ...fiscal, cnae: e.target.value || null })}
+                    placeholder="4711-3/02"
+                  />
+                </div>
+                <div>
+                  <Label>CRT (Código de Regime Tributário)</Label>
+                  <Select
+                    value={fiscal.crt ?? ""}
+                    onValueChange={(v) => setFiscal({ ...fiscal, crt: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">1 - Simples Nacional</SelectItem>
                       <SelectItem value="2">2 - Simples Nacional (excesso)</SelectItem>
@@ -535,40 +961,96 @@ function SettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>CSC ID (Token NFC-e)</Label><Input value={fiscal.csc_id ?? ""} onChange={(e) => setFiscal({ ...fiscal, csc_id: e.target.value || null })} placeholder="000001" /></div>
-                <div><Label>CSC Token</Label><Input type="password" value={fiscal.csc_token ?? ""} onChange={(e) => setFiscal({ ...fiscal, csc_token: e.target.value || null })} /></div>
+                <div>
+                  <Label>CSC ID (Token NFC-e)</Label>
+                  <Input
+                    value={fiscal.csc_id ?? ""}
+                    onChange={(e) => setFiscal({ ...fiscal, csc_id: e.target.value || null })}
+                    placeholder="000001"
+                  />
+                </div>
+                <div>
+                  <Label>CSC Token</Label>
+                  <Input
+                    type="password"
+                    value={fiscal.csc_token ?? ""}
+                    onChange={(e) => setFiscal({ ...fiscal, csc_token: e.target.value || null })}
+                  />
+                </div>
               </div>
 
               <div className="border border-warning/40 rounded-md bg-warning/5 p-4 space-y-3 md:col-span-2">
                 <div className="flex items-center gap-2">
                   <KeyRound className="size-4 text-warning" />
                   <h3 className="text-sm font-semibold">Credencial do provedor (API)</h3>
-                  <Badge variant="outline" className={fiscal.defer_credentials ? "border-warning/40 text-warning gap-1" : "border-primary/40 text-primary gap-1"}>
-                    {fiscal.defer_credentials ? <><Clock className="size-3" /> Registrar depois</> : <><ShieldCheck className="size-3" /> Ativa no backend</>}
+                  <Badge
+                    variant="outline"
+                    className={
+                      fiscal.defer_credentials
+                        ? "border-warning/40 text-warning gap-1"
+                        : "border-primary/40 text-primary gap-1"
+                    }
+                  >
+                    {fiscal.defer_credentials ? (
+                      <>
+                        <Clock className="size-3" /> Registrar depois
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="size-3" /> Ativa no backend
+                      </>
+                    )}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Você pode continuar sem cadastrar agora. Enquanto esta opção estiver marcada, o PDV funciona em modo <b>recibo não-fiscal</b> e a emissão real fica bloqueada com uma mensagem explicando o que falta.
+                  Você pode continuar sem cadastrar agora. Enquanto esta opção estiver marcada, o
+                  PDV funciona em modo <b>recibo não-fiscal</b> e a emissão real fica bloqueada com
+                  uma mensagem explicando o que falta.
                 </p>
                 <div className="flex items-center justify-between border border-border rounded p-3 bg-card">
                   <div>
                     <Label className="text-sm">Configurar credencial depois</Label>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Segredo esperado: <span className="font-mono">{PROVIDER_INFO[fiscal.provider]?.secret ?? "—"}</span>
-                      {PROVIDER_INFO[fiscal.provider] && ` · ${PROVIDER_INFO[fiscal.provider]!.note}`}
+                      Segredo esperado:{" "}
+                      <span className="font-mono">
+                        {PROVIDER_INFO[fiscal.provider]?.secret ?? "—"}
+                      </span>
+                      {PROVIDER_INFO[fiscal.provider] &&
+                        ` · ${PROVIDER_INFO[fiscal.provider]!.note}`}
                     </p>
                   </div>
-                  <Switch checked={fiscal.defer_credentials} onCheckedChange={(c) => setFiscal({ ...fiscal, defer_credentials: c })} />
+                  <Switch
+                    checked={fiscal.defer_credentials}
+                    onCheckedChange={(c) => setFiscal({ ...fiscal, defer_credentials: c })}
+                  />
                 </div>
-                <div><Label>Anotação para lembrar depois</Label>
-                  <Textarea rows={2} value={fiscal.credentials_note ?? ""} onChange={(e) => setFiscal({ ...fiscal, credentials_note: e.target.value || null })} placeholder="Ex: aguardando contrato Focus NFe · responsável: contador João" />
+                <div>
+                  <Label>Anotação para lembrar depois</Label>
+                  <Textarea
+                    rows={2}
+                    value={fiscal.credentials_note ?? ""}
+                    onChange={(e) =>
+                      setFiscal({ ...fiscal, credentials_note: e.target.value || null })
+                    }
+                    placeholder="Ex: aguardando contrato Focus NFe · responsável: contador João"
+                  />
                 </div>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <a href="/docs/fiscal-setup.md" target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1">
+                  <a
+                    href="/docs/fiscal-setup.md"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-info hover:underline inline-flex items-center gap-1"
+                  >
                     <BookOpen className="size-3" /> Guia completo: como obter a API do provedor
                   </a>
                   {PROVIDER_INFO[fiscal.provider]?.url && (
-                    <a href={PROVIDER_INFO[fiscal.provider]!.url} target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1">
+                    <a
+                      href={PROVIDER_INFO[fiscal.provider]!.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-info hover:underline inline-flex items-center gap-1"
+                    >
                       Documentação {PROVIDER_INFO[fiscal.provider]!.label}
                     </a>
                   )}
@@ -579,18 +1061,57 @@ function SettingsPage() {
 
           <TabsContent value="numeracao" className="mt-4">
             <div className="flex justify-end gap-2 mb-4">
-              <Button onClick={() => saveFiscal.mutate()} disabled={saveFiscal.isPending} className="gap-2"><Save className="size-4" />Salvar</Button>
+              <Button
+                onClick={() => saveFiscal.mutate()}
+                disabled={saveFiscal.isPending}
+                className="gap-2"
+              >
+                <Save className="size-4" />
+                Salvar
+              </Button>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
                 <h3 className="text-sm font-semibold">NFC-e</h3>
-                <div><Label>Série</Label><Input type="number" value={fiscal.nfce_series} onChange={(e) => setFiscal({ ...fiscal, nfce_series: Number(e.target.value) })} /></div>
-                <div><Label>Próximo número</Label><Input type="number" value={fiscal.nfce_next_number} onChange={(e) => setFiscal({ ...fiscal, nfce_next_number: Number(e.target.value) })} /></div>
+                <div>
+                  <Label>Série</Label>
+                  <Input
+                    type="number"
+                    value={fiscal.nfce_series}
+                    onChange={(e) => setFiscal({ ...fiscal, nfce_series: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Próximo número</Label>
+                  <Input
+                    type="number"
+                    value={fiscal.nfce_next_number}
+                    onChange={(e) =>
+                      setFiscal({ ...fiscal, nfce_next_number: Number(e.target.value) })
+                    }
+                  />
+                </div>
               </div>
               <div className="border border-border rounded-md bg-card p-4 space-y-3">
                 <h3 className="text-sm font-semibold">NF-e</h3>
-                <div><Label>Série</Label><Input type="number" value={fiscal.nfe_series} onChange={(e) => setFiscal({ ...fiscal, nfe_series: Number(e.target.value) })} /></div>
-                <div><Label>Próximo número</Label><Input type="number" value={fiscal.nfe_next_number} onChange={(e) => setFiscal({ ...fiscal, nfe_next_number: Number(e.target.value) })} /></div>
+                <div>
+                  <Label>Série</Label>
+                  <Input
+                    type="number"
+                    value={fiscal.nfe_series}
+                    onChange={(e) => setFiscal({ ...fiscal, nfe_series: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Próximo número</Label>
+                  <Input
+                    type="number"
+                    value={fiscal.nfe_next_number}
+                    onChange={(e) =>
+                      setFiscal({ ...fiscal, nfe_next_number: Number(e.target.value) })
+                    }
+                  />
+                </div>
               </div>
             </div>
           </TabsContent>
@@ -610,50 +1131,115 @@ function SettingsPage() {
 }
 
 const COLOR_PRESETS: { name: string; primary: string; accent: string; background: string }[] = [
-  { name: "Terminal (padrão)", primary: "oklch(0.78 0.18 155)", accent: "oklch(0.72 0.16 220)", background: "oklch(0.16 0.015 250)" },
-  { name: "Cyber Blue",        primary: "oklch(0.72 0.18 240)", accent: "oklch(0.78 0.16 180)", background: "oklch(0.15 0.02 260)" },
-  { name: "Sunset Orange",     primary: "oklch(0.75 0.19 55)",  accent: "oklch(0.72 0.16 30)",  background: "oklch(0.16 0.02 30)" },
-  { name: "Royal Purple",      primary: "oklch(0.68 0.22 300)", accent: "oklch(0.75 0.16 340)", background: "oklch(0.15 0.02 290)" },
-  { name: "Crimson Red",       primary: "oklch(0.65 0.24 25)",  accent: "oklch(0.72 0.16 55)",  background: "oklch(0.15 0.02 15)" },
-  { name: "Golden Amber",      primary: "oklch(0.82 0.17 85)",  accent: "oklch(0.72 0.16 55)",  background: "oklch(0.16 0.02 60)" },
-  { name: "Ocean Teal",        primary: "oklch(0.72 0.15 195)", accent: "oklch(0.68 0.14 220)", background: "oklch(0.15 0.02 220)" },
-  { name: "Mono Light",        primary: "oklch(0.55 0 0)",      accent: "oklch(0.65 0 0)",      background: "oklch(0.97 0 0)" },
+  {
+    name: "Terminal (padrão)",
+    primary: "oklch(0.78 0.18 155)",
+    accent: "oklch(0.72 0.16 220)",
+    background: "oklch(0.16 0.015 250)",
+  },
+  {
+    name: "Cyber Blue",
+    primary: "oklch(0.72 0.18 240)",
+    accent: "oklch(0.78 0.16 180)",
+    background: "oklch(0.15 0.02 260)",
+  },
+  {
+    name: "Sunset Orange",
+    primary: "oklch(0.75 0.19 55)",
+    accent: "oklch(0.72 0.16 30)",
+    background: "oklch(0.16 0.02 30)",
+  },
+  {
+    name: "Royal Purple",
+    primary: "oklch(0.68 0.22 300)",
+    accent: "oklch(0.75 0.16 340)",
+    background: "oklch(0.15 0.02 290)",
+  },
+  {
+    name: "Crimson Red",
+    primary: "oklch(0.65 0.24 25)",
+    accent: "oklch(0.72 0.16 55)",
+    background: "oklch(0.15 0.02 15)",
+  },
+  {
+    name: "Golden Amber",
+    primary: "oklch(0.82 0.17 85)",
+    accent: "oklch(0.72 0.16 55)",
+    background: "oklch(0.16 0.02 60)",
+  },
+  {
+    name: "Ocean Teal",
+    primary: "oklch(0.72 0.15 195)",
+    accent: "oklch(0.68 0.14 220)",
+    background: "oklch(0.15 0.02 220)",
+  },
+  {
+    name: "Mono Light",
+    primary: "oklch(0.55 0 0)",
+    accent: "oklch(0.65 0 0)",
+    background: "oklch(0.97 0 0)",
+  },
 ];
 
 function BrandingTab() {
   const [b, setB] = useState<Branding>(() => loadBranding());
-  const persist = (next: Branding) => { setB(next); saveBranding(next); };
-  const reset = () => { setB(DEFAULT_BRANDING); resetBranding(); toast.success("Aparência restaurada ao padrão"); };
+  const persist = (next: Branding) => {
+    setB(next);
+    saveBranding(next);
+  };
+  const reset = () => {
+    setB(DEFAULT_BRANDING);
+    resetBranding();
+    toast.success("Aparência restaurada ao padrão");
+  };
 
   return (
     <div className="space-y-4">
       <div className="border border-border rounded-md bg-card p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Palette className="size-4" /> Identidade do sistema</h3>
-          <Button variant="ghost" size="sm" className="gap-2" onClick={reset}><RotateCcw className="size-3" /> Restaurar padrão</Button>
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Palette className="size-4" /> Identidade do sistema
+          </h3>
+          <Button variant="ghost" size="sm" className="gap-2" onClick={reset}>
+            <RotateCcw className="size-3" /> Restaurar padrão
+          </Button>
         </div>
         <div className="grid md:grid-cols-2 gap-3">
           <div>
             <Label>Nome do sistema</Label>
-            <Input value={b.appName} onChange={(e) => persist({ ...b, appName: e.target.value })} placeholder="BASTION POS" />
+            <Input
+              value={b.appName}
+              onChange={(e) => persist({ ...b, appName: e.target.value })}
+              placeholder="BASTION POS"
+            />
           </div>
           <div>
             <Label>Sub-título / slogan</Label>
-            <Input value={b.appTagline} onChange={(e) => persist({ ...b, appTagline: e.target.value })} placeholder="Operações fiscais" />
+            <Input
+              value={b.appTagline}
+              onChange={(e) => persist({ ...b, appTagline: e.target.value })}
+              placeholder="Operações fiscais"
+            />
           </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">Alterações aplicam-se imediatamente à barra lateral e ao cabeçalho.</p>
+        <p className="text-[11px] text-muted-foreground">
+          Alterações aplicam-se imediatamente à barra lateral e ao cabeçalho.
+        </p>
       </div>
 
       <div className="border border-border rounded-md bg-card p-4 space-y-3">
         <h3 className="text-sm font-semibold">Modo de exibição</h3>
-        <p className="text-[11px] text-muted-foreground">Escolha entre tema claro, escuro ou seguir a preferência do sistema operacional.</p>
+        <p className="text-[11px] text-muted-foreground">
+          Escolha entre tema claro, escuro ou seguir a preferência do sistema operacional.
+        </p>
         <div className="grid grid-cols-3 gap-2">
-          {([
-            { key: "light",  label: "Claro",   icon: Sun },
-            { key: "dark",   label: "Escuro",  icon: Moon },
-            { key: "system", label: "Sistema", icon: Monitor },
-          ] as { key: ThemeMode; label: string; icon: typeof Sun }[]).map(({ key, label, icon: Icon }) => {
+          {(
+            [
+              { key: "light", label: "Claro", icon: Sun },
+              { key: "dark", label: "Escuro", icon: Moon },
+              { key: "system", label: "Sistema", icon: Monitor },
+            ] as { key: ThemeMode; label: string; icon: typeof Sun }[]
+          ).map(({ key, label, icon: Icon }) => {
             const active = b.mode === key;
             return (
               <button
@@ -674,18 +1260,24 @@ function BrandingTab() {
         <h3 className="text-sm font-semibold">Paletas predefinidas</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {COLOR_PRESETS.map((p) => {
-            const active = p.primary === b.primary && p.accent === b.accent && p.background === b.background;
+            const active =
+              p.primary === b.primary && p.accent === b.accent && p.background === b.background;
             return (
               <button
                 key={p.name}
                 type="button"
-                onClick={() => persist({ ...b, primary: p.primary, accent: p.accent, background: p.background })}
+                onClick={() =>
+                  persist({ ...b, primary: p.primary, accent: p.accent, background: p.background })
+                }
                 className={`border rounded-md p-3 text-left space-y-2 transition-all hover:border-primary/60 ${active ? "border-primary ring-2 ring-primary/30" : "border-border"}`}
               >
                 <div className="flex gap-1">
                   <span className="size-6 rounded" style={{ background: p.primary }} />
                   <span className="size-6 rounded" style={{ background: p.accent }} />
-                  <span className="size-6 rounded border border-border" style={{ background: p.background }} />
+                  <span
+                    className="size-6 rounded border border-border"
+                    style={{ background: p.background }}
+                  />
                 </div>
                 <div className="text-xs font-medium">{p.name}</div>
               </button>
@@ -696,11 +1288,27 @@ function BrandingTab() {
 
       <div className="border border-border rounded-md bg-card p-4 space-y-3">
         <h3 className="text-sm font-semibold">Cores personalizadas</h3>
-        <p className="text-[11px] text-muted-foreground">Aceita qualquer formato CSS: <span className="font-mono">#rrggbb</span>, <span className="font-mono">rgb(...)</span>, <span className="font-mono">hsl(...)</span> ou <span className="font-mono">oklch(...)</span>.</p>
+        <p className="text-[11px] text-muted-foreground">
+          Aceita qualquer formato CSS: <span className="font-mono">#rrggbb</span>,{" "}
+          <span className="font-mono">rgb(...)</span>, <span className="font-mono">hsl(...)</span>{" "}
+          ou <span className="font-mono">oklch(...)</span>.
+        </p>
         <div className="grid md:grid-cols-3 gap-3">
-          <ColorField label="Cor primária" value={b.primary} onChange={(v) => persist({ ...b, primary: v })} />
-          <ColorField label="Cor de destaque" value={b.accent} onChange={(v) => persist({ ...b, accent: v })} />
-          <ColorField label="Fundo do sistema" value={b.background} onChange={(v) => persist({ ...b, background: v })} />
+          <ColorField
+            label="Cor primária"
+            value={b.primary}
+            onChange={(v) => persist({ ...b, primary: v })}
+          />
+          <ColorField
+            label="Cor de destaque"
+            value={b.accent}
+            onChange={(v) => persist({ ...b, accent: v })}
+          />
+          <ColorField
+            label="Fundo do sistema"
+            value={b.background}
+            onChange={(v) => persist({ ...b, background: v })}
+          />
         </div>
       </div>
 
@@ -711,20 +1319,37 @@ function BrandingTab() {
           <Button variant="outline">Botão secundário</Button>
           <Button variant="destructive">Destrutivo</Button>
           <Badge className="bg-primary text-primary-foreground">Badge primária</Badge>
-          <Badge variant="outline" className="border-primary/40 text-primary">Badge outline</Badge>
+          <Badge variant="outline" className="border-primary/40 text-primary">
+            Badge outline
+          </Badge>
         </div>
       </div>
     </div>
   );
 }
 
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div>
       <Label>{label}</Label>
       <div className="flex gap-2 items-center">
-        <span className="size-9 rounded border border-border shrink-0" style={{ background: value }} />
-        <Input value={value} onChange={(e) => onChange(e.target.value)} className="font-mono text-xs" />
+        <span
+          className="size-9 rounded border border-border shrink-0"
+          style={{ background: value }}
+        />
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="font-mono text-xs"
+        />
       </div>
     </div>
   );

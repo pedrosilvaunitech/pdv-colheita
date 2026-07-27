@@ -7,11 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
-  getTefStatus, isTefEnabled, listTefProviders, saveTefConfig, setTefEnabled,
-  type TefConfig, type TefProviderInfo,
+  getTefStatus,
+  isTefEnabled,
+  listTefProviders,
+  saveTefConfig,
+  setTefEnabled,
+  type TefConfig,
+  type TefProviderInfo,
 } from "@/lib/tef-agent";
 
 /**
@@ -43,7 +54,10 @@ export function TefConfigCard() {
     }
   }, []);
 
-  useEffect(() => { setEnabled(isTefEnabled()); void refresh(); }, [refresh]);
+  useEffect(() => {
+    setEnabled(isTefEnabled());
+    void refresh();
+  }, [refresh]);
 
   const patch = async (p: Partial<TefConfig>) => {
     try {
@@ -60,9 +74,12 @@ export function TefConfigCard() {
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <div>
-          <CardTitle className="flex items-center gap-2"><CreditCard className="size-4" /> Maquininha / PIN Pad (TEF)</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="size-4" /> Maquininha / PIN Pad (TEF)
+          </CardTitle>
           <CardDescription>
-            Selecione a adquirente usada no caixa. O SDK oficial do provedor é instalado na pasta do agente.
+            Selecione a adquirente usada no caixa. O SDK oficial do provedor é instalado na pasta do
+            agente.
           </CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
@@ -71,23 +88,38 @@ export function TefConfigCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         {agentError && (
-          <p className="text-xs rounded border border-destructive/40 bg-destructive/10 p-3 text-destructive">{agentError}</p>
+          <p className="text-xs rounded border border-destructive/40 bg-destructive/10 p-3 text-destructive">
+            {agentError}
+          </p>
         )}
 
         <div className="flex items-center justify-between rounded border border-border p-3">
           <div>
             <Label className="text-sm">Cobrar cartão pelo PIN Pad no PDV</Label>
-            <p className="text-xs text-muted-foreground">Bloqueia a venda até a aprovação da transação.</p>
+            <p className="text-xs text-muted-foreground">
+              Bloqueia a venda até a aprovação da transação.
+            </p>
           </div>
-          <Switch checked={enabled} onCheckedChange={(v) => { setTefEnabled(v); setEnabled(v); }} />
+          <Switch
+            checked={enabled}
+            onCheckedChange={(v) => {
+              setTefEnabled(v);
+              setEnabled(v);
+            }}
+          />
         </div>
 
         {cfg && (
           <div className="grid gap-3 md:grid-cols-3">
             <div className="md:col-span-1">
               <Label className="text-xs">Ambiente</Label>
-              <Select value={cfg.mode} onValueChange={(v) => void patch({ mode: v as TefConfig["mode"] })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <Select
+                value={cfg.mode}
+                onValueChange={(v) => void patch({ mode: v as TefConfig["mode"] })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="homologacao">Homologação</SelectItem>
                   <SelectItem value="producao">Produção</SelectItem>
@@ -96,11 +128,19 @@ export function TefConfigCard() {
             </div>
             <div>
               <Label className="text-xs">Timeout da transação (ms)</Label>
-              <Input type="number" className="mt-1 font-mono" value={cfg.timeout}
-                onChange={(e) => void patch({ timeout: Math.max(15000, Number(e.target.value) || 120000) })} />
+              <Input
+                type="number"
+                className="mt-1 font-mono"
+                value={cfg.timeout}
+                onChange={(e) =>
+                  void patch({ timeout: Math.max(15000, Number(e.target.value) || 120000) })
+                }
+              />
             </div>
             <div className="flex items-end">
-              <Badge variant="outline" className="font-mono">estado: {state}</Badge>
+              <Badge variant="outline" className="font-mono">
+                estado: {state}
+              </Badge>
             </div>
           </div>
         )}
@@ -120,18 +160,28 @@ export function TefConfigCard() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{p.name}</span>
-                  {p.available
-                    ? <CheckCircle2 className="size-4 text-primary" />
-                    : <AlertTriangle className="size-4 text-muted-foreground" />}
+                  {p.available ? (
+                    <CheckCircle2 className="size-4 text-primary" />
+                  ) : (
+                    <AlertTriangle className="size-4 text-muted-foreground" />
+                  )}
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground line-clamp-3">
-                  {p.available ? "SDK detectado — pronto para transacionar." : (p.reason ?? "SDK não instalado no agente.")}
+                  {p.available
+                    ? "SDK detectado — pronto para transacionar."
+                    : (p.reason ?? "SDK não instalado no agente.")}
                 </p>
-                {p.active && <Badge className="mt-2" variant="secondary">Ativo</Badge>}
+                {p.active && (
+                  <Badge className="mt-2" variant="secondary">
+                    Ativo
+                  </Badge>
+                )}
               </button>
             ))}
             {!providers.length && !agentError && (
-              <p className="text-xs text-muted-foreground">Nenhum provedor carregado pelo agente.</p>
+              <p className="text-xs text-muted-foreground">
+                Nenhum provedor carregado pelo agente.
+              </p>
             )}
           </div>
         </div>

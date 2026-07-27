@@ -92,8 +92,12 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs = 8000): Prom
 
 export function listScalePorts() {
   return call<{
-    ok: boolean; available: boolean; reason: string | null;
-    ports: AgentSerialPort[]; presets: AgentScalePreset[]; config: AgentScaleConfig;
+    ok: boolean;
+    available: boolean;
+    reason: string | null;
+    ports: AgentSerialPort[];
+    presets: AgentScalePreset[];
+    config: AgentScaleConfig;
   }>("/scale/ports", { cache: "no-store" });
 }
 
