@@ -43,6 +43,9 @@ export function ScaleAgentCard() {
   const [cfg, setCfg] = useState<AgentScaleConfig | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<AgentScaleAutodetectResult | null>(null);
+
 
   const refresh = useCallback(async () => {
     setLoading(true);
