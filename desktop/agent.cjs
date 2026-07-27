@@ -29,7 +29,7 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.5.0";
+const VERSION = "1.6.0";
 
 // Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
 let nfce = null;
@@ -40,6 +40,11 @@ catch (e) { console.warn("[agent] nfce module indisponível:", e.message); }
 let tef = null;
 try { tef = require("./tef/manager.cjs"); }
 catch (e) { console.warn("[agent] módulo TEF indisponível:", e.message); }
+
+// Balança serial (Toledo Prix e compatíveis). Opcional: depende de `serialport`.
+let scale = null;
+try { scale = require("./scale.cjs"); scale.autoStart(); }
+catch (e) { console.warn("[agent] módulo Balança indisponível:", e.message); }
 
 
 // Modelos conhecidos e sua largura padrão. Usado para inferir paperWidth
@@ -633,6 +638,7 @@ function startAgent(options = {}) {
       platform: process.platform,
       nfce: nfce?.isAvailable() ? "ready" : "off",
       tef: tef ? tef.getStatus() : { ok: false, error: "off" },
+      scale: scale ? { available: scale.isAvailable(), connected: scale.getStatus().connected } : { available: false },
       uptime_s: Math.floor(process.uptime()),
     });
   });
@@ -641,6 +647,68 @@ function startAgent(options = {}) {
     const printers = listAllPrinters();
     const tefDevices = tef ? await tef.getDevices() : { devices: [] };
     res.json({ ok: true, printers, tef: tefDevices.devices ?? [], drawer: { available: printers.length > 0 } });
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // BALANÇA SERIAL — Toledo Prix e compatíveis (Filizola, Urano, Elgin…)
+  // ────────────────────────────────────────────────────────────────
+  const requireScale = (res) => {
+    if (!scale) { res.status(501).json({ ok: false, error: "Módulo de balança não carregado no agente." }); return false; }
+    return true;
+  };
+
+  app.get("/scale/ports", async (_req, res) => {
+    if (!requireScale(res)) return;
+    res.json({
+      ok: true,
+      available: scale.isAvailable(),
+      reason: scale.unavailableReason(),
+      ports: await scale.listPorts(),
+      presets: scale.PRESETS,
+      config: scale.loadConfig(),
+    });
+  });
+
+  app.get("/scale/config", (_req, res) => {
+    if (!requireScale(res)) return;
+    res.json({ ok: true, config: scale.loadConfig(), presets: scale.PRESETS });
+  });
+
+  app.post("/scale/config", (req, res) => {
+    if (!requireScale(res)) return;
+    try { res.json({ ok: true, config: scale.saveConfig(req.body || {}) }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  app.get("/scale/status", (_req, res) => {
+    if (!requireScale(res)) return;
+    res.json(scale.getStatus());
+  });
+
+  app.post("/scale/connect", async (req, res) => {
+    if (!requireScale(res)) return;
+    try { res.json(await scale.connect(req.body || {})); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  app.post("/scale/disconnect", (_req, res) => {
+    if (!requireScale(res)) return;
+    res.json(scale.disconnect());
+  });
+
+  app.get("/scale/read", async (req, res) => {
+    if (!requireScale(res)) return;
+    try {
+      const reading = await scale.readWeight({ timeoutMs: Number(req.query.timeout) || undefined });
+      res.json({ ok: true, ...reading });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
+  app.post("/scale/test", async (req, res) => {
+    if (!requireScale(res)) return;
+    res.json(await scale.test(req.body || {}));
   });
 
   app.get("/tef/providers", (_req, res) => {

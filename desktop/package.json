@@ -1,9 +1,8 @@
 {
   "name": "bastion-pos-agent",
   "productName": "Bastion POS Agent",
-  "version": "1.5.0",
-  "description": "Agente Local do Bastion POS: impressão ESC/POS (USB/spooler), emissão NFC-e direta SEFAZ e TEF multiprovedor (SiTef, PayGo, Cappta, Getnet, Cielo, Rede, Stone, BIN). Escuta em 127.0.0.1:9100.",
-
+  "version": "1.6.0",
+  "description": "Agente Local do Bastion POS: impressão ESC/POS (USB/spooler), gaveta, balança serial (Toledo/Filizola/Urano/Elgin), emissão NFC-e direta SEFAZ e TEF multiprovedor. Escuta em 127.0.0.1:9100.",
   "main": "main.cjs",
   "author": "Bastion POS",
   "license": "MIT",
@@ -25,7 +24,8 @@
     "@thiagoelg/node-printer": "^0.6.2",
     "node-dfe": "^1.0.0",
     "node-forge": "^1.3.1",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "serialport": "^12.0.0"
   },
   "devDependencies": {
     "electron": "^33.0.0",
