@@ -142,8 +142,28 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
     return <p className={cn("text-sm text-muted-foreground", className)}>Selecione uma loja para ver a auditoria.</p>;
   }
 
+  const activeBlocks = blocks.data ?? [];
+
   return (
     <div className={className}>
+      {activeBlocks.length > 0 && (
+        <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+          <p className="text-sm font-medium text-destructive flex items-center gap-2">
+            <ShieldAlert className="size-4" />
+            {activeBlocks.length} bloqueio(s) por excesso de tentativas
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+            {activeBlocks.map((b) => (
+              <li key={b.id} className="font-mono">
+                {(FUNCTION_LABEL[b.function_name] ?? b.function_name)} · {b.attempts} tentativas ·
+                usuário {b.user_id.slice(0, 8)}… · liberado às{" "}
+                {b.blocked_until ? new Date(b.blocked_until).toLocaleTimeString("pt-BR") : "—"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
         <div className="flex items-center gap-2">
           <ShieldAlert className="size-4 text-muted-foreground" />
