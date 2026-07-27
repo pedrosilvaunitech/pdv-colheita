@@ -68,7 +68,7 @@ jobs:
       # ------------------------------------------------------------------
       - name: Restaurar certificado
         id: cert
-        if: ${{ env.CERT_B64 != '' }}
+        if: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
         env:
           CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
         run: |
