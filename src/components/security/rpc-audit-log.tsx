@@ -224,10 +224,24 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
               <ShieldAlert className="size-4" />
               {activeBlocks.length} bloqueio(s) por excesso de tentativas
             </p>
-            <Button variant="outline" size="sm" className="gap-2 h-7" onClick={exportBlocksCsv}>
-              <Download className="size-3.5" />
-              Exportar bloqueios
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 h-7" disabled={exporting}>
+                  {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                  Exportar bloqueios
+                  <ChevronDown className="size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportBlocksXlsx} className="gap-2">
+                  <FileSpreadsheet className="size-4" /> Excel (.xlsx) com logo
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportBlocksCsv} className="gap-2">
+                  <FileText className="size-4" /> CSV (separado por ;)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
           </div>
 
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
