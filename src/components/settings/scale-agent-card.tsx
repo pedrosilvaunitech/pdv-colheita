@@ -15,16 +15,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  autodetectScale,
   connectScale,
   disconnectScale,
   listScalePorts,
   saveScaleConfig,
   testScale,
+  type AgentScaleAutodetectResult,
   type AgentScaleConfig,
   type AgentScalePreset,
   type AgentSerialPort,
   type AgentScaleProtocol,
 } from "@/lib/scale-agent";
+
 
 /**
  * Configuração da balança serial pelo Agente Local.
