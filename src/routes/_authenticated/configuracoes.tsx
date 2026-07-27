@@ -1121,9 +1121,21 @@ function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="hardware" className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-border bg-muted/40 p-3">
+              <p className="text-xs text-muted-foreground">
+                Problemas com impressora ou balança? A tela de diagnóstico mostra o estado do agente
+                e o checklist de permissões do Windows.
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/agente-diagnostico" className="gap-1">
+                  <Activity className="size-3" /> Abrir diagnóstico
+                </Link>
+              </Button>
+            </div>
             <ScaleAgentCard />
             <TefConfigCard />
           </TabsContent>
+
         </Tabs>
       </div>
     </div>
