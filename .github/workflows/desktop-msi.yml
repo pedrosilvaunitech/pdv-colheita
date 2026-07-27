@@ -1,0 +1,144 @@
+name: Agente Desktop (MSI Windows)
+
+# Compila o Bastion POS Agent no Windows, assina (se houver certificado
+# configurado) e publica os artefatos .msi / .zip como release.
+#
+# Disparo:
+#   - tag `agent-v*` (ex.: agent-v1.5.0)  -> gera release pública
+#   - manual (workflow_dispatch)          -> gera apenas artefatos do build
+on:
+  push:
+    tags: ["agent-v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publicar release no GitHub"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-msi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build + assinatura + publicação
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: desktop
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Necessário para compilar o binding nativo do pacote `usb` (libusb).
+      - name: Preparar toolchain nativa
+        run: |
+          npm config set msvs_version 2022
+          python --version
+
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Ler versão do agente
+        id: meta
+        run: |
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Empacotar (electron-packager)
+        run: npm run pack:win
+
+      # ------------------------------------------------------------------
+      # Assinatura do .exe ANTES de gerar o MSI: o instalador precisa conter
+      # binários já assinados, senão o SmartScreen alerta mesmo com MSI assinado.
+      # Segredos necessários (Settings > Secrets > Actions):
+      #   WINDOWS_CERT_PFX_BASE64  -> base64 do certificado .pfx
+      #   WINDOWS_CERT_PASSWORD    -> senha do .pfx
+      # Sem os segredos, o passo é pulado e o build segue sem assinatura.
+      # ------------------------------------------------------------------
+      - name: Restaurar certificado
+        id: cert
+        if: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
+        env:
+          CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:CERT_B64))
+          "pfx=$path" >> $env:GITHUB_OUTPUT
+
+      - name: Assinar executável
+        if: ${{ steps.cert.outputs.pfx != '' }}
+        env:
+          PFX: ${{ steps.cert.outputs.pfx }}
+          PFX_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { throw "signtool.exe não encontrado no runner" }
+          & $signtool sign /f $env:PFX /p $env:PFX_PASS `
+            /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
+            "release\BastionPOSAgent-win32-x64\BastionPOSAgent.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao assinar o executável" }
+
+      - name: Gerar MSI
+        run: npm run msi:win
+
+      - name: Assinar MSI
+        if: ${{ steps.cert.outputs.pfx != '' }}
+        env:
+          PFX: ${{ steps.cert.outputs.pfx }}
+          PFX_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1 -ExpandProperty FullName
+          & $signtool sign /f $env:PFX /p $env:PFX_PASS `
+            /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
+            "release\msi\BastionPOSAgent.msi"
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao assinar o MSI" }
+
+      - name: Gerar ZIP portátil
+        run: npm run zip:win
+
+      - name: Nomear artefatos de distribuição
+        id: dist
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          # O PDV aponta para /downloads/BastionPOSAgent-Setup.exe por padrão,
+          # então mantemos também esse nome como alias do instalador MSI.
+          Copy-Item release\msi\BastionPOSAgent.msi dist\BastionPOSAgent-Setup.msi -Force
+          Copy-Item release\BastionPOSAgent-win32-x64.zip dist\BastionPOSAgent-win32-x64.zip -Force
+          Get-FileHash dist\* -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } |
+            Set-Content dist\SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bastion-pos-agent-${{ steps.meta.outputs.version }}
+          path: desktop/dist/
+          retention-days: 30
+
+      - name: Publicar release
+        if: ${{ startsWith(github.ref, 'refs/tags/agent-v') || inputs.publish }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/agent-v') && github.ref_name || format('agent-v{0}', steps.meta.outputs.version) }}
+          name: Bastion POS Agent ${{ steps.meta.outputs.version }}
+          body: |
+            Agente Local do Bastion POS (impressão ESC/POS, gaveta, NFC-e direto SEFAZ e TEF).
+
+            **Instalação:** baixe `BastionPOSAgent-Setup.msi` e execute como administrador.
+            Confira a integridade em `SHA256SUMS.txt`.
+          files: |
+            desktop/dist/BastionPOSAgent-Setup.msi
+            desktop/dist/BastionPOSAgent-win32-x64.zip
+            desktop/dist/SHA256SUMS.txt
