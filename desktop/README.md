@@ -220,3 +220,29 @@ Epson, Bematech, Elgin, Daruma, Custom, Bixolon, Star, Sunmi, Xprinter,
 Citizen. Modelos genéricos costumam responder também via detecção de
 classe USB 7 (Printer). Se sua impressora não aparecer no `/status`,
 abra uma issue anexando a saída de `usb.getDeviceList()` no modo debug.
+
+## Gerar instalador MSI (Windows)
+
+```powershell
+npm install
+npm run pack:win
+npm run msi:win     # saída: release/msi/BastionPOSAgent.msi
+```
+
+O erro `Could not find light.exe or candle.exe` significa que o **WiX Toolset v3**
+não está no PATH. O `msi:win` agora resolve isso sozinho: procura o WiX instalado
+e, se não encontrar, baixa `wix314-binaries.zip` para `desktop/.wix/` e usa de lá.
+
+Se a rede bloquear o download:
+
+1. baixe `wix314.exe` ou `wix314-binaries.zip` em
+   <https://github.com/wixtoolset/wix3/releases>;
+2. extraia/instale;
+3. rode `set WIX_BIN=C:\caminho\para\bin` e depois `npm run msi:win`.
+
+Alternativa sem MSI (distribuição portátil):
+
+```powershell
+npm run pack:win
+npm run zip:win     # saída: release/BastionPOSAgent-win32-x64.zip
+```
