@@ -1,13 +1,27 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldAlert, ShieldCheck, RefreshCw, Loader2, Download } from "lucide-react";
+import { ShieldAlert, ShieldCheck, RefreshCw, Loader2, Download, FileSpreadsheet, FileText, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { buildAuditCsv, buildRateLimitCsv, csvFilename, downloadCsv } from "@/lib/audit-csv";
+import {
+  buildAuditWorkbook,
+  buildRateLimitWorkbook,
+  downloadWorkbook,
+  xlsxFilename,
+  type XlsxStoreInfo,
+} from "@/lib/audit-xlsx";
+
 
 
 
