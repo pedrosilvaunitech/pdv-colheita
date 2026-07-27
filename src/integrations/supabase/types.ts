@@ -1250,6 +1250,42 @@ export type Database = {
         }
         Relationships: []
       }
+      rpc_rate_limits: {
+        Row: {
+          attempts: number
+          blocked_until: string | null
+          created_at: string
+          function_name: string
+          id: string
+          store_id: string | null
+          updated_at: string
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          attempts?: number
+          blocked_until?: string | null
+          created_at?: string
+          function_name: string
+          id?: string
+          store_id?: string | null
+          updated_at?: string
+          user_id: string
+          window_start?: string
+        }
+        Update: {
+          attempts?: number
+          blocked_until?: string | null
+          created_at?: string
+          function_name?: string
+          id?: string
+          store_id?: string | null
+          updated_at?: string
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       sale_items: {
         Row: {
           barcode: string | null
@@ -1742,7 +1778,21 @@ export type Database = {
         Args: { _manager_user_id?: string }
         Returns: Json
       }
+      clear_rate_limit: {
+        Args: { _function_name: string; _store_id: string }
+        Returns: undefined
+      }
       current_open_register: { Args: { _store_id: string }; Returns: string }
+      enforce_rate_limit: {
+        Args: {
+          _block_secs: number
+          _function_name: string
+          _max_attempts: number
+          _store_id: string
+          _window_secs: number
+        }
+        Returns: undefined
+      }
       generate_admin_code: { Args: { _store_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -1791,6 +1841,16 @@ export type Database = {
       regenerate_admin_code: {
         Args: { _store_id: string; _user_id: string }
         Returns: string
+      }
+      register_rate_limit_failure: {
+        Args: {
+          _block_secs: number
+          _function_name: string
+          _max_attempts: number
+          _store_id: string
+          _window_secs: number
+        }
+        Returns: undefined
       }
       reserve_nfce_number: {
         Args: { _store_id: string }
