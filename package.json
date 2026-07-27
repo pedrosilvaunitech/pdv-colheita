@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "vitest run --dir src",
+    "test": "vitest run",
     "test:e2e": "playwright test"
 
   },
