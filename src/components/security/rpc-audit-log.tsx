@@ -142,10 +142,17 @@ export function RpcAuditLog({ storeId, className, limit = 200 }: RpcAuditLogProp
     <div className={className}>
       {activeBlocks.length > 0 && (
         <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-          <p className="text-sm font-medium text-destructive flex items-center gap-2">
-            <ShieldAlert className="size-4" />
-            {activeBlocks.length} bloqueio(s) por excesso de tentativas
-          </p>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-sm font-medium text-destructive flex items-center gap-2">
+              <ShieldAlert className="size-4" />
+              {activeBlocks.length} bloqueio(s) por excesso de tentativas
+            </p>
+            <Button variant="outline" size="sm" className="gap-2 h-7" onClick={exportBlocksCsv}>
+              <Download className="size-3.5" />
+              Exportar bloqueios
+            </Button>
+          </div>
+
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
             {activeBlocks.map((b) => (
               <li key={b.id} className="font-mono">
