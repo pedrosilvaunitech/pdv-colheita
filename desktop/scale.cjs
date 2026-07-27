@@ -296,8 +296,206 @@ function autoStart() {
   openPort(cfg).catch((e) => console.warn("[scale] auto-connect falhou:", e.message));
 }
 
+/* --------------------------- auto-detecção ------------------------------ */
+
+/**
+ * Combinações testadas na varredura. A ordem importa: começamos pelo que é
+ * mais comum no varejo brasileiro (Toledo Prix 4 @ 9600 8N1) para encerrar a
+ * varredura o mais cedo possível — cada tentativa custa ~1,2s por porta.
+ */
+const PROBE_MATRIX = [
+  { protocol: "prix4-p0", baudRate: 9600, parity: "none", dataBits: 8, stopBits: 1 },
+  { protocol: "prix3", baudRate: 9600, parity: "none", dataBits: 8, stopBits: 1 },
+  { protocol: "prix4-p1", baudRate: 9600, parity: "none", dataBits: 8, stopBits: 1 },
+  { protocol: "generic", baudRate: 9600, parity: "none", dataBits: 8, stopBits: 1 },
+  { protocol: "prix4-p0", baudRate: 4800, parity: "none", dataBits: 8, stopBits: 1 },
+  { protocol: "generic", baudRate: 4800, parity: "none", dataBits: 8, stopBits: 1 },
+  { protocol: "prix4-p0", baudRate: 19200, parity: "none", dataBits: 8, stopBits: 1 },
+  { protocol: "prix3", baudRate: 2400, parity: "none", dataBits: 7, stopBits: 1 },
+  { protocol: "prix4-p0", baudRate: 9600, parity: "even", dataBits: 7, stopBits: 1 },
+];
+
+/** Fabricantes típicos de conversor USB-Serial usados em balanças. */
+const SERIAL_HINTS = /prolific|ftdi|ch340|ch341|cp210|silicon labs|pl2303|usb.?serial|toledo|filizola|urano|elgin/i;
+
+function scorePort(p) {
+  let score = 0;
+  const hay = `${p.manufacturer || ""} ${p.friendly || ""} ${p.path || ""}`;
+  if (SERIAL_HINTS.test(hay)) score += 10;
+  if (p.vendorId) score += 2; // porta física USB > porta virtual (bluetooth)
+  if (/bluetooth|virtual/i.test(hay)) score -= 8;
+  return score;
+}
+
+/**
+ * Abre uma instância isolada da porta (não mexe na conexão global) e tenta
+ * obter UMA leitura válida. Resolve `null` quando não houver resposta —
+ * falha de sondagem NÃO é erro fatal, apenas descarta a combinação.
+ */
+function probeCombo(portPath, combo, timeoutMs) {
+  if (!SerialPortLib) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    let buf = Buffer.alloc(0);
+    let p = null;
+    let timer = null;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      try { if (p && p.isOpen) p.close(() => {}); } catch { /* noop */ }
+      resolve(result);
+    };
+
+    try {
+      p = new SerialPortLib({
+        path: portPath,
+        baudRate: Number(combo.baudRate),
+        dataBits: Number(combo.dataBits) || 8,
+        stopBits: Number(combo.stopBits) || 1,
+        parity: combo.parity || "none",
+        autoOpen: false,
+      });
+    } catch (e) {
+      finish({ error: e.message });
+      return;
+    }
+
+    p.on("error", (e) => finish({ error: e.message }));
+    p.on("data", (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      if (buf.length > 2048) buf = buf.slice(-512);
+      const reading = parseFrame(buf, combo.protocol);
+      // Só aceitamos leituras plausíveis: descarta lixo de porta errada.
+      if (reading && reading.status !== "unknown" && reading.weightKg < 500) {
+        finish({ reading });
+      }
+    });
+
+    p.open((err) => {
+      if (err) { finish({ error: friendlyOpenError(err.message, portPath) }); return; }
+      if (combo.protocol === "prix4-p0" || combo.protocol === "prix4-p1") {
+        // Protocolo por requisição: precisa do ENQ, repetido para o caso de
+        // a balança estar iniciando o firmware.
+        const poll = () => { try { p.write(Buffer.from([ENQ])); } catch { /* noop */ } };
+        poll();
+        setTimeout(poll, 400);
+        setTimeout(poll, 800);
+      }
+      timer = setTimeout(() => finish(null), timeoutMs);
+    });
+  });
+}
+
+/**
+ * Varre todas as portas seriais tentando descobrir onde está a balança e com
+ * qual protocolo/baud ela fala. Retorna candidatos ordenados; `applied: true`
+ * quando a melhor combinação foi persistida na configuração.
+ */
+async function autodetect(opts = {}) {
+  if (!SerialPortLib) {
+    return { ok: false, available: false, error: unavailableReason(), candidates: [], attempts: [] };
+  }
+
+  const timeoutMs = Math.min(Math.max(Number(opts.timeoutMs) || 1200, 400), 4000);
+  const apply = opts.apply !== false;
+  const all = await listPorts();
+  const only = Array.isArray(opts.ports) && opts.ports.length ? opts.ports : null;
+  const ports = (only ? all.filter((p) => only.includes(p.path)) : all)
+    .sort((a, b) => scorePort(b) - scorePort(a));
+
+  if (!ports.length) {
+    return {
+      ok: false,
+      available: true,
+      error: "Nenhuma porta serial encontrada. Conecte o cabo USB-Serial e instale o driver (Prolific/FTDI/CH340).",
+      candidates: [],
+      attempts: [],
+    };
+  }
+
+  // Sondar exige a porta livre: derruba a conexão atual e reabre no fim.
+  const previous = loadConfig();
+  const wasConnected = !!(port && port.isOpen);
+  closePort();
+
+  const attempts = [];
+  const candidates = [];
+
+  try {
+    for (const p of ports) {
+      let portFailed = null;
+      for (const combo of PROBE_MATRIX) {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await probeCombo(p.path, combo, timeoutMs);
+        const label = `${p.path} · ${combo.protocol} · ${combo.baudRate} ${combo.dataBits}${(combo.parity || "none")[0].toUpperCase()}${combo.stopBits}`;
+        if (r && r.reading) {
+          attempts.push({ ...combo, path: p.path, label, ok: true, weightKg: r.reading.weightKg, raw: r.reading.raw });
+          candidates.push({
+            path: p.path,
+            friendly: p.friendly,
+            manufacturer: p.manufacturer,
+            protocol: combo.protocol,
+            baudRate: combo.baudRate,
+            dataBits: combo.dataBits,
+            stopBits: combo.stopBits,
+            parity: combo.parity,
+            reading: r.reading,
+            score: scorePort(p) + (combo.protocol === "prix4-p0" ? 2 : 0),
+          });
+          break; // achou nesta porta: não testa mais combinações nela
+        }
+        attempts.push({ ...combo, path: p.path, label, ok: false, error: r?.error || "sem resposta" });
+        if (r && r.error && /acesso negado|access denied|em uso|busy/i.test(r.error)) {
+          portFailed = r.error;
+          break; // porta ocupada: nenhuma combinação vai funcionar
+        }
+      }
+      if (portFailed) continue;
+    }
+  } finally {
+    // Restaura a conexão anterior se a varredura não vai aplicar nada.
+    if (wasConnected && previous.path && !candidates.length) {
+      openPort(previous).catch(() => {});
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  const best = candidates[0] || null;
+
+  let config = previous;
+  if (best && apply) {
+    config = saveConfig({
+      enabled: true,
+      path: best.path,
+      protocol: best.protocol,
+      baudRate: best.baudRate,
+      dataBits: best.dataBits,
+      stopBits: best.stopBits,
+      parity: best.parity,
+    });
+    try { await openPort(config); } catch { /* usuário conecta manualmente */ }
+  }
+
+  return {
+    ok: !!best,
+    available: true,
+    applied: !!best && apply,
+    scannedPorts: ports.length,
+    candidates,
+    attempts,
+    config,
+    error: best
+      ? null
+      : "Nenhuma balança respondeu. Verifique se ela está ligada, se o cabo é serial (não é apenas alimentação) e se nenhum outro programa está usando a porta.",
+  };
+}
+
 module.exports = {
-  DEFAULT_CONFIG, PRESETS,
+  DEFAULT_CONFIG, PRESETS, PROBE_MATRIX,
   isAvailable, unavailableReason, listPorts, loadConfig, saveConfig,
   connect, disconnect, getStatus, readWeight, test, autoStart, parseFrame,
+  autodetect,
 };
+
