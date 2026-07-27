@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useToledoScale } from "@/hooks/use-toledo-scale";
 import type { ToledoProtocol } from "@/lib/toledo-scale";
 import { getBrowserDeviceFeatureState } from "@/lib/browser-device-permissions";
+import { getScaleStatus, readScaleWeight } from "@/lib/scale-agent";
 
 /**
  * Widget compacto para o cabeçalho do PDV.
@@ -23,13 +24,24 @@ export function ScaleWidget({ onWeight }: { onWeight?: (kg: number) => void }) {
   const [busy, setBusy] = useState(false);
   const [cfgOpen, setCfgOpen] = useState(false);
   const serialState = getBrowserDeviceFeatureState("serial");
+  // Balança pelo Agente Local tem prioridade: funciona em qualquer navegador
+  // e no PWA, sem depender do prompt de porta do Web Serial.
+  const [agentScale, setAgentScale] = useState(false);
 
   useEffect(() => { if (error) toast.error(error); }, [error]);
+
+  useEffect(() => {
+    let alive = true;
+    getScaleStatus()
+      .then((st) => { if (alive) setAgentScale(!!st.available && !!st.config.enabled); })
+      .catch(() => { if (alive) setAgentScale(false); });
+    return () => { alive = false; };
+  }, []);
 
   const doRead = async () => {
     setBusy(true);
     try {
-      const r = await requestWeight();
+      const r = agentScale ? await readScaleWeight() : await requestWeight();
       if (r.status === "overload") { toast.error("Balança em sobrecarga"); return; }
       if (r.status === "unstable") { toast.warning("Peso instável — aguarde estabilizar"); return; }
       if (r.weightKg <= 0) { toast.error("Peso zero na balança"); return; }
@@ -40,7 +52,7 @@ export function ScaleWidget({ onWeight }: { onWeight?: (kg: number) => void }) {
     } finally { setBusy(false); }
   };
 
-  if (!supported) {
+  if (!supported && !agentScale) {
     return (
       <Button variant="outline" size="sm" disabled title={serialState.message}>
         <Scale className="size-4" /> Balança
@@ -50,7 +62,7 @@ export function ScaleWidget({ onWeight }: { onWeight?: (kg: number) => void }) {
 
   return (
     <div className="flex items-center gap-1">
-      {connected ? (
+      {connected || agentScale ? (
         <>
           <Button variant="outline" size="sm" onClick={doRead} disabled={busy} title="Ler peso da balança (ENQ)">
             <PlugZap className="size-4 text-primary" />
