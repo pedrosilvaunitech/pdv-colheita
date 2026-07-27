@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +39,7 @@ import {
   Eye,
   Archive,
   Cable,
+  Activity,
 } from "lucide-react";
 import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
 import { RpcAuditLog } from "@/components/security/rpc-audit-log";
