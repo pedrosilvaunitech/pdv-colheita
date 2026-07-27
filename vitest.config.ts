@@ -1,4 +1,6 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+
 
 /**
  * Vitest cuida apenas dos testes unitários/integração em `src/`.
