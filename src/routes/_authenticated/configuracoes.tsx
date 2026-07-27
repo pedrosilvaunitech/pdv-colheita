@@ -13,13 +13,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye, Archive } from "lucide-react";
+import { Save, Printer, Upload, ShieldCheck, ShieldAlert, Image as ImageIcon, Trash2, BookOpen, KeyRound, Clock, QrCode, Palette, RotateCcw, Sun, Moon, Monitor, Eye, Archive, Cable } from "lucide-react";
 import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
 import { RpcAuditLog } from "@/components/security/rpc-audit-log";
 
 import { DrawerPinTest } from "@/components/pdv/drawer-pin-test";
 
 import { PixSettingsTab } from "@/components/pix-settings-tab";
+import { ScaleAgentCard } from "@/components/settings/scale-agent-card";
+import { TefConfigCard } from "@/components/settings/tef-config-card";
 import { DEFAULT_BRANDING, loadBranding, saveBranding, resetBranding, type Branding, type ThemeMode } from "@/lib/branding";
 import { DENSITY_LABELS, getPrintDensity, setPrintDensity, type PrintDensity } from "@/lib/print-density";
 import { tryPrintEscPos } from "@/lib/escpos";
@@ -279,6 +281,7 @@ function SettingsPage() {
             <TabsTrigger value="fiscal">Fiscal & Certificado A1</TabsTrigger>
             <TabsTrigger value="numeracao">Numeração NFC-e/NF-e</TabsTrigger>
             <TabsTrigger value="pix" className="gap-1"><QrCode className="size-3" /> PIX</TabsTrigger>
+            <TabsTrigger value="hardware" className="gap-1"><Cable className="size-3" /> Hardware (Balança / Maquininha)</TabsTrigger>
             <TabsTrigger value="seguranca" className="gap-1"><ShieldCheck className="size-3" /> Segurança</TabsTrigger>
           </TabsList>
 
@@ -594,6 +597,11 @@ function SettingsPage() {
 
           <TabsContent value="pix" className="mt-4">
             <PixSettingsTab storeId={storeId!} />
+          </TabsContent>
+
+          <TabsContent value="hardware" className="mt-4 space-y-4">
+            <ScaleAgentCard />
+            <TefConfigCard />
           </TabsContent>
         </Tabs>
       </div>
