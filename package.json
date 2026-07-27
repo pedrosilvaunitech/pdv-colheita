@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
