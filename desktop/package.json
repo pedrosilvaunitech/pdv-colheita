@@ -1,7 +1,7 @@
 {
   "name": "bastion-pos-agent",
   "productName": "Bastion POS Agent",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Agente Local do Bastion POS: impressão ESC/POS (USB/spooler), gaveta, balança serial (Toledo/Filizola/Urano/Elgin), emissão NFC-e direta SEFAZ e TEF multiprovedor. Escuta em 127.0.0.1:9100.",
   "main": "main.cjs",
   "author": "Bastion POS",
