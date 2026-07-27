@@ -142,9 +142,20 @@ export function ScaleAgentCard() {
             USB-Serial.
           </CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
-          <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} /> Atualizar
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => void autodetect()}
+            disabled={scanning || !available}
+            className="gap-1"
+          >
+            <Radar className={scanning ? "size-4 animate-spin" : "size-4"} />
+            {scanning ? "Varrendo portas…" : "Detectar automaticamente"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
+            <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} /> Atualizar
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {agentError && (
@@ -155,9 +166,55 @@ export function ScaleAgentCard() {
         {!agentError && !available && (
           <p className="text-xs rounded border border-border bg-muted/40 p-3 text-muted-foreground">
             {reason ?? "Driver serial indisponível no agente."} Rode <code>npm i serialport</code>{" "}
-            na pasta do agente (ou reinstale o Bastion POS Agent 1.6.0+) e reinicie o agente.
+            na pasta do agente (ou reinstale o Bastion POS Agent 1.7.0+) e reinicie o agente.
           </p>
         )}
+
+        {scanning && (
+          <p className="text-xs rounded border border-border bg-muted/40 p-3 text-muted-foreground">
+            Testando cada porta com os protocolos Toledo Prix, Filizola, Urano e genérico. Isso pode
+            levar até 1 minuto — mantenha a balança ligada e com peso sobre o prato.
+          </p>
+        )}
+
+        {scanResult && !scanning && (
+          <div
+            className={
+              scanResult.ok
+                ? "rounded border border-primary/40 bg-primary/5 p-3 text-xs space-y-2"
+                : "rounded border border-destructive/40 bg-destructive/10 p-3 text-xs space-y-2"
+            }
+          >
+            {scanResult.ok && scanResult.candidates[0] ? (
+              <p className="font-medium text-foreground">
+                Detectada em {scanResult.candidates[0].path} · {scanResult.candidates[0].protocol} ·{" "}
+                {scanResult.candidates[0].baudRate} baud — leitura de{" "}
+                {scanResult.candidates[0].reading.weightKg.toFixed(3)} kg
+                {scanResult.applied ? " (configuração aplicada)" : ""}
+              </p>
+            ) : (
+              <p className="font-medium text-destructive">{scanResult.error}</p>
+            )}
+            <details>
+              <summary className="cursor-pointer text-muted-foreground">
+                Ver tentativas ({scanResult.attempts.length} em {scanResult.scannedPorts ?? 0} porta
+                {(scanResult.scannedPorts ?? 0) === 1 ? "" : "s"})
+              </summary>
+              <ul className="mt-2 space-y-1 max-h-48 overflow-auto font-mono text-[11px]">
+                {scanResult.attempts.map((a, i) => (
+                  <li
+                    key={`${a.label}-${i}`}
+                    className={a.ok ? "text-foreground" : "text-muted-foreground"}
+                  >
+                    {a.ok ? "✓" : "×"} {a.label}
+                    {a.ok ? ` → ${a.weightKg?.toFixed(3)} kg` : ` — ${a.error}`}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )}
+
 
         {cfg && (
           <>
