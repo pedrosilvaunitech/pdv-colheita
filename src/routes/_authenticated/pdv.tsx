@@ -705,6 +705,9 @@ function PdvPage() {
         }
       />
 
+      {monitorSefaz && <SefazHealthBanner enabled className="mx-6 mt-4" />}
+
+
       {!openReg.data && (
         <div className="mx-6 mt-4 border border-warning/40 bg-warning/10 rounded-md p-4 flex items-center gap-3">
           <Lock className="size-5 text-warning" />
