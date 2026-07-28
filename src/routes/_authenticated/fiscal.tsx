@@ -313,6 +313,28 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
   const [form, setForm] = useState<FiscalForm>({ ...DEFAULT_CONFIG });
   const testConn = useServerFn(testFiscalConnection);
   const [testing, setTesting] = useState(false);
+  // Estado do motor fiscal embarcado no Agente Local (Direto SEFAZ).
+  const [engine, setEngine] = useState<NfceEngineStatus | null>(null);
+  const [checkingEngine, setCheckingEngine] = useState(false);
+
+  async function refreshEngine() {
+    setCheckingEngine(true);
+    try {
+      setEngine(await getNfceEngineStatus());
+    } finally {
+      setCheckingEngine(false);
+    }
+  }
+
+  useEffect(() => {
+    let alive = true;
+    getNfceEngineStatus().then((st) => {
+      if (alive) setEngine(st);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Sincroniza TODOS os campos existentes no banco (não sobrescreve com defaults).
   useEffect(() => {
