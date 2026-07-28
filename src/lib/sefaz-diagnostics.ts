@@ -97,6 +97,19 @@ const RULES: Rule[] = [
     ],
   },
   {
+    // Precede a regra de rejeição: cStat 108/109 são paralisação, não recusa de dados.
+    code: "sefaz_down",
+    severity: "warning",
+    test: /servi[çc]o (?:em manuten[çc]|paralisad|indisponí)|cstat\s*10[89]\b|timeout da sefaz|gateway timeout|\b50[34]\b/i,
+    title: "SEFAZ indisponível",
+    cause: "O ambiente da SEFAZ do seu estado está fora do ar ou em manutenção — não é problema do seu PDV.",
+    steps: [
+      "Continue vendendo: as notas ficam pendentes e são reenviadas automaticamente.",
+      "Acompanhe em Fiscal → Erros de emissão.",
+      "Nenhuma ação manual é necessária enquanto o serviço não volta.",
+    ],
+  },
+  {
     code: "rejected",
     severity: "warning",
     test: /cstat\s*(?:1[0-9]{2}|2[0-9]{2}|[3-7][0-9]{2})|rejei[çc]/i,
@@ -106,18 +119,6 @@ const RULES: Rule[] = [
       "Leia o motivo retornado abaixo — ele indica o campo problemático.",
       "Corrija o cadastro (produto, NCM, CFOP, CSC ou dados do emitente).",
       "Reenvie a nota pela tela Fiscal → Erros de emissão.",
-    ],
-  },
-  {
-    code: "sefaz_down",
-    severity: "warning",
-    test: /servi[çc]o (?:em manuten[çc]|paralisad|indisponí)|108|109|timeout da sefaz|gateway timeout|503|504/i,
-    title: "SEFAZ indisponível",
-    cause: "O ambiente da SEFAZ do seu estado está fora do ar ou em manutenção — não é problema do seu PDV.",
-    steps: [
-      "Continue vendendo: as notas ficam pendentes e são reenviadas automaticamente.",
-      "Acompanhe em Fiscal → Erros de emissão.",
-      "Nenhuma ação manual é necessária enquanto o serviço não volta.",
     ],
   },
   {
