@@ -152,15 +152,15 @@ function validateFiscalForm(f: FiscalForm): string | null {
   if (f.provider === "none" && f.environment === "producao") {
     return "Para operar em produção você precisa escolher um provedor de emissão.";
   }
-  if (f.provider === "direto_sefaz") {
-    return "'Direto SEFAZ' exige servidor Node externo — o backend Lovable (Cloudflare Workers) não suporta assinatura XML-DSig + mutual TLS. Escolha um provedor de API.";
-  }
   if (f.environment === "producao") {
     if (!f.cnae.trim()) return "CNAE principal é obrigatório em produção.";
     if (!f.crt) return "CRT (Código de Regime Tributário) é obrigatório em produção.";
     if (!f.csc_id.trim() || !f.csc_token.trim()) return "CSC ID e CSC Token são obrigatórios para emitir NFC-e em produção.";
     if (!f.certificate_uploaded) return "Envie o certificado A1 (.pfx) antes de virar produção.";
-    if (f.defer_credentials) return "Desmarque 'Configurar credencial depois' e cadastre a chave do provedor antes de virar produção.";
+    // "Direto SEFAZ" roda no Agente Local do caixa: não depende de chave de provedor.
+    if (f.provider !== "direto_sefaz" && f.defer_credentials) {
+      return "Desmarque 'Configurar credencial depois' e cadastre a chave do provedor antes de virar produção.";
+    }
   }
   if (f.nfce_series < 1 || f.nfce_next_number < 1) return "Série e próximo número da NFC-e precisam ser ≥ 1.";
   if (f.cnae && !/^\d{4}-\d\/\d{2}$/.test(f.cnae.trim())) {
