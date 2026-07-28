@@ -276,6 +276,7 @@ function FiscalPage() {
           </div>
 
           <div className="space-y-4">
+            <SefazHealthBanner enabled={(config?.provider as string | undefined) === "direto_sefaz"} />
             <FiscalConfigCard storeId={storeId!} store={store} config={config} />
             <NfceNumberingCard storeId={storeId!} />
             <DirectEngineCard storeId={storeId!} />
