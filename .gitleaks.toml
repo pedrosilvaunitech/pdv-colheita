@@ -1,0 +1,53 @@
+# Configuração do Gitleaks para o PDV Colheita.
+#
+# Estende as regras padrão (AWS, Stripe, GitHub, chaves privadas etc.) e
+# adiciona detecções específicas do domínio fiscal brasileiro.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Chave secreta do Supabase (sb_secret_) — nunca deve ser versionada"
+regex = '''sb_secret_[A-Za-z0-9_\-]{16,}'''
+tags = ["supabase", "secret"]
+
+[[rules]]
+id = "supabase-service-role-jwt"
+description = "JWT com role service_role"
+regex = '''eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]*c2VydmljZV9yb2xl[A-Za-z0-9_\-]*\.[A-Za-z0-9_\-]{10,}'''
+tags = ["supabase", "secret"]
+
+[[rules]]
+id = "nfce-csc-token"
+description = "CSC Token da NFC-e (32 hex) atribuído a uma variável"
+regex = '''(?i)(csc[_-]?(token|code)?)\s*[:=]\s*["']?[a-f0-9]{32}["']?'''
+tags = ["fiscal", "sefaz"]
+
+[[rules]]
+id = "certificado-a1-password"
+description = "Senha de certificado digital A1"
+regex = '''(?i)(cert(ificate|ificado)?[_-]?(password|senha)|pfx[_-]?password)\s*[:=]\s*["'][^"']{4,}["']'''
+tags = ["fiscal", "certificado"]
+
+[[rules]]
+id = "certificado-a1-binario"
+description = "Conteúdo de certificado PKCS#12 em base64"
+regex = '''MII[A-Za-z0-9+/]{200,}={0,2}'''
+tags = ["fiscal", "certificado"]
+
+[allowlist]
+description = "Falsos positivos conhecidos"
+paths = [
+  '''\.env\.example$''',
+  '''bun\.lock$''',
+  '''package-lock\.json$''',
+  '''(^|/)dist/''',
+  '''(^|/)node_modules/''',
+]
+regexes = [
+  # Chaves publicáveis são públicas por design (vão no bundle do browser).
+  '''sb_publishable_[A-Za-z0-9_\-]+''',
+  # Checagens de prefixo no código dos clients gerados.
+  '''startsWith\(['"]sb_secret_['"]\)''',
+]
