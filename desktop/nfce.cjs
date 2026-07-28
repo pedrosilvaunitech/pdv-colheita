@@ -29,8 +29,24 @@ const os = require("os");
 // Dependências opcionais
 // ────────────────────────────────────────────────────────────────────
 let NodeDfe = null;
-try { NodeDfe = require("node-dfe"); }
-catch { console.warn("[nfce] node-dfe não instalado — emissão direta indisponível até rodar `npm install node-dfe` no agente."); }
+/** Motivo exato da indisponibilidade — exposto no /nfce/config para diagnóstico. */
+let engineError = null;
+/** Candidatos de motor fiscal, em ordem de preferência. */
+const ENGINE_CANDIDATES = ["node-dfe"];
+for (const mod of ENGINE_CANDIDATES) {
+  try {
+    NodeDfe = require(mod);
+    engineError = null;
+    break;
+  } catch (e) {
+    // MODULE_NOT_FOUND => não instalado. Outro erro => instalado porém quebrado.
+    engineError =
+      e && e.code === "MODULE_NOT_FOUND"
+        ? `Dependência "${mod}" não instalada. Rode \`npm run install:fiscal\` na pasta do agente e reinicie.`
+        : `Falha ao carregar "${mod}": ${e && e.message ? e.message : String(e)}`;
+  }
+}
+if (!NodeDfe) console.warn("[nfce] motor indisponível —", engineError);
 
 let forge = null;
 try { forge = require("node-forge"); }
@@ -328,5 +344,6 @@ module.exports = {
   getEndpoints,
   buildQRUrl,
   isAvailable: () => !!NodeDfe,
+  engineError: () => engineError,
   CONFIG_FILE,
 };

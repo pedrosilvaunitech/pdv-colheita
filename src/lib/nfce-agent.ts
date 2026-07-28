@@ -83,7 +83,10 @@ export async function getNfceEngineStatus(): Promise<NfceEngineStatus> {
       agentOnline: true,
       engineReady: Boolean(json.engine_ready),
       config: json.config ?? null,
-      error: json.engine_ready ? undefined : "Motor NFC-e presente, mas node-dfe não está instalado.",
+      error: json.engine_ready
+        ? undefined
+        : (json.error ??
+          "Motor NFC-e não carregado. Rode `npm run install:fiscal` na pasta do agente e reinicie."),
     };
   } catch (e) {
     return { agentOnline: false, engineReady: false, config: null, error: e instanceof Error ? e.message : String(e) };

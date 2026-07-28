@@ -8,6 +8,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "install:fiscal": "npm install node-dfe@^0.0.25 node-forge@^1.3.1 qrcode@^1.5.4 --no-audit --no-fund",
     "agent-only": "node agent.cjs",
     "pack:win": "electron-packager . \"BastionPOSAgent\" --platform=win32 --arch=x64 --out=release --overwrite --icon=assets/icon.ico --asar --win32metadata.CompanyName=\"Bastion POS\" --win32metadata.FileDescription=\"Agente de Impressao Local\" --win32metadata.ProductName=\"Bastion POS Agent\"",
     "pack:mac": "electron-packager . \"BastionPOSAgent\" --platform=darwin --arch=x64 --out=release --overwrite --icon=assets/icon.icns --asar",
@@ -22,7 +23,7 @@
   },
   "optionalDependencies": {
     "@thiagoelg/node-printer": "^0.6.2",
-    "node-dfe": "^1.0.0",
+    "node-dfe": "^0.0.25",
     "node-forge": "^1.3.1",
     "qrcode": "^1.5.4",
     "serialport": "^12.0.0"

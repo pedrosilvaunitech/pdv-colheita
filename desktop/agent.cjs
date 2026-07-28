@@ -609,8 +609,14 @@ function startAgent(options = {}) {
   // NFC-e — Emissão direta SEFAZ (via node-dfe)
   // ────────────────────────────────────────────────────────────────
   app.get("/nfce/config", (_req, res) => {
-    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado (falta node-dfe)." });
-    res.json({ ok: true, engine_ready: nfce.isAvailable(), config: nfce.maskFiscalConfig(nfce.loadFiscalConfig()) });
+    if (!nfce) return res.status(501).json({ ok: false, error: "Módulo NFC-e não carregado no agente." });
+    const ready = nfce.isAvailable();
+    res.json({
+      ok: true,
+      engine_ready: ready,
+      error: ready ? undefined : (nfce.engineError ? nfce.engineError() : "Motor NFC-e não carregado."),
+      config: nfce.maskFiscalConfig(nfce.loadFiscalConfig()),
+    });
   });
 
   app.post("/nfce/config", (req, res) => {
