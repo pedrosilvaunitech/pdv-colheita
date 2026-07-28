@@ -149,10 +149,11 @@ export const testFiscalConnection = createServerFn({ method: "POST" })
       return { ok: false, message: "Escolha um provedor de emissão antes de testar." };
     }
     if (provider === "direto_sefaz") {
+      // O teste real roda no Agente Local (GET /nfce/status). A nuvem só confirma a config.
       return {
-        ok: false,
+        ok: true,
         message:
-          "Emissão 'Direto SEFAZ' exige servidor Node externo com assinatura XML-DSig + mutual TLS. Não é possível testar direto pelo backend Lovable.",
+          "Motor 'Direto SEFAZ' configurado. O teste de comunicação com a SEFAZ é feito pelo Agente Local do caixa.",
       };
     }
 
