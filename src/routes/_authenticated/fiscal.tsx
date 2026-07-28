@@ -506,10 +506,32 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
             </SelectContent>
           </Select>
           {form.provider === "direto_sefaz" && (
-            <p className="text-[10px] text-destructive mt-1 flex items-start gap-1">
-              <AlertTriangle className="size-3 mt-0.5 shrink-0" />
-              Exige servidor Node externo com XML-DSig + mutual TLS. Não é suportado no runtime do backend Lovable.
-            </p>
+            <div className="mt-2 rounded-md border border-border p-2 space-y-1">
+              <div className="flex items-center gap-2">
+                {engine?.engineReady ? (
+                  <Badge className="bg-success text-success-foreground">Motor SEFAZ pronto no Agente Local</Badge>
+                ) : engine?.agentOnline ? (
+                  <Badge variant="destructive">Agente online, motor NFC-e não carregado</Badge>
+                ) : (
+                  <Badge variant="outline">Agente Local offline</Badge>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  disabled={checkingEngine}
+                  onClick={() => void refreshEngine()}
+                >
+                  {checkingEngine ? <Loader2 className="size-3 animate-spin" /> : "Verificar"}
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                A assinatura XML-DSig e o envio à SEFAZ acontecem no Agente Local instalado no PC do caixa —
+                o certificado A1 nunca sai da máquina. Salve aqui para espelhar CNPJ, UF, CSC e numeração no agente.
+              </p>
+              {engine?.error && <p className="text-[10px] text-destructive">{engine.error}</p>}
+            </div>
           )}
           {secretName && (
             <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
