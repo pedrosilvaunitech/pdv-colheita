@@ -18,6 +18,7 @@ import { CscTokenAssistant } from "@/components/fiscal/csc-token-assistant";
 import { CnpjPrefillButton } from "@/components/fiscal/cnpj-prefill-button";
 import { NfceNumberingCard } from "@/components/fiscal/nfce-numbering-card";
 import { DirectEngineCard } from "@/components/fiscal/direct-engine-card";
+import { SefazHealthBanner } from "@/components/fiscal/sefaz-health-banner";
 import { validateIE, SEFAZ_LINKS, lookupCnpj, suggestCRT } from "@/lib/cnpj-lookup";
 import { getNfceEngineStatus, syncFiscalConfigToAgent, testSefazViaAgent, type NfceEngineStatus } from "@/lib/nfce-agent";
 import type { StoreRow } from "@/lib/current-store";
@@ -276,6 +277,7 @@ function FiscalPage() {
           </div>
 
           <div className="space-y-4">
+            <SefazHealthBanner enabled={(config?.provider as string | undefined) === "direto_sefaz"} />
             <FiscalConfigCard storeId={storeId!} store={store} config={config} />
             <NfceNumberingCard storeId={storeId!} />
             <DirectEngineCard storeId={storeId!} />

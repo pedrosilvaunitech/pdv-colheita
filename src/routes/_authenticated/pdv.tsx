@@ -14,6 +14,8 @@ import { ReceiptData } from "@/lib/receipt";
 import { tryPrintEscPos } from "@/lib/escpos";
 import { emitDirectFiscal } from "@/lib/direct-fiscal";
 import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
+import { SefazHealthBanner } from "@/components/fiscal/sefaz-health-banner";
+import { diagnoseSefazFailure } from "@/lib/sefaz-diagnostics";
 import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
 import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
 import { openCashDrawer, shouldAutoOpen } from "@/lib/cash-drawer";
@@ -117,6 +119,25 @@ function PdvPage() {
       return data;
     },
   });
+
+  // Provedor fiscal da loja — define se monitoramos o motor Direto SEFAZ.
+  const fiscalProvider = useQuery({
+    queryKey: ["pdv-fiscal-provider", storeId],
+    enabled: !!storeId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("fiscal_configs")
+        .select("provider")
+        .eq("store_id", storeId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.provider ?? "none";
+    },
+  });
+  const monitorSefaz = fiscalProvider.data === "direto_sefaz";
+
+
 
   useEffect(() => { if (settings.data?.default_document) setDocType(settings.data.default_document as "fiscal" | "nao_fiscal"); }, [settings.data?.default_document]);
   useEffect(() => { inputRef.current?.focus(); }, [storeId]);
@@ -493,7 +514,12 @@ function PdvPage() {
               if (!rp.ok) toast.warning(`Cupom com QR não impresso: ${rp.error ?? "erro"}. Reimprima em Erros fiscais.`);
             }
           } else {
-            toast.error(`NFC-e falhou: ${r.error ?? "erro desconhecido"}. Reemissão automática agendada · veja Erros fiscais.`);
+            // Traduz o erro cru em causa + primeiro passo acionável para o operador.
+            const diag = diagnoseSefazFailure(r.error ?? "erro desconhecido");
+            toast.error(`${diag.title}: ${diag.cause}`, {
+              description: `${diag.steps[0]} · Reemissão automática agendada — veja Erros fiscais.`,
+              duration: 12000,
+            });
           }
 
           qc.invalidateQueries({ queryKey: ["fiscal-pending"] });
@@ -685,6 +711,9 @@ function PdvPage() {
           </div>
         }
       />
+
+      {monitorSefaz && <SefazHealthBanner enabled className="mx-6 mt-4" />}
+
 
       {!openReg.data && (
         <div className="mx-6 mt-4 border border-warning/40 bg-warning/10 rounded-md p-4 flex items-center gap-3">
