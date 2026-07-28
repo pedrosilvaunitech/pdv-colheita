@@ -19,6 +19,7 @@ import { CnpjPrefillButton } from "@/components/fiscal/cnpj-prefill-button";
 import { NfceNumberingCard } from "@/components/fiscal/nfce-numbering-card";
 import { DirectEngineCard } from "@/components/fiscal/direct-engine-card";
 import { validateIE, SEFAZ_LINKS, lookupCnpj, suggestCRT } from "@/lib/cnpj-lookup";
+import { getNfceEngineStatus, syncFiscalConfigToAgent, testSefazViaAgent, type NfceEngineStatus } from "@/lib/nfce-agent";
 import type { StoreRow } from "@/lib/current-store";
 
 export const Route = createFileRoute("/_authenticated/fiscal")({
@@ -151,15 +152,15 @@ function validateFiscalForm(f: FiscalForm): string | null {
   if (f.provider === "none" && f.environment === "producao") {
     return "Para operar em produção você precisa escolher um provedor de emissão.";
   }
-  if (f.provider === "direto_sefaz") {
-    return "'Direto SEFAZ' exige servidor Node externo — o backend Lovable (Cloudflare Workers) não suporta assinatura XML-DSig + mutual TLS. Escolha um provedor de API.";
-  }
   if (f.environment === "producao") {
     if (!f.cnae.trim()) return "CNAE principal é obrigatório em produção.";
     if (!f.crt) return "CRT (Código de Regime Tributário) é obrigatório em produção.";
     if (!f.csc_id.trim() || !f.csc_token.trim()) return "CSC ID e CSC Token são obrigatórios para emitir NFC-e em produção.";
     if (!f.certificate_uploaded) return "Envie o certificado A1 (.pfx) antes de virar produção.";
-    if (f.defer_credentials) return "Desmarque 'Configurar credencial depois' e cadastre a chave do provedor antes de virar produção.";
+    // "Direto SEFAZ" roda no Agente Local do caixa: não depende de chave de provedor.
+    if (f.provider !== "direto_sefaz" && f.defer_credentials) {
+      return "Desmarque 'Configurar credencial depois' e cadastre a chave do provedor antes de virar produção.";
+    }
   }
   if (f.nfce_series < 1 || f.nfce_next_number < 1) return "Série e próximo número da NFC-e precisam ser ≥ 1.";
   if (f.cnae && !/^\d{4}-\d\/\d{2}$/.test(f.cnae.trim())) {
@@ -312,6 +313,28 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
   const [form, setForm] = useState<FiscalForm>({ ...DEFAULT_CONFIG });
   const testConn = useServerFn(testFiscalConnection);
   const [testing, setTesting] = useState(false);
+  // Estado do motor fiscal embarcado no Agente Local (Direto SEFAZ).
+  const [engine, setEngine] = useState<NfceEngineStatus | null>(null);
+  const [checkingEngine, setCheckingEngine] = useState(false);
+
+  async function refreshEngine() {
+    setCheckingEngine(true);
+    try {
+      setEngine(await getNfceEngineStatus());
+    } finally {
+      setCheckingEngine(false);
+    }
+  }
+
+  useEffect(() => {
+    let alive = true;
+    getNfceEngineStatus().then((st) => {
+      if (alive) setEngine(st);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Sincroniza TODOS os campos existentes no banco (não sobrescreve com defaults).
   useEffect(() => {
@@ -357,10 +380,33 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
       };
       const { error } = await supabase.from("fiscal_configs").upsert(payload, { onConflict: "store_id" });
       if (error) throw new Error(friendlyError(error.message));
+
+      // Direto SEFAZ: espelha a config no Agente Local (fiscal.json da máquina do caixa).
+      if (form.provider === "direto_sefaz") {
+        const sync = await syncFiscalConfigToAgent({
+          cnpj: String(store.cnpj ?? "").replace(/\D/g, ""),
+          uf: String(store.state ?? "MG"),
+          environment: form.environment,
+          csc_id: form.csc_id.trim() || null,
+          csc_token: form.csc_token.trim() || null,
+          serie: form.nfce_series,
+          proximo_numero: form.nfce_next_number,
+          crt: form.crt || null,
+          ie: (store as unknown as { ie?: string }).ie ?? null,
+          razao_social: String(store.name ?? ""),
+        });
+        return { agentSync: sync };
+      }
+      return { agentSync: null as null | { ok: boolean; error?: string } };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success("Configuração fiscal salva");
+      if (result?.agentSync) {
+        if (result.agentSync.ok) toast.success("Configuração enviada ao Agente Local (motor SEFAZ).");
+        else toast.warning(`Salvo na nuvem, mas o Agente Local não recebeu: ${result.agentSync.error}`);
+      }
       qc.invalidateQueries({ queryKey: ["fiscal-config"] });
+      void refreshEngine();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -368,6 +414,14 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
   async function handleTest() {
     setTesting(true);
     try {
+      if (form.provider === "direto_sefaz") {
+        // Teste local: consulta o status do serviço da SEFAZ pelo agente do caixa.
+        const r = await testSefazViaAgent();
+        if (r.ok) toast.success(r.message);
+        else toast.error(r.message);
+        void refreshEngine();
+        return;
+      }
       const result = await testConn({ data: { storeId } });
       if (result.ok) toast.success(result.message);
       else toast.error(result.message);
@@ -380,7 +434,10 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
 
   const isProd = form.environment === "producao";
   const secretName = PROVIDER_SECRET[form.provider];
-  const canTest = form.provider !== "none" && form.provider !== "direto_sefaz" && !form.defer_credentials;
+  const canTest =
+    form.provider === "direto_sefaz"
+      ? true
+      : form.provider !== "none" && !form.defer_credentials;
 
   // Validação de CRT contra a Receita (chamada opcional após consulta)
   const [crtCheck, setCrtCheck] = useState<{ ok: boolean; message: string } | null>(null);
@@ -449,10 +506,32 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
             </SelectContent>
           </Select>
           {form.provider === "direto_sefaz" && (
-            <p className="text-[10px] text-destructive mt-1 flex items-start gap-1">
-              <AlertTriangle className="size-3 mt-0.5 shrink-0" />
-              Exige servidor Node externo com XML-DSig + mutual TLS. Não é suportado no runtime do backend Lovable.
-            </p>
+            <div className="mt-2 rounded-md border border-border p-2 space-y-1">
+              <div className="flex items-center gap-2">
+                {engine?.engineReady ? (
+                  <Badge className="bg-success text-success-foreground">Motor SEFAZ pronto no Agente Local</Badge>
+                ) : engine?.agentOnline ? (
+                  <Badge variant="destructive">Agente online, motor NFC-e não carregado</Badge>
+                ) : (
+                  <Badge variant="outline">Agente Local offline</Badge>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  disabled={checkingEngine}
+                  onClick={() => void refreshEngine()}
+                >
+                  {checkingEngine ? <Loader2 className="size-3 animate-spin" /> : "Verificar"}
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                A assinatura XML-DSig e o envio à SEFAZ acontecem no Agente Local instalado no PC do caixa —
+                o certificado A1 nunca sai da máquina. Salve aqui para espelhar CNPJ, UF, CSC e numeração no agente.
+              </p>
+              {engine?.error && <p className="text-[10px] text-destructive">{engine.error}</p>}
+            </div>
           )}
           {secretName && (
             <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
