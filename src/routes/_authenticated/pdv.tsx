@@ -118,6 +118,25 @@ function PdvPage() {
     },
   });
 
+  // Provedor fiscal da loja — define se monitoramos o motor Direto SEFAZ.
+  const fiscalProvider = useQuery({
+    queryKey: ["pdv-fiscal-provider", storeId],
+    enabled: !!storeId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("fiscal_configs")
+        .select("provider")
+        .eq("store_id", storeId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.provider ?? "none";
+    },
+  });
+  const monitorSefaz = fiscalProvider.data === "direto_sefaz";
+
+
+
   useEffect(() => { if (settings.data?.default_document) setDocType(settings.data.default_document as "fiscal" | "nao_fiscal"); }, [settings.data?.default_document]);
   useEffect(() => { inputRef.current?.focus(); }, [storeId]);
 
