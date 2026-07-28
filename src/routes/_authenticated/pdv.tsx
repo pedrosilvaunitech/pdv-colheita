@@ -513,7 +513,12 @@ function PdvPage() {
               if (!rp.ok) toast.warning(`Cupom com QR não impresso: ${rp.error ?? "erro"}. Reimprima em Erros fiscais.`);
             }
           } else {
-            toast.error(`NFC-e falhou: ${r.error ?? "erro desconhecido"}. Reemissão automática agendada · veja Erros fiscais.`);
+            // Traduz o erro cru em causa + primeiro passo acionável para o operador.
+            const diag = diagnoseSefazFailure(r.error ?? "erro desconhecido");
+            toast.error(`${diag.title}: ${diag.cause}`, {
+              description: `${diag.steps[0]} · Reemissão automática agendada — veja Erros fiscais.`,
+              duration: 12000,
+            });
           }
 
           qc.invalidateQueries({ queryKey: ["fiscal-pending"] });
