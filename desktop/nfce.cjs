@@ -344,5 +344,6 @@ module.exports = {
   getEndpoints,
   buildQRUrl,
   isAvailable: () => !!NodeDfe,
+  engineError: () => engineError,
   CONFIG_FILE,
 };
