@@ -380,10 +380,33 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
       };
       const { error } = await supabase.from("fiscal_configs").upsert(payload, { onConflict: "store_id" });
       if (error) throw new Error(friendlyError(error.message));
+
+      // Direto SEFAZ: espelha a config no Agente Local (fiscal.json da máquina do caixa).
+      if (form.provider === "direto_sefaz") {
+        const sync = await syncFiscalConfigToAgent({
+          cnpj: String(store.cnpj ?? "").replace(/\D/g, ""),
+          uf: String(store.state ?? "MG"),
+          environment: form.environment,
+          csc_id: form.csc_id.trim() || null,
+          csc_token: form.csc_token.trim() || null,
+          serie: form.nfce_series,
+          proximo_numero: form.nfce_next_number,
+          crt: form.crt || null,
+          ie: (store as unknown as { ie?: string }).ie ?? null,
+          razao_social: String(store.name ?? ""),
+        });
+        return { agentSync: sync };
+      }
+      return { agentSync: null as null | { ok: boolean; error?: string } };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success("Configuração fiscal salva");
+      if (result?.agentSync) {
+        if (result.agentSync.ok) toast.success("Configuração enviada ao Agente Local (motor SEFAZ).");
+        else toast.warning(`Salvo na nuvem, mas o Agente Local não recebeu: ${result.agentSync.error}`);
+      }
       qc.invalidateQueries({ queryKey: ["fiscal-config"] });
+      void refreshEngine();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -391,6 +414,14 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
   async function handleTest() {
     setTesting(true);
     try {
+      if (form.provider === "direto_sefaz") {
+        // Teste local: consulta o status do serviço da SEFAZ pelo agente do caixa.
+        const r = await testSefazViaAgent();
+        if (r.ok) toast.success(r.message);
+        else toast.error(r.message);
+        void refreshEngine();
+        return;
+      }
       const result = await testConn({ data: { storeId } });
       if (result.ok) toast.success(result.message);
       else toast.error(result.message);
@@ -403,7 +434,10 @@ function FiscalConfigCard({ storeId, store, config }: { storeId: string; store: 
 
   const isProd = form.environment === "producao";
   const secretName = PROVIDER_SECRET[form.provider];
-  const canTest = form.provider !== "none" && form.provider !== "direto_sefaz" && !form.defer_credentials;
+  const canTest =
+    form.provider === "direto_sefaz"
+      ? true
+      : form.provider !== "none" && !form.defer_credentials;
 
   // Validação de CRT contra a Receita (chamada opcional após consulta)
   const [crtCheck, setCrtCheck] = useState<{ ok: boolean; message: string } | null>(null);
