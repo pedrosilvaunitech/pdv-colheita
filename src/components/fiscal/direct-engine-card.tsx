@@ -124,15 +124,19 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
           <div className="flex items-start gap-3 rounded-md border p-3">
             <RadioGroupItem value="vps" id="eng-vps" className="mt-1" />
             <div className="flex-1 space-y-2">
-              <Label htmlFor="eng-vps" className="font-medium">VPS Externa (multi-PDV / redundância)</Label>
+              <Label htmlFor="eng-vps" className="font-medium">
+                Servidor fiscal central (recomendado para 2+ caixas)
+              </Label>
               <p className="text-sm text-muted-foreground">
-                Rode o container <code className="font-mono text-xs">vps-fiscal/</code> em Fly.io, Railway ou Docker.
-                Informe a URL pública HTTPS e o nome do segredo que guarda o token Bearer.
+                Um único Node com o motor NFC-e (pasta <code className="font-mono text-xs">vps-fiscal/</code>, em
+                Docker, Fly.io, Railway ou um PC servidor da loja) recebe as notas de <strong>todos os caixas</strong>.
+                O certificado A1 fica só nesse servidor e a numeração continua atômica no banco — dois caixas
+                emitindo ao mesmo tempo nunca repetem número.
               </p>
               {engine === "vps" && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="vps-url" className="text-xs">URL da VPS</Label>
+                    <Label htmlFor="vps-url" className="text-xs">URL do servidor fiscal</Label>
                     <Input id="vps-url" placeholder="https://fiscal.suaempresa.com" value={vpsUrl} onChange={(e) => setVpsUrl(e.target.value)} />
                   </div>
                   <div>
@@ -154,7 +158,12 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
             {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
             Testar em homologação
           </Button>
+          <Button variant="outline" onClick={checkServer} disabled={checking || engine !== "vps"}>
+            {checking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ServerCog className="h-4 w-4 mr-2" />}
+            Testar servidor central
+          </Button>
         </div>
+
 
         {lastTest && (
           <div className={`rounded-md border p-3 text-sm flex items-start gap-2 ${lastTest.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-destructive/40 bg-destructive/5"}`}>
