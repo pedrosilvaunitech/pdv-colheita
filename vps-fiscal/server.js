@@ -60,13 +60,23 @@ app.get("/nfce/status", auth, async (_req, res) => {
 });
 
 app.post("/nfce/emit", auth, async (req, res) => {
+  // Multi-caixa: o PDV envia `terminal: { id, name }` no DTO. Registramos a
+  // origem para auditoria e devolvemos junto do resultado.
+  const terminal = (req.body && req.body.terminal) || null;
+  const started = Date.now();
   try {
     const result = await nfce.emitNFCe(req.body);
-    res.status(result.ok ? 200 : 502).json(result);
+    console.log(
+      `[bastion-fiscal] emit terminal=${terminal?.name || terminal?.id || "desconhecido"} ` +
+        `serie=${req.body?.series} numero=${req.body?.number} ok=${result.ok} ${Date.now() - started}ms`,
+    );
+    res.status(result.ok ? 200 : 502).json({ ...result, terminal, elapsed_ms: Date.now() - started });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    console.error(`[bastion-fiscal] emit falhou terminal=${terminal?.id || "?"}:`, e.message);
+    res.status(500).json({ ok: false, error: e.message, terminal, elapsed_ms: Date.now() - started });
   }
 });
+
 
 app.post("/nfce/cancel", auth, async (req, res) => {
   try { res.json(await nfce.cancelNFCe(req.body)); }

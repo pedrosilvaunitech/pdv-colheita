@@ -49,6 +49,7 @@ import { DrawerPinTest } from "@/components/pdv/drawer-pin-test";
 import { PixSettingsTab } from "@/components/pix-settings-tab";
 import { ScaleAgentCard } from "@/components/settings/scale-agent-card";
 import { TefConfigCard } from "@/components/settings/tef-config-card";
+import { TerminalsCard } from "@/components/settings/terminals-card";
 import {
   DEFAULT_BRANDING,
   loadBranding,
@@ -1133,6 +1134,7 @@ function SettingsPage() {
                 </Link>
               </Button>
             </div>
+            <TerminalsCard storeId={storeId ?? null} />
             <ScaleAgentCard />
             <TefConfigCard />
           </TabsContent>

@@ -254,11 +254,15 @@ function explainAgentNetworkError(error: unknown): string {
 async function fetchAgent(path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const bases = [activeAgentUrl, ...AGENT_URLS.filter((u) => u !== activeAgentUrl)];
   let lastError: unknown = null;
+  // Identifica o caixa: o agente recusa comandos de um terminal diferente
+  // daquele ao qual está vinculado (multi-caixa sem misturar equipamentos).
+  const headers = new Headers(init.headers);
+  headers.set("X-Terminal-Id", getTerminalId());
   for (const base of bases) {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const response = await fetch(`${base}${path}`, { ...init, signal: ctrl.signal });
+      const response = await fetch(`${base}${path}`, { ...init, headers, signal: ctrl.signal });
       activeAgentUrl = base;
       return response;
     } catch (error) {

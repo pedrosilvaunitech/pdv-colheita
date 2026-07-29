@@ -358,3 +358,73 @@ export const emitViaVps = createServerFn({ method: "POST" })
       return { ok: false, error: err.message, elapsed_ms: Date.now() - started, channel: "vps" as const };
     }
   });
+
+// ─────────────────────────────────────────────────────────────
+// Servidor fiscal central (Node NFC-e compartilhado entre caixas)
+// ─────────────────────────────────────────────────────────────
+const pingSchema = z.object({ storeId: z.string().uuid() });
+
+/**
+ * Health check do servidor fiscal central. Todos os caixas emitem por ele,
+ * então a checagem é feita no backend (o token Bearer nunca vai ao navegador).
+ */
+export const pingFiscalServer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d) => pingSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: cfg, error } = await supabase
+      .from("fiscal_configs")
+      .select("vps_url, vps_auth_secret_name")
+      .eq("store_id", data.storeId)
+      .maybeSingle();
+    if (error) return { ok: false, message: error.message };
+    if (!cfg?.vps_url) {
+      return { ok: false, message: "URL do servidor fiscal central não configurada." };
+    }
+    const tokenName = cfg.vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
+    const token = process.env[tokenName];
+    if (!token) {
+      return { ok: false, message: `Segredo ${tokenName} ausente. Cadastre-o antes de emitir.` };
+    }
+    const started = Date.now();
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10_000);
+      const res = await fetch(`${cfg.vps_url.replace(/\/+$/, "")}/health`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      const body = (await res.json().catch(() => ({}))) as {
+        engine_ready?: boolean;
+        version?: string;
+        node?: string;
+      };
+      if (!res.ok) {
+        return { ok: false, message: `Servidor fiscal respondeu HTTP ${res.status}.`, elapsed_ms: Date.now() - started };
+      }
+      if (!body.engine_ready) {
+        return {
+          ok: false,
+          message: "Servidor fiscal online, mas o motor NFC-e (node-dfe) não carregou. Rode `npm install` no servidor.",
+          elapsed_ms: Date.now() - started,
+        };
+      }
+      return {
+        ok: true,
+        message: `Servidor fiscal central online (v${body.version ?? "?"} · Node ${body.node ?? "?"}).`,
+        elapsed_ms: Date.now() - started,
+      };
+    } catch (e) {
+      const err = e as Error;
+      return {
+        ok: false,
+        message:
+          err.name === "AbortError"
+            ? "Servidor fiscal central não respondeu em 10s."
+            : `Falha ao contatar o servidor fiscal central: ${err.message}`,
+        elapsed_ms: Date.now() - started,
+      };
+    }
+  });

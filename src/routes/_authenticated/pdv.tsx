@@ -26,6 +26,7 @@ import { ScaleWidget } from "@/components/pdv/scale-widget";
 import { getToledoScale } from "@/lib/toledo-scale";
 import { TefPaymentDialog } from "@/components/pdv/tef-payment-dialog";
 import { isTefEnabled, setTefEnabled, type TefResult, type TefPaymentType } from "@/lib/tef-agent";
+import { getTerminalId, startTerminalHeartbeat } from "@/lib/terminal";
 
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -141,6 +142,11 @@ function PdvPage() {
 
   useEffect(() => { if (settings.data?.default_document) setDocType(settings.data.default_document as "fiscal" | "nao_fiscal"); }, [settings.data?.default_document]);
   useEffect(() => { inputRef.current?.focus(); }, [storeId]);
+  // Registra este caixa na loja e mantém o "sinal de vida" (multi-caixa).
+  useEffect(() => {
+    if (!storeId) return;
+    return startTerminalHeartbeat(storeId);
+  }, [storeId]);
 
   // ============================================================
   // COMANDA (lanchonete) — carrega itens da comanda no carrinho e
@@ -458,6 +464,7 @@ function PdvPage() {
         subtotal, discount: disc, total,
         operator_id: user.user.id, finalized_at: new Date().toISOString(),
         cash_register_id: openReg.data.id, document_type: docType,
+        terminal_key: getTerminalId(),
         fiscal_status: docType === "fiscal" ? "pendente" : "nao_fiscal",
         change_given: change,
         customer_cpf: customerCpf || null, customer_name: customerName || null,

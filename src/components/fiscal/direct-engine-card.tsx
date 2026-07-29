@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { testHomologacaoViaAgent } from "@/lib/direct-fiscal";
+import { pingFiscalServer } from "@/lib/fiscal.functions";
 import { pingPrintAgent } from "@/lib/print-agent";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ShieldCheck, ShieldAlert, Rocket } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldAlert, Rocket, ServerCog } from "lucide-react";
 
 interface Props {
   storeId: string;
@@ -28,6 +29,7 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
   const [agentVersion, setAgentVersion] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [lastTest, setLastTest] = useState<{ ok: boolean; msg: string; at: string } | null>(null);
 
   useEffect(() => {
@@ -65,6 +67,23 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar motor.");
     } finally { setSaving(false); }
+  }
+
+  /** Health check do servidor fiscal central (executado no backend). */
+  async function checkServer() {
+    setChecking(true);
+    try {
+      const r = (await pingFiscalServer({ data: { storeId } })) as { ok: boolean; message: string };
+      setLastTest({ ok: r.ok, at: new Date().toLocaleString("pt-BR"), msg: r.message });
+      if (r.ok) toast.success(r.message);
+      else toast.error(r.message);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setLastTest({ ok: false, at: new Date().toLocaleString("pt-BR"), msg });
+      toast.error(msg);
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function testHomologacao() {
@@ -124,15 +143,19 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
           <div className="flex items-start gap-3 rounded-md border p-3">
             <RadioGroupItem value="vps" id="eng-vps" className="mt-1" />
             <div className="flex-1 space-y-2">
-              <Label htmlFor="eng-vps" className="font-medium">VPS Externa (multi-PDV / redundância)</Label>
+              <Label htmlFor="eng-vps" className="font-medium">
+                Servidor fiscal central (recomendado para 2+ caixas)
+              </Label>
               <p className="text-sm text-muted-foreground">
-                Rode o container <code className="font-mono text-xs">vps-fiscal/</code> em Fly.io, Railway ou Docker.
-                Informe a URL pública HTTPS e o nome do segredo que guarda o token Bearer.
+                Um único Node com o motor NFC-e (pasta <code className="font-mono text-xs">vps-fiscal/</code>, em
+                Docker, Fly.io, Railway ou um PC servidor da loja) recebe as notas de <strong>todos os caixas</strong>.
+                O certificado A1 fica só nesse servidor e a numeração continua atômica no banco — dois caixas
+                emitindo ao mesmo tempo nunca repetem número.
               </p>
               {engine === "vps" && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="vps-url" className="text-xs">URL da VPS</Label>
+                    <Label htmlFor="vps-url" className="text-xs">URL do servidor fiscal</Label>
                     <Input id="vps-url" placeholder="https://fiscal.suaempresa.com" value={vpsUrl} onChange={(e) => setVpsUrl(e.target.value)} />
                   </div>
                   <div>
@@ -154,7 +177,12 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
             {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
             Testar em homologação
           </Button>
+          <Button variant="outline" onClick={checkServer} disabled={checking || engine !== "vps"}>
+            {checking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ServerCog className="h-4 w-4 mr-2" />}
+            Testar servidor central
+          </Button>
         </div>
+
 
         {lastTest && (
           <div className={`rounded-md border p-3 text-sm flex items-start gap-2 ${lastTest.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-destructive/40 bg-destructive/5"}`}>
