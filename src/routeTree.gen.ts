@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
+import { Route as AuthenticatedServidorFiscalRouteImport } from './routes/_authenticated/servidor-fiscal'
 import { Route as AuthenticatedReposicaoRouteImport } from './routes/_authenticated/reposicao'
 import { Route as AuthenticatedRelatoriosRouteImport } from './routes/_authenticated/relatorios'
 import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticated/produtos'
@@ -50,6 +51,12 @@ const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedServidorFiscalRoute =
+  AuthenticatedServidorFiscalRouteImport.update({
+    id: '/servidor-fiscal',
+    path: '/servidor-fiscal',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedReposicaoRoute = AuthenticatedReposicaoRouteImport.update({
   id: '/reposicao',
   path: '/reposicao',
@@ -160,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/produtos': typeof AuthenticatedProdutosRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
   '/reposicao': typeof AuthenticatedReposicaoRoute
+  '/servidor-fiscal': typeof AuthenticatedServidorFiscalRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/api/public/pix-webhook/$provider': typeof ApiPublicPixWebhookProviderRoute
 }
@@ -182,6 +190,7 @@ export interface FileRoutesByTo {
   '/produtos': typeof AuthenticatedProdutosRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
   '/reposicao': typeof AuthenticatedReposicaoRoute
+  '/servidor-fiscal': typeof AuthenticatedServidorFiscalRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/api/public/pix-webhook/$provider': typeof ApiPublicPixWebhookProviderRoute
 }
@@ -206,6 +215,7 @@ export interface FileRoutesById {
   '/_authenticated/produtos': typeof AuthenticatedProdutosRoute
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRoute
   '/_authenticated/reposicao': typeof AuthenticatedReposicaoRoute
+  '/_authenticated/servidor-fiscal': typeof AuthenticatedServidorFiscalRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
   '/api/public/pix-webhook/$provider': typeof ApiPublicPixWebhookProviderRoute
 }
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/produtos'
     | '/relatorios'
     | '/reposicao'
+    | '/servidor-fiscal'
     | '/usuarios'
     | '/api/public/pix-webhook/$provider'
   fileRoutesByTo: FileRoutesByTo
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/produtos'
     | '/relatorios'
     | '/reposicao'
+    | '/servidor-fiscal'
     | '/usuarios'
     | '/api/public/pix-webhook/$provider'
   id:
@@ -275,6 +287,7 @@ export interface FileRouteTypes {
     | '/_authenticated/produtos'
     | '/_authenticated/relatorios'
     | '/_authenticated/reposicao'
+    | '/_authenticated/servidor-fiscal'
     | '/_authenticated/usuarios'
     | '/api/public/pix-webhook/$provider'
   fileRoutesById: FileRoutesById
@@ -314,6 +327,13 @@ declare module '@tanstack/react-router' {
       path: '/usuarios'
       fullPath: '/usuarios'
       preLoaderRoute: typeof AuthenticatedUsuariosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/servidor-fiscal': {
+      id: '/_authenticated/servidor-fiscal'
+      path: '/servidor-fiscal'
+      fullPath: '/servidor-fiscal'
+      preLoaderRoute: typeof AuthenticatedServidorFiscalRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/reposicao': {
@@ -455,6 +475,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProdutosRoute: typeof AuthenticatedProdutosRoute
   AuthenticatedRelatoriosRoute: typeof AuthenticatedRelatoriosRoute
   AuthenticatedReposicaoRoute: typeof AuthenticatedReposicaoRoute
+  AuthenticatedServidorFiscalRoute: typeof AuthenticatedServidorFiscalRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
 
@@ -475,6 +496,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProdutosRoute: AuthenticatedProdutosRoute,
   AuthenticatedRelatoriosRoute: AuthenticatedRelatoriosRoute,
   AuthenticatedReposicaoRoute: AuthenticatedReposicaoRoute,
+  AuthenticatedServidorFiscalRoute: AuthenticatedServidorFiscalRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }
 
@@ -490,13 +512,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

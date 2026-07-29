@@ -53,6 +53,7 @@ const NAV = [
   { to: "/clientes", label: "Clientes", icon: UserSquare2 },
   { to: "/fiscal", label: "Nota Fiscal", icon: FileText },
   { to: "/fiscal-erros", label: "Erros fiscais", icon: AlertTriangle },
+  { to: "/servidor-fiscal", label: "Servidor fiscal", icon: ServerCog },
   { to: "/lojas", label: "Lojas", icon: Store },
   { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/agente-diagnostico", label: "Diagnóstico do Agente", icon: Activity },
