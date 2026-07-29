@@ -118,11 +118,13 @@ export async function retryFiscalJob(jobId: string): Promise<void> {
 export interface ListJobsOptions {
   statuses?: FiscalJobStatus[];
   terminalKey?: string;
+  /** Filtra pelo job de uma venda específica. */
+  saleId?: string;
   limit?: number;
 }
 
 export async function listFiscalJobs(storeId: string, options: ListJobsOptions = {}): Promise<FiscalJob[]> {
-  const { statuses, terminalKey, limit = 100 } = options;
+  const { statuses, terminalKey, saleId, limit = 100 } = options;
   let query = supabase
     .from("fiscal_queue")
     .select("*")
@@ -131,6 +133,7 @@ export async function listFiscalJobs(storeId: string, options: ListJobsOptions =
     .limit(limit);
   if (statuses?.length) query = query.in("status", statuses);
   if (terminalKey) query = query.eq("terminal_key", terminalKey);
+  if (saleId) query = query.eq("sale_id", saleId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as FiscalJob[];
