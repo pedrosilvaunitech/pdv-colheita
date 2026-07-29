@@ -62,7 +62,7 @@ function FiscalErrorsPage() {
     queryFn: async () => {
       await syncPendingSalesToQueue(storeId!);
       return listFiscalJobs(storeId!, {
-        status: ["pendente", "processando", "falha"],
+        statuses: ["pendente", "processando", "falha"],
         limit: 200,
       });
     },
