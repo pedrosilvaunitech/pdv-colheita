@@ -185,43 +185,141 @@ export async function testHomologacaoViaAgent(input: DirectEmitInput): Promise<D
 }
 
 /**
- * Emissão VPS server-side. Reserva número + monta DTO no navegador
+ * Emissão via servidor fiscal (VPS). Reserva número + monta DTO no navegador
  * (usa RLS do usuário logado) e transmite pelo backend com Bearer.
+ *
+ * `target` escolhe entre o servidor principal (`vps_url`) e o reserva
+ * (`vps_fallback_url`), configurados em `fiscal_configs`.
  */
-export async function emitViaVpsFlow(input: DirectEmitInput): Promise<DirectEmitResult> {
+export async function emitViaVpsFlow(
+  input: DirectEmitInput & { target?: "primary" | "fallback" },
+): Promise<DirectEmitResult> {
   const reserved = await reserveNumber(input.storeId);
   const environment = input.environment ?? (reserved.environment as "homologacao" | "producao");
   const dto = await buildSaleDto(input.saleId, input.storeId, environment, reserved.series, reserved.number);
   const started = Date.now();
-  const r = await emitViaVps({ data: { storeId: input.storeId, dto } });
-  return { ...(r as Record<string, unknown>), channel: "vps", elapsed_ms: (r as { elapsed_ms?: number }).elapsed_ms ?? Date.now() - started } as DirectEmitResult;
+  const r = await emitViaVps({
+    data: { storeId: input.storeId, dto, target: input.target ?? "primary" },
+  });
+  return {
+    ...(r as Record<string, unknown>),
+    channel: "vps",
+    elapsed_ms: (r as { elapsed_ms?: number }).elapsed_ms ?? Date.now() - started,
+  } as DirectEmitResult;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Fallback encadeado entre motores de emissão
+// ─────────────────────────────────────────────────────────────
+
+/** Motores possíveis, em ordem de preferência configurável por loja. */
+export type FiscalEngine = "agent_local" | "vps" | "vps_fallback";
+
+export const ENGINE_LABEL: Record<FiscalEngine, string> = {
+  agent_local: "Agente local do caixa",
+  vps: "Servidor fiscal central",
+  vps_fallback: "Servidor fiscal reserva",
+};
+
+interface FallbackConfig {
+  enabled: boolean;
+  order: FiscalEngine[];
+  hasVps: boolean;
+  hasFallbackVps: boolean;
+}
+
+async function loadFallbackConfig(storeId: string): Promise<FallbackConfig> {
+  const { data } = await supabase
+    .from("fiscal_configs")
+    .select("fallback_enabled, fallback_order, vps_url, vps_fallback_url")
+    .eq("store_id", storeId)
+    .maybeSingle();
+
+  const rawOrder = (data?.fallback_order ?? ["agent_local", "vps"]) as string[];
+  const order = rawOrder.filter((e): e is FiscalEngine =>
+    e === "agent_local" || e === "vps" || e === "vps_fallback",
+  );
+
+  return {
+    enabled: data?.fallback_enabled ?? true,
+    order: order.length > 0 ? order : ["agent_local", "vps"],
+    hasVps: Boolean(data?.vps_url),
+    hasFallbackVps: Boolean(data?.vps_fallback_url),
+  };
+}
+
+/**
+ * Monta a cadeia de tentativas: o motor escolhido pelo despacho vem primeiro,
+ * seguido dos demais na ordem configurada — apenas os que estão realmente
+ * configurados (VPS sem URL não entra na fila de tentativas).
+ */
+function buildEngineChain(preferred: FiscalEngine, cfg: FallbackConfig): FiscalEngine[] {
+  const available = (engine: FiscalEngine) =>
+    engine === "agent_local" || (engine === "vps" ? cfg.hasVps : cfg.hasFallbackVps);
+
+  const chain: FiscalEngine[] = available(preferred) ? [preferred] : [];
+  if (!cfg.enabled) return chain.length > 0 ? chain : [preferred];
+
+  for (const engine of cfg.order) {
+    if (!chain.includes(engine) && available(engine)) chain.push(engine);
+  }
+  return chain.length > 0 ? chain : [preferred];
+}
+
+async function runEngine(
+  engine: FiscalEngine,
+  storeId: string,
+  saleId: string,
+  environment: "homologacao" | "producao",
+): Promise<DirectEmitResult> {
+  const guard = (e: unknown): DirectEmitResult => ({
+    ok: false,
+    channel: engine === "agent_local" ? "agent_local" : "vps",
+    error: e instanceof Error ? e.message : String(e),
+  });
+
+  if (engine === "agent_local") {
+    return emitViaAgent({ storeId, saleId, environment }).catch(guard);
+  }
+  return emitViaVpsFlow({
+    storeId,
+    saleId,
+    environment,
+    target: engine === "vps" ? "primary" : "fallback",
+  }).catch(guard);
 }
 
 /** Erros do agente que justificam tentar a VPS automaticamente. */
 function isRecoverableAgentError(error?: string): boolean {
   if (!error) return true;
-  return /offline|failed to fetch|load failed|ECONNREFUSED|timeout|abort|não carregado|nao carregado|501|não instalado|nao instalado/i.test(error);
+  return /offline|failed to fetch|load failed|ECONNREFUSED|timeout|abort|não carregado|nao carregado|501|não instalado|nao instalado|indispon[ií]vel|502|503|504|network/i.test(
+    error,
+  );
 }
 
 /**
  * Fluxo completo pós-venda: consulta emitInvoice (autorização + delegate),
- * despacha para agente local ou VPS, grava invoice + atualiza sales.fiscal_status.
+ * percorre a cadeia de motores (agente local → servidor central → reserva),
+ * grava invoice + atualiza sales.fiscal_status.
  *
- * Retry automático: se o motor for `agent_local` e a falha for de
- * disponibilidade (agente fora do ar, sem node-dfe, timeout), tenta a VPS
- * configurada antes de marcar a venda como falha.
+ * Só cai para o próximo motor em falhas de DISPONIBILIDADE. Rejeição de
+ * conteúdo (XML/CSC/certificado) falharia igual em qualquer motor e por isso
+ * interrompe a cadeia imediatamente.
  *
  * Retorna resultado unificado. Não lança — grava "falha" e devolve error.
  */
 export async function emitDirectFiscal(params: {
   storeId: string;
   saleId: string;
-  /** false desliga o fallback agente→VPS (usado em testes de homologação). */
+  /** false desliga o fallback (usado em testes de homologação). */
   allowVpsFallback?: boolean;
-}): Promise<DirectEmitResult & { invoiceId?: string; fellBackToVps?: boolean }> {
+}): Promise<DirectEmitResult & { invoiceId?: string; fellBackToVps?: boolean; engine?: FiscalEngine; attempts?: { engine: FiscalEngine; error?: string }[] }> {
   const { storeId, saleId, allowVpsFallback = true } = params;
   let result: DirectEmitResult;
+  let usedEngine: FiscalEngine = "agent_local";
   let fellBackToVps = false;
+  const attempts: { engine: FiscalEngine; error?: string }[] = [];
+
   try {
     const dispatch = (await emitInvoice({ data: { storeId, saleId, type: "nfce" } })) as
       | { delegate: "agent_local"; environment: string }
@@ -235,36 +333,33 @@ export async function emitDirectFiscal(params: {
     }
 
     const environment = dispatch.environment as "homologacao" | "producao";
+    const cfg = await loadFallbackConfig(storeId);
+    const chain = allowVpsFallback
+      ? buildEngineChain(dispatch.delegate as FiscalEngine, cfg)
+      : [dispatch.delegate as FiscalEngine];
 
-    if (dispatch.delegate === "agent_local") {
-      result = await emitViaAgent({ storeId, saleId, environment }).catch((e: unknown) => ({
-        ok: false as const,
-        channel: "agent_local" as const,
-        error: e instanceof Error ? e.message : String(e),
-      }));
+    result = { ok: false, channel: "agent_local", error: "Nenhum motor fiscal configurado." };
 
-      // Retry agente → VPS quando o agente está indisponível.
-      if (!result.ok && allowVpsFallback && isRecoverableAgentError(result.error)) {
-        const { data: cfg } = await supabase
-          .from("fiscal_configs")
-          .select("vps_url")
-          .eq("store_id", storeId)
-          .maybeSingle();
-        if (cfg?.vps_url) {
-          const agentError = result.error;
-          const vpsResult = await emitViaVpsFlow({ storeId, saleId, environment }).catch((e: unknown) => ({
-            ok: false as const,
-            channel: "vps" as const,
-            error: e instanceof Error ? e.message : String(e),
-          }));
-          fellBackToVps = true;
-          result = vpsResult.ok
-            ? vpsResult
-            : { ...vpsResult, error: `Agente: ${agentError} · VPS: ${vpsResult.error}` };
-        }
+    for (let i = 0; i < chain.length; i += 1) {
+      const engine = chain[i];
+      usedEngine = engine;
+      result = await runEngine(engine, storeId, saleId, environment);
+      attempts.push({ engine, error: result.ok ? undefined : result.error });
+      if (result.ok) {
+        fellBackToVps = i > 0;
+        break;
       }
-    } else {
-      result = await emitViaVpsFlow({ storeId, saleId, environment });
+      // Rejeição de conteúdo: trocar de motor não resolve.
+      if (!isRecoverableAgentError(result.error)) break;
+    }
+
+    if (!result.ok && attempts.length > 1) {
+      result = {
+        ...result,
+        error: attempts
+          .map((a) => `${ENGINE_LABEL[a.engine]}: ${a.error ?? "falha"}`)
+          .join(" · "),
+      };
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -272,14 +367,13 @@ export async function emitDirectFiscal(params: {
       () => undefined,
       () => undefined,
     );
-    return { ok: false, channel: "agent_local", error: msg };
+    return { ok: false, channel: "agent_local", error: msg, attempts };
   }
 
   if (!result.ok) {
     await supabase.from("sales").update({ fiscal_status: "falha" }).eq("id", saleId);
-    return { ...result, fellBackToVps };
+    return { ...result, fellBackToVps, engine: usedEngine, attempts };
   }
-
 
   // Grava invoice autorizada + atualiza sale.
   try {
@@ -303,18 +397,22 @@ export async function emitDirectFiscal(params: {
         access_key: result.chave ?? null,
         protocol: result.protocolo ?? null,
         danfe_url: result.qr_url ?? null,
-        provider_response: JSON.parse(JSON.stringify(result)),
+        provider_response: JSON.parse(JSON.stringify({ ...result, engine: usedEngine, attempts })),
         terminal_key: getTerminalId(),
         issued_at: new Date().toISOString(),
       })
       .select("id")
       .single();
     await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", saleId);
-    return { ...result, invoiceId: inv?.id, fellBackToVps };
+    return { ...result, invoiceId: inv?.id, fellBackToVps, engine: usedEngine, attempts };
   } catch (e) {
     console.warn("[direct-fiscal] emissão OK mas falhou ao gravar invoice:", e);
     await supabase.from("sales").update({ fiscal_status: "emitida" }).eq("id", saleId);
-    return { ...result, fellBackToVps };
+    return { ...result, fellBackToVps, engine: usedEngine, attempts };
   }
 }
 
+/** Erro definitivo (rejeição de conteúdo) — a fila não deve reagendar. */
+export function isPermanentFiscalError(error?: string): boolean {
+  return Boolean(error) && !isRecoverableAgentError(error);
+}
