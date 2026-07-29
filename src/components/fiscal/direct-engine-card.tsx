@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { testHomologacaoViaAgent } from "@/lib/direct-fiscal";
+import { pingFiscalServer } from "@/lib/fiscal.functions";
 import { pingPrintAgent } from "@/lib/print-agent";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ShieldCheck, ShieldAlert, Rocket } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldAlert, Rocket, ServerCog } from "lucide-react";
 
 interface Props {
   storeId: string;
@@ -28,6 +29,7 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
   const [agentVersion, setAgentVersion] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [lastTest, setLastTest] = useState<{ ok: boolean; msg: string; at: string } | null>(null);
 
   useEffect(() => {
@@ -65,6 +67,23 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar motor.");
     } finally { setSaving(false); }
+  }
+
+  /** Health check do servidor fiscal central (executado no backend). */
+  async function checkServer() {
+    setChecking(true);
+    try {
+      const r = (await pingFiscalServer({ data: { storeId } })) as { ok: boolean; message: string };
+      setLastTest({ ok: r.ok, at: new Date().toLocaleString("pt-BR"), msg: r.message });
+      if (r.ok) toast.success(r.message);
+      else toast.error(r.message);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setLastTest({ ok: false, at: new Date().toLocaleString("pt-BR"), msg });
+      toast.error(msg);
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function testHomologacao() {
