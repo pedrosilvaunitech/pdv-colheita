@@ -181,8 +181,13 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
             {checking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ServerCog className="h-4 w-4 mr-2" />}
             Testar servidor central
           </Button>
+          <Button variant="outline" onClick={runServerValidation} disabled={validating || engine !== "vps"}>
+            {validating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ListChecks className="h-4 w-4 mr-2" />}
+            Validar servidor central
+          </Button>
         </div>
 
+        {serverChecks && <FiscalCheckList checks={serverChecks.checks} summary={serverChecks.summary} />}
 
         {lastTest && (
           <div className={`rounded-md border p-3 text-sm flex items-start gap-2 ${lastTest.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-destructive/40 bg-destructive/5"}`}>
@@ -194,6 +199,7 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
             </div>
           </div>
         )}
+
 
         <p className="text-xs text-muted-foreground">
           Guia completo em <code className="font-mono">docs/fiscal-direto-sefaz.md</code>.
