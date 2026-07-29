@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Utensils,
   Activity,
+  ServerCog,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
