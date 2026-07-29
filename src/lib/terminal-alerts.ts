@@ -83,11 +83,11 @@ export async function recordTerminalAlert(input: RecordAlertInput): Promise<stri
   try {
     const { data, error } = await supabase.rpc("record_terminal_alert", {
       _store_id: input.storeId,
-      _terminal_key: input.terminalKey === undefined ? getTerminalId() : input.terminalKey,
+      _terminal_key: (input.terminalKey === undefined ? getTerminalId() : input.terminalKey) ?? undefined,
       _kind: input.kind,
       _severity: input.severity,
       _title: input.title,
-      _detail: input.detail ?? null,
+      _detail: input.detail ?? undefined,
       _context: (input.context ?? {}) as never,
     });
     if (error) {
@@ -111,7 +111,7 @@ export async function resolveTerminalAlerts(
   try {
     const { data, error } = await supabase.rpc("resolve_terminal_alerts", {
       _store_id: storeId,
-      _terminal_key: terminalKey,
+      _terminal_key: terminalKey ?? undefined,
       _kinds: kinds,
     });
     if (error) {
