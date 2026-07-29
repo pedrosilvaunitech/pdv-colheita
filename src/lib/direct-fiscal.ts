@@ -14,6 +14,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { pingPrintAgent } from "@/lib/print-agent";
 import { emitInvoice, emitViaVps } from "@/lib/fiscal.functions";
+import { getTerminalId, getTerminalName } from "@/lib/terminal";
 
 
 export interface DirectEmitInput {
@@ -82,6 +83,9 @@ async function buildSaleDto(saleId: string, storeId: string, environment: string
     series,
     number,
     environment,
+    // Identificação do caixa emissor — o servidor fiscal central recebe notas
+    // de vários PDVs e registra a origem de cada uma.
+    terminal: { id: getTerminalId(), name: getTerminalName() },
     dataEmissao: new Date().toISOString(),
     emitente: {
       cnpj: String(store.cnpj ?? cfg.cnpj ?? ""),
@@ -300,6 +304,7 @@ export async function emitDirectFiscal(params: {
         protocol: result.protocolo ?? null,
         danfe_url: result.qr_url ?? null,
         provider_response: JSON.parse(JSON.stringify(result)),
+        terminal_key: getTerminalId(),
         issued_at: new Date().toISOString(),
       })
       .select("id")
