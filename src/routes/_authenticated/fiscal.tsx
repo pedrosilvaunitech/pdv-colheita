@@ -18,6 +18,7 @@ import { CscTokenAssistant } from "@/components/fiscal/csc-token-assistant";
 import { CnpjPrefillButton } from "@/components/fiscal/cnpj-prefill-button";
 import { NfceNumberingCard } from "@/components/fiscal/nfce-numbering-card";
 import { DirectEngineCard } from "@/components/fiscal/direct-engine-card";
+import { AgentEngineCard } from "@/components/fiscal/agent-engine-card";
 import { SefazHealthBanner } from "@/components/fiscal/sefaz-health-banner";
 import { validateIE, SEFAZ_LINKS, lookupCnpj, suggestCRT } from "@/lib/cnpj-lookup";
 import { getNfceEngineStatus, syncFiscalConfigToAgent, testSefazViaAgent, type NfceEngineStatus } from "@/lib/nfce-agent";
@@ -281,6 +282,7 @@ function FiscalPage() {
             <FiscalConfigCard storeId={storeId!} store={store} config={config} />
             <NfceNumberingCard storeId={storeId!} />
             <DirectEngineCard storeId={storeId!} />
+            <AgentEngineCard />
             <PendingFiscalCard storeId={storeId!} />
             <div className="border border-border rounded-md bg-card p-5">
               <h3 className="text-sm font-semibold mb-3">Notas recentes</h3>
