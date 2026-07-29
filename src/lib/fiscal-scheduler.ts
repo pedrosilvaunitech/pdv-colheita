@@ -27,8 +27,42 @@ import { recordTerminalAlert, resolveTerminalAlerts } from "@/lib/terminal-alert
 
 /** Intervalo entre varreduras da fila. */
 const TICK_MS = 60_000;
-/** Quantos jobs um caixa processa por rodada. */
-const BATCH = 3;
+/** Quantos jobs um caixa reserva por rodada. */
+const BATCH = 6;
+/**
+ * Emissões simultâneas dentro de um mesmo caixa.
+ *
+ * Emitir em paralelo é seguro: `reserve_nfce_number` incrementa a numeração
+ * em um único UPDATE ... RETURNING atômico, então dois caixas (ou duas
+ * emissões do mesmo caixa) nunca recebem o mesmo número. O limite existe só
+ * para não saturar o motor local / a SEFAZ com dezenas de conexões.
+ */
+const CONCURRENCY = 3;
+
+/**
+ * Executa `worker` sobre `items` com no máximo `limit` tarefas em voo.
+ * Preserva a ordem dos resultados e nunca rejeita — cada worker trata o erro.
+ */
+async function runPool<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+
+  const lanes = Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, async () => {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  });
+
+  await Promise.all(lanes);
+  return results;
+}
 
 /** Vendas fiscais aguardando autorização, mais antigas primeiro. */
 export async function listPendingFiscalSales(storeId: string, limit = 50) {
@@ -126,28 +160,29 @@ export async function runFiscalRetryPass(
 
   // Modo forçado por venda: emite direto, sem passar pela reserva da fila.
   if (opts?.force && opts.saleIds?.length) {
-    for (const saleId of opts.saleIds) {
-      result.attempted += 1;
+    const outcomes = await runPool(opts.saleIds, CONCURRENCY, async (saleId) => {
       const r = await emitDirectFiscal({ storeId, saleId });
       if (r.ok) {
-        result.authorized += 1;
         await supabase
           .from("fiscal_queue")
           .update({ status: "concluida", last_error: null, locked_by: null })
           .eq("sale_id", saleId)
           .in("status", ["pendente", "processando", "falha"]);
-      } else {
-        result.failed += 1;
-        await recordTerminalAlert({
-          storeId,
-          kind: "fiscal_emit_failed",
-          severity: "aviso",
-          title: "Falha ao reemitir NFC-e",
-          detail: r.error ?? "Erro desconhecido.",
-          context: { sale_id: saleId },
-        });
+        return true;
       }
-    }
+      await recordTerminalAlert({
+        storeId,
+        kind: "fiscal_emit_failed",
+        severity: "aviso",
+        title: "Falha ao reemitir NFC-e",
+        detail: r.error ?? "Erro desconhecido.",
+        context: { sale_id: saleId },
+      });
+      return false;
+    });
+    result.attempted = outcomes.length;
+    result.authorized = outcomes.filter(Boolean).length;
+    result.failed = outcomes.length - result.authorized;
     return result;
   }
 
@@ -162,16 +197,16 @@ export async function runFiscalRetryPass(
       .in("status", ["pendente", "falha"]);
   }
 
-  const jobs = await claimFiscalJobs(storeId, opts?.force ? 10 : BATCH);
+  const jobs = await claimFiscalJobs(storeId, opts?.force ? BATCH * 3 : BATCH);
 
-  // Sequencial de propósito: a numeração NFC-e é atômica por loja e emitir em
-  // paralelo aumenta a chance de colisão de número/duplicidade na SEFAZ.
-  for (const job of jobs) {
-    result.attempted += 1;
-    const ok = await processJob(storeId, job);
-    if (ok) result.authorized += 1;
-    else result.failed += 1;
-  }
+  // Emissão concorrente: várias notas deste caixa saem ao mesmo tempo, e os
+  // demais caixas seguem emitindo em paralelo (cada um reserva os próprios
+  // jobs via SKIP LOCKED). A numeração continua atômica no banco.
+  const outcomes = await runPool(jobs, CONCURRENCY, (job) => processJob(storeId, job));
+
+  result.attempted = outcomes.length;
+  result.authorized = outcomes.filter(Boolean).length;
+  result.failed = outcomes.length - result.authorized;
 
   return result;
 }
