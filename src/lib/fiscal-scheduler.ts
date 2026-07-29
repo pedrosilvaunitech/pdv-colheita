@@ -145,9 +145,17 @@ async function processJob(storeId: string, job: FiscalJob): Promise<boolean> {
     storeId,
     kind: "fiscal_emit_failed",
     severity: permanent ? "critico" : "aviso",
-    title: permanent ? "Nota rejeitada — exige correção" : "Falha ao emitir NFC-e",
-    detail: r.error ?? "Erro desconhecido na emissão.",
-    context: { sale_id: job.sale_id, attempts: r.attempts ?? [], permanent },
+    title: permanent
+      ? `${ERROR_CLASS_LABEL[decision.class]} — exige correção`
+      : `Falha ao emitir NFC-e (${ERROR_CLASS_LABEL[decision.class]})`,
+    detail: `${r.error ?? "Erro desconhecido na emissão."} — ${decision.reason}`,
+    context: {
+      sale_id: job.sale_id,
+      attempts: r.attempts ?? [],
+      permanent,
+      error_class: decision.class,
+      retry_in_ms: decision.delayMs,
+    },
   });
   return false;
 }
