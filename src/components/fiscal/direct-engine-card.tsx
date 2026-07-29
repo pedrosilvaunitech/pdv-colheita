@@ -3,6 +3,7 @@
  * Permite escolher entre "Agente Local" e "VPS externa" e testar em homologação.
  */
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { testHomologacaoViaAgent } from "@/lib/direct-fiscal";
@@ -11,7 +12,6 @@ import { FiscalCheckList } from "@/components/fiscal/fiscal-check-list";
 import { pingPrintAgent } from "@/lib/print-agent";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ interface Props {
 
 export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
   const [engine, setEngine] = useState<"agent_local" | "vps">("agent_local");
+  // Somente leitura aqui: a fonte única de verdade é a tela "Servidor fiscal".
   const [vpsUrl, setVpsUrl] = useState("");
   const [vpsSecret, setVpsSecret] = useState("FISCAL_VPS_TOKEN");
   const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
@@ -59,11 +60,9 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
     try {
       const { error } = await supabase
         .from("fiscal_configs")
-        .update({
-          direct_engine: engine,
-          vps_url: engine === "vps" ? vpsUrl.trim() || null : null,
-          vps_auth_secret_name: engine === "vps" ? (vpsSecret.trim() || "FISCAL_VPS_TOKEN") : null,
-        })
+        // Grava apenas o motor: apagar vps_url daqui zeraria o endereço salvo
+        // na tela "Servidor fiscal" toda vez que o lojista voltasse ao agente.
+        .update({ direct_engine: engine })
         .eq("store_id", storeId);
       if (error) throw error;
       toast.success("Motor de emissão salvo.");
