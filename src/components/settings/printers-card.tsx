@@ -211,7 +211,7 @@ export function PrintersCard({ storeId }: Props) {
               </SelectTrigger>
               <SelectContent>
                 {CODEPAGE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
+                  <SelectItem key={o.id} value={o.id}>
                     {o.label}
                   </SelectItem>
                 ))}
