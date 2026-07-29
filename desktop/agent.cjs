@@ -519,10 +519,10 @@ function startAgent(options = {}) {
     else res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Vary", "Origin, Access-Control-Request-Headers, Access-Control-Request-Private-Network");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] || "Content-Type, X-Printer, X-Printer-Source, Accept, Origin");
+    res.setHeader("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] || "Content-Type, X-Printer, X-Printer-Source, X-Terminal-Id, Accept, Origin");
     res.setHeader("Access-Control-Allow-Private-Network", "true");
     res.setHeader("Access-Control-Max-Age", "86400");
-    res.setHeader("Access-Control-Expose-Headers", "X-Agent-Version");
+    res.setHeader("Access-Control-Expose-Headers", "X-Agent-Version, X-Agent-Id");
     res.setHeader("X-Agent-Version", VERSION);
     if (req.method === "OPTIONS") return res.status(204).end();
     next();
