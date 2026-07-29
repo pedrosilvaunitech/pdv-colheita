@@ -10,7 +10,7 @@
  * O token Bearer NÃO é digitado aqui: só o NOME do segredo. O valor vive no
  * backend e nunca trafega para o navegador.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -18,7 +18,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentStore } from "@/lib/current-store";
 import { PageHeader, StoreRequired } from "@/components/page-header";
 import { FiscalCheckList } from "@/components/fiscal/fiscal-check-list";
-import { pingFiscalServer, validateFiscalServer, type FiscalServerCheck } from "@/lib/fiscal.functions";
+import {
+  pingFiscalServer,
+  validateFiscalServer,
+  testFiscalServerToken,
+  type FiscalServerCheck,
+} from "@/lib/fiscal.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +31,18 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, ServerCog, Save, Activity, ListChecks, Network, ShieldAlert } from "lucide-react";
+import {
+  Loader2,
+  ServerCog,
+  Save,
+  Activity,
+  ListChecks,
+  Network,
+  ShieldAlert,
+  KeyRound,
+  Download,
+  Upload,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/servidor-fiscal")({
   head: () => ({
@@ -114,6 +130,9 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
   const [validating, setValidating] = useState(false);
   const [ping, setPing] = useState<{ ok: boolean; message: string; at: string } | null>(null);
   const [checks, setChecks] = useState<{ summary: string; checks: FiscalServerCheck[] } | null>(null);
+  const [authTesting, setAuthTesting] = useState(false);
+  const [auth, setAuth] = useState<{ ok: boolean; unprotected: boolean; message: string; at: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const config = useQuery({
     queryKey: ["fiscal-server-config", storeId],
@@ -203,6 +222,89 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setValidating(false);
+    }
+  }
+
+  /**
+   * Prova o token Bearer contra um endpoint autenticado do servidor.
+   * Roda no backend — o valor do segredo nunca chega ao navegador.
+   */
+  async function testToken() {
+    setAuthTesting(true);
+    try {
+      const r = (await testFiscalServerToken({ data: { storeId } })) as {
+        ok: boolean;
+        unprotected: boolean;
+        message: string;
+      };
+      setAuth({ ...r, at: new Date().toLocaleString("pt-BR") });
+      if (r.ok && !r.unprotected) toast.success(r.message);
+      else if (r.ok) toast.warning(r.message);
+      else toast.error(r.message);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setAuth({ ok: false, unprotected: false, message, at: new Date().toLocaleString("pt-BR") });
+      toast.error(message);
+    } finally {
+      setAuthTesting(false);
+    }
+  }
+
+  /**
+   * Exporta a configuração (sem segredos — só o NOME do segredo) para replicar
+   * o mesmo servidor em outra loja/instalação sem redigitar nada.
+   */
+  function exportConfig() {
+    if (!form) return;
+    const payload = {
+      kind: "bastion-pos.fiscal-server",
+      version: 1,
+      exported_at: new Date().toISOString(),
+      config: {
+        direct_engine: form.direct_engine,
+        vps_url: normalizeServerUrl(form.vps_url),
+        vps_fallback_url: normalizeServerUrl(form.vps_fallback_url),
+        vps_auth_secret_name: form.vps_auth_secret_name,
+        fallback_enabled: form.fallback_enabled,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `servidor-fiscal-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Configuração exportada (sem o valor do token).");
+  }
+
+  /** Importa o JSON exportado. Só preenche o formulário — salvar continua manual. */
+  async function importConfig(file: File) {
+    try {
+      const parsed = JSON.parse(await file.text()) as {
+        kind?: string;
+        config?: Partial<FiscalServerConfig>;
+      };
+      if (parsed.kind !== "bastion-pos.fiscal-server" || !parsed.config) {
+        throw new Error("Arquivo não é uma exportação de servidor fiscal do Bastion POS.");
+      }
+      const c = parsed.config;
+      const engine: Engine = c.direct_engine === "vps" ? "vps" : "agent_local";
+      setDraft({
+        direct_engine: engine,
+        vps_url: typeof c.vps_url === "string" ? c.vps_url : "",
+        vps_fallback_url: typeof c.vps_fallback_url === "string" ? c.vps_fallback_url : "",
+        vps_auth_secret_name:
+          typeof c.vps_auth_secret_name === "string" && c.vps_auth_secret_name.trim()
+            ? c.vps_auth_secret_name.trim()
+            : "FISCAL_VPS_TOKEN",
+        fallback_enabled: c.fallback_enabled !== false,
+      });
+      toast.success("Configuração carregada. Confira os campos e clique em Salvar.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Arquivo inválido.");
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -380,6 +482,10 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
                 {pinging ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Activity className="h-4 w-4 mr-2" />}
                 Testar conexão
               </Button>
+              <Button variant="outline" onClick={testToken} disabled={authTesting}>
+                {authTesting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <KeyRound className="h-4 w-4 mr-2" />}
+                Testar token
+              </Button>
               <Button variant="outline" onClick={runValidation} disabled={validating}>
                 {validating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ListChecks className="h-4 w-4 mr-2" />}
                 Validar servidor
@@ -396,7 +502,50 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
               </div>
             )}
 
+            {auth && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 text-sm">
+                <Badge
+                  variant={auth.ok && !auth.unprotected ? "default" : auth.ok ? "secondary" : "destructive"}
+                  className={auth.ok && !auth.unprotected ? "bg-emerald-600" : ""}
+                >
+                  {auth.ok ? (auth.unprotected ? "Exposto" : "Token válido") : "Token recusado"}
+                </Badge>
+                <span className="text-muted-foreground">{auth.message}</span>
+                <span className="ml-auto text-xs text-muted-foreground font-mono">{auth.at}</span>
+              </div>
+            )}
+
             {checks && <FiscalCheckList checks={checks.checks} summary={checks.summary} />}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" /> Importar / exportar configuração
+            </CardTitle>
+            <CardDescription>
+              Leve o mesmo endereço, servidor reserva e nome do segredo para outra loja sem redigitar. O{" "}
+              <strong>valor</strong> do token nunca é exportado — ele fica só no backend.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exportConfig}>
+              <Download className="h-4 w-4 mr-2" /> Exportar JSON
+            </Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+              <Upload className="h-4 w-4 mr-2" /> Importar JSON
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void importConfig(f);
+              }}
+            />
           </CardContent>
         </Card>
 
