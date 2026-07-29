@@ -68,7 +68,40 @@ fly volumes create certs --size 1
 2. Configure secrets no painel
 3. Adicione um volume em `/certs` e faça upload do `.pfx`
 
-### Opção C — Contabo/Hetzner (~R$ 25/mês)
+### Opção C — Windows (sem Docker, sem Linux)
+
+O servidor é Node puro: roda em qualquer Windows 10/11 ou Windows Server.
+Pode ser uma máquina dedicada, o PC da retaguarda ou até o caixa principal.
+
+1. Instale o **Node.js 20 LTS** (https://nodejs.org).
+2. Copie a pasta `vps-fiscal` para, por exemplo, `C:\bastion-fiscal`.
+3. Copie o certificado A1 para `C:\bastion-fiscal\certs\store.pfx`.
+4. Copie `.env.example` para `.env` e preencha, usando caminho Windows:
+   `FISCAL_PFX_PATH=C:\bastion-fiscal\certs\store.pfx`
+5. Rodar em primeiro plano (para testar):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\windows\start.ps1
+```
+
+6. Rodar como **serviço do Windows** (sobe no boot, reinicia sozinho) —
+   PowerShell **como Administrador**:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\windows\install-service.ps1
+```
+
+O script instala o NSSM, cria o serviço `BastionFiscal`, repassa o `.env`,
+grava logs em `vps-fiscal\logs\` e libera a porta 3737 no firewall privado.
+Para remover: `nssm remove BastionFiscal confirm`.
+
+Nos caixas, em **Configurações → Servidor fiscal**, aponte para
+`http://<ip-do-servidor>:3737`. Como é IP privado da rede local, o app aceita
+`http://` sem TLS. Se for expor pela internet, use HTTPS (IIS/Nginx/Cloudflare
+Tunnel na frente) — nunca abra a porta 3737 direto ao público.
+
+### Opção D — Contabo/Hetzner (~R$ 25/mês)
+
 
 ```bash
 apt install docker.io -y
