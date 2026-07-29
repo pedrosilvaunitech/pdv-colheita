@@ -174,7 +174,12 @@ function FiscalErrorsPage() {
         }
       />
 
+      {/* Visão operacional (NOC): fila em tempo real + integridade da numeração. */}
+      <FiscalQueuePanel storeId={storeId} />
+      <NumberingAuditCard storeId={storeId} />
+
       <section className="border border-border rounded-md bg-card">
+
         <header className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <AlertTriangle className="size-4 text-warning" />
           <h2 className="text-sm font-semibold">Fila de reemissão</h2>
