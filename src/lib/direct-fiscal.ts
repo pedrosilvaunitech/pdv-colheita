@@ -228,6 +228,8 @@ export async function emitViaVpsFlow(
     ...(r as Record<string, unknown>),
     channel: "vps",
     elapsed_ms: (r as { elapsed_ms?: number }).elapsed_ms ?? Date.now() - started,
+    series: reserved.series,
+    number: reserved.number,
   } as DirectEmitResult;
 }
 
