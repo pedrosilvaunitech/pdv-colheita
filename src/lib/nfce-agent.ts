@@ -156,3 +156,97 @@ export async function testSefazViaAgent(): Promise<{ ok: boolean; message: strin
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Validação profunda do motor fiscal + instalação assistida
+// ─────────────────────────────────────────────────────────────
+
+export interface EngineCheck {
+  key: string;
+  label: string;
+  status: "ok" | "warn" | "fail";
+  detail: string;
+  fix: string | null;
+}
+
+export interface EngineValidation {
+  ok: boolean;
+  ready: boolean;
+  summary: string;
+  engine_error?: string | null;
+  versions?: Record<string, string | null>;
+  checks: EngineCheck[];
+}
+
+/** Bateria de checagens do node-dfe no PC do caixa. Nunca lança. */
+export async function validateNfceEngine(): Promise<EngineValidation> {
+  try {
+    const res = await agentFetch("/nfce/engine", {}, 15000);
+    const json = (await res.json().catch(() => ({}))) as Partial<EngineValidation> & { error?: string };
+    if (!res.ok || !json.checks) {
+      return {
+        ok: false,
+        ready: false,
+        summary: json.error ?? `Agente respondeu HTTP ${res.status}.`,
+        checks: [
+          {
+            key: "agent",
+            label: "Agente Local",
+            status: "fail",
+            detail: json.error ?? `HTTP ${res.status}`,
+            fix: "Atualize o Bastion POS Agent para a versão 1.8.1 ou superior.",
+          },
+        ],
+      };
+    }
+    return json as EngineValidation;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      ready: false,
+      summary: msg,
+      checks: [
+        {
+          key: "agent",
+          label: "Agente Local",
+          status: "fail",
+          detail: msg,
+          fix: "Abra o Bastion POS Agent na bandeja do Windows e tente novamente.",
+        },
+      ],
+    };
+  }
+}
+
+export interface EngineInstallState {
+  running: boolean;
+  ok: boolean | null;
+  error: string | null;
+  log: string[];
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+/** Dispara `npm run install:fiscal` no caixa (roda em background no agente). */
+export async function startNfceEngineInstall(): Promise<{ ok: boolean; error?: string; state?: EngineInstallState }> {
+  try {
+    const res = await agentFetch("/nfce/engine/install", { method: "POST" }, 20000);
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; state?: EngineInstallState };
+    if (!res.ok || json.ok === false) return { ok: false, error: json.error ?? `HTTP ${res.status}` };
+    return { ok: true, state: json.state };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Progresso da instalação (polling). */
+export async function getNfceEngineInstallState(): Promise<EngineInstallState | null> {
+  try {
+    const res = await agentFetch("/nfce/engine/install", {}, 10000);
+    const json = (await res.json().catch(() => ({}))) as { state?: EngineInstallState };
+    return json.state ?? null;
+  } catch {
+    return null;
+  }
+}
