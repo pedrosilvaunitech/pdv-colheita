@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ReceiptData } from "@/lib/receipt";
 import { tryPrintEscPos } from "@/lib/escpos";
 import { emitDirectFiscal } from "@/lib/direct-fiscal";
+import { enqueueFiscalJob, completeFiscalJob, listFiscalJobs } from "@/lib/fiscal-queue";
 import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
 import { SefazHealthBanner } from "@/components/fiscal/sefaz-health-banner";
 import { diagnoseSefazFailure } from "@/lib/sefaz-diagnostics";
@@ -510,6 +511,9 @@ function PdvPage() {
       // Emissão direta SEFAZ: dispara em paralelo com a impressão do recibo.
       if (docType === "fiscal" && storeId) {
         void (async () => {
+          // Enfileira ANTES de emitir: se este caixa cair no meio do processo,
+          // outro caixa assume a nota em vez de ela ficar órfã.
+          await enqueueFiscalJob(storeId, saleId).catch(() => null);
           const r = await emitDirectFiscal({ storeId, saleId });
           if (r.ok) {
             toast.success(
