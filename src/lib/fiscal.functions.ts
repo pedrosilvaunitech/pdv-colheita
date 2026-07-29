@@ -428,3 +428,191 @@ export const pingFiscalServer = createServerFn({ method: "POST" })
       };
     }
   });
+
+// ─────────────────────────────────────────────────────────────
+// Rotina de validação do servidor fiscal central (VPS)
+// ─────────────────────────────────────────────────────────────
+
+export interface FiscalServerCheck {
+  key: string;
+  label: string;
+  status: "ok" | "warn" | "fail";
+  detail: string;
+  fix: string | null;
+}
+
+/**
+ * Valida ponta a ponta o servidor fiscal central antes de liberar a emissão:
+ * configuração no banco, segredo cadastrado, URL/HTTPS, /health, motor node-dfe
+ * e a rotina remota /nfce/validate (certificado, env, conexão SEFAZ).
+ * Roda no backend — o token Bearer nunca vai ao navegador. Nunca lança.
+ */
+export const validateFiscalServer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d) => pingSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const checks: FiscalServerCheck[] = [];
+    const push = (
+      key: string,
+      label: string,
+      status: FiscalServerCheck["status"],
+      detail: string,
+      fix: string | null = null,
+    ) => checks.push({ key, label, status, detail, fix });
+
+    const finish = () => {
+      const failed = checks.filter((c) => c.status === "fail");
+      return {
+        ok: failed.length === 0,
+        summary: failed.length
+          ? `${failed.length} problema(s) bloqueando a emissão pelo servidor central.`
+          : "Servidor fiscal central validado e pronto para emitir.",
+        checks,
+      };
+    };
+
+    const { supabase } = context;
+    const { data: cfg, error } = await supabase
+      .from("fiscal_configs")
+      .select("vps_url, vps_auth_secret_name, direct_engine, environment, certificate_uploaded")
+      .eq("store_id", data.storeId)
+      .maybeSingle();
+
+    if (error) {
+      push("config", "Configuração fiscal", "fail", error.message, "Revise as configurações fiscais da loja.");
+      return finish();
+    }
+
+    push(
+      "engine_choice",
+      "Motor de emissão",
+      cfg?.direct_engine === "vps" ? "ok" : "warn",
+      cfg?.direct_engine === "vps" ? "Servidor fiscal central" : `Configurado como "${cfg?.direct_engine ?? "agent_local"}"`,
+      cfg?.direct_engine === "vps" ? null : "Selecione o Servidor Fiscal Central acima e salve para usar múltiplos caixas.",
+    );
+
+    const url = cfg?.vps_url?.trim();
+    if (!url) {
+      push("url", "URL do servidor", "fail", "Não configurada.", "Informe a URL do servidor fiscal central e salve.");
+      return finish();
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      push("url", "URL do servidor", "fail", `"${url}" não é uma URL válida.`, "Use o formato https://fiscal.suaempresa.com.br");
+      return finish();
+    }
+    const isLocal = /^(localhost|127\.|192\.168\.|10\.)/.test(parsed.hostname);
+    push(
+      "url",
+      "URL do servidor",
+      parsed.protocol === "https:" || isLocal ? "ok" : "warn",
+      `${parsed.origin}${parsed.protocol === "https:" ? "" : " (sem HTTPS)"}`,
+      parsed.protocol === "https:" || isLocal ? null : "Use HTTPS: o tráfego inclui dados fiscais da loja.",
+    );
+
+    const tokenName = cfg?.vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
+    const token = process.env[tokenName];
+    if (!token) {
+      push("secret", "Token de autenticação", "fail", `Segredo ${tokenName} ausente.`, `Cadastre o segredo ${tokenName} no backend.`);
+      return finish();
+    }
+    push("secret", "Token de autenticação", "ok", `${tokenName} cadastrado (${token.length} caracteres).`);
+
+    const base = url.replace(/\/+$/, "");
+    const call = async (path: string, timeoutMs = 15_000) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(`${base}${path}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ctrl.signal,
+        });
+        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        return { status: res.status, ok: res.ok, body };
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    // 1) Disponibilidade + latência
+    const t0 = Date.now();
+    try {
+      const health = await call("/health", 10_000);
+      const elapsed = Date.now() - t0;
+      if (!health.ok) {
+        push("health", "Disponibilidade", "fail", `HTTP ${health.status} em /health.`, "Confirme se o container está no ar e a porta exposta.");
+        return finish();
+      }
+      push(
+        "health",
+        "Disponibilidade",
+        elapsed > 3000 ? "warn" : "ok",
+        `Online em ${elapsed}ms · v${String(health.body.version ?? "?")} · Node ${String(health.body.node ?? "?")}`,
+        elapsed > 3000 ? "Latência alta pode atrasar o fechamento das vendas no caixa." : null,
+      );
+      push(
+        "engine",
+        "Motor node-dfe",
+        health.body.engine_ready ? "ok" : "fail",
+        health.body.engine_ready ? "carregado" : "não carregado no servidor",
+        health.body.engine_ready ? null : "Rode `npm install` no servidor fiscal e reinicie o serviço.",
+      );
+    } catch (e) {
+      const err = e as Error;
+      push(
+        "health",
+        "Disponibilidade",
+        "fail",
+        err.name === "AbortError" ? "Sem resposta em 10s." : err.message,
+        "Verifique DNS, firewall e se o serviço está rodando.",
+      );
+      return finish();
+    }
+
+    // 2) Rotina remota de validação (certificado, env, SEFAZ)
+    try {
+      const remote = await call("/nfce/validate", 25_000);
+      if (remote.status === 401) {
+        push("auth", "Autenticação", "fail", "Servidor recusou o token (401).", `O valor de ${tokenName} deve ser igual ao FISCAL_VPS_TOKEN do servidor.`);
+        return finish();
+      }
+      push("auth", "Autenticação", "ok", "Token aceito pelo servidor.");
+      if (remote.status === 404) {
+        push(
+          "remote",
+          "Rotina remota",
+          "warn",
+          "Servidor sem /nfce/validate (versão antiga).",
+          "Atualize o servidor fiscal para a versão 1.1.0 para checagens completas.",
+        );
+        return finish();
+      }
+      const remoteChecks = Array.isArray(remote.body.checks) ? (remote.body.checks as FiscalServerCheck[]) : [];
+      for (const c of remoteChecks) checks.push({ ...c, key: `remote_${c.key}` });
+      if (!remoteChecks.length) {
+        push("remote", "Rotina remota", "warn", "Servidor não devolveu checagens.", "Verifique os logs do servidor fiscal.");
+      }
+    } catch (e) {
+      const err = e as Error;
+      push(
+        "remote",
+        "Rotina remota",
+        "fail",
+        err.name === "AbortError" ? "Validação remota expirou em 25s." : err.message,
+        "A consulta à SEFAZ pode estar travando: cheque a saída HTTPS do servidor.",
+      );
+    }
+
+    // 3) Ambiente
+    push(
+      "environment",
+      "Ambiente fiscal",
+      cfg?.environment === "producao" ? "ok" : "warn",
+      cfg?.environment === "producao" ? "Produção" : "Homologação",
+      cfg?.environment === "producao" ? null : "Em homologação as notas não têm valor fiscal.",
+    );
+
+    return finish();
+  });
