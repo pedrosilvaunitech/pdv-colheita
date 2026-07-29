@@ -154,16 +154,36 @@ export async function emitViaAgent(input: DirectEmitInput): Promise<DirectEmitRe
   const dto = await buildSaleDto(input.saleId, input.storeId, environment, reserved.series, reserved.number);
 
   const started = Date.now();
-  const res = await fetch(`${agentUrl}/nfce/emit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(dto),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${agentUrl}/nfce/emit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dto),
+    });
+  } catch (e) {
+    // Rede caiu no meio: a URL cacheada pode ter ficado obsoleta.
+    invalidateAgentUrlCache();
+    return {
+      ok: false,
+      channel: "agent_local",
+      error: e instanceof Error ? e.message : String(e),
+      series: reserved.series,
+      number: reserved.number,
+    };
+  }
 
   const elapsed_ms = Date.now() - started;
   const body = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
-  return { ...body, channel: "agent_local", elapsed_ms };
+  return {
+    ...body,
+    channel: "agent_local",
+    elapsed_ms,
+    series: reserved.series,
+    number: reserved.number,
+  };
 }
+
 
 /**
  * Testa emissão em homologação — força ambiente=homologacao e grava histórico.
