@@ -429,6 +429,7 @@ export type Database = {
           certificate_path: string | null
           certificate_subject: string | null
           certificate_uploaded: boolean
+          circuit_state: Json
           cnae: string | null
           credentials_note: string | null
           crt: string | null
@@ -437,6 +438,8 @@ export type Database = {
           defer_credentials: boolean
           direct_engine: string
           environment: Database["public"]["Enums"]["fiscal_env"]
+          fallback_enabled: boolean
+          fallback_order: string[]
           homologacao_history: Json
           homologacao_last_test_at: string | null
           homologacao_last_test_result: Json | null
@@ -450,6 +453,7 @@ export type Database = {
           store_id: string
           updated_at: string
           vps_auth_secret_name: string | null
+          vps_fallback_url: string | null
           vps_url: string | null
         }
         Insert: {
@@ -459,6 +463,7 @@ export type Database = {
           certificate_path?: string | null
           certificate_subject?: string | null
           certificate_uploaded?: boolean
+          circuit_state?: Json
           cnae?: string | null
           credentials_note?: string | null
           crt?: string | null
@@ -467,6 +472,8 @@ export type Database = {
           defer_credentials?: boolean
           direct_engine?: string
           environment?: Database["public"]["Enums"]["fiscal_env"]
+          fallback_enabled?: boolean
+          fallback_order?: string[]
           homologacao_history?: Json
           homologacao_last_test_at?: string | null
           homologacao_last_test_result?: Json | null
@@ -480,6 +487,7 @@ export type Database = {
           store_id: string
           updated_at?: string
           vps_auth_secret_name?: string | null
+          vps_fallback_url?: string | null
           vps_url?: string | null
         }
         Update: {
@@ -489,6 +497,7 @@ export type Database = {
           certificate_path?: string | null
           certificate_subject?: string | null
           certificate_uploaded?: boolean
+          circuit_state?: Json
           cnae?: string | null
           credentials_note?: string | null
           crt?: string | null
@@ -497,6 +506,8 @@ export type Database = {
           defer_credentials?: boolean
           direct_engine?: string
           environment?: Database["public"]["Enums"]["fiscal_env"]
+          fallback_enabled?: boolean
+          fallback_order?: string[]
           homologacao_history?: Json
           homologacao_last_test_at?: string | null
           homologacao_last_test_result?: Json | null
@@ -510,6 +521,7 @@ export type Database = {
           store_id?: string
           updated_at?: string
           vps_auth_secret_name?: string | null
+          vps_fallback_url?: string | null
           vps_url?: string | null
         }
         Relationships: [
@@ -517,6 +529,78 @@ export type Database = {
             foreignKeyName: "fiscal_configs_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fiscal_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          id: string
+          last_channel: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          next_attempt_at: string
+          permanent: boolean
+          sale_id: string
+          status: string
+          store_id: string
+          terminal_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_channel?: string | null
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          permanent?: boolean
+          sale_id: string
+          status?: string
+          store_id: string
+          terminal_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_channel?: string | null
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          permanent?: boolean
+          sale_id?: string
+          status?: string
+          store_id?: string
+          terminal_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_queue_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_queue_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
@@ -1658,17 +1742,91 @@ export type Database = {
           },
         ]
       }
+      terminal_alerts: {
+        Row: {
+          context: Json
+          created_at: string
+          created_by: string | null
+          detail: string | null
+          fingerprint: string
+          first_seen_at: string
+          id: string
+          kind: string
+          last_seen_at: string
+          occurrences: number
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          store_id: string
+          terminal_key: string | null
+          terminal_name: string | null
+          title: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          created_by?: string | null
+          detail?: string | null
+          fingerprint: string
+          first_seen_at?: string
+          id?: string
+          kind: string
+          last_seen_at?: string
+          occurrences?: number
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          store_id: string
+          terminal_key?: string | null
+          terminal_name?: string | null
+          title: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          created_by?: string | null
+          detail?: string | null
+          fingerprint?: string
+          first_seen_at?: string
+          id?: string
+          kind?: string
+          last_seen_at?: string
+          occurrences?: number
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          store_id?: string
+          terminal_key?: string | null
+          terminal_name?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "terminal_alerts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       terminals: {
         Row: {
           agent_id: string | null
           agent_version: string | null
           created_at: string
+          health_checked_at: string | null
+          health_detail: Json
+          health_status: string
           id: string
           last_seen_at: string
           name: string
+          number: number | null
           printer_name: string | null
           printer_source: string | null
+          provisioned_at: string
           scale_port: string | null
+          status: string
           store_id: string
           tef_provider: string | null
           terminal_key: string
@@ -1679,12 +1837,18 @@ export type Database = {
           agent_id?: string | null
           agent_version?: string | null
           created_at?: string
+          health_checked_at?: string | null
+          health_detail?: Json
+          health_status?: string
           id?: string
           last_seen_at?: string
           name?: string
+          number?: number | null
           printer_name?: string | null
           printer_source?: string | null
+          provisioned_at?: string
           scale_port?: string | null
+          status?: string
           store_id: string
           tef_provider?: string | null
           terminal_key: string
@@ -1695,12 +1859,18 @@ export type Database = {
           agent_id?: string | null
           agent_version?: string | null
           created_at?: string
+          health_checked_at?: string | null
+          health_detail?: Json
+          health_status?: string
           id?: string
           last_seen_at?: string
           name?: string
+          number?: number | null
           printer_name?: string | null
           printer_source?: string | null
+          provisioned_at?: string
           scale_port?: string | null
+          status?: string
           store_id?: string
           tef_provider?: string | null
           terminal_key?: string
@@ -1839,12 +2009,49 @@ export type Database = {
         Args: { _store_id: string; _user_id: string }
         Returns: boolean
       }
+      claim_fiscal_jobs: {
+        Args: { _limit?: number; _store_id: string; _terminal_key: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          id: string
+          last_channel: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          next_attempt_at: string
+          permanent: boolean
+          sale_id: string
+          status: string
+          store_id: string
+          terminal_key: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "fiscal_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       cleanup_orphan_user_links: {
         Args: { _manager_user_id?: string }
         Returns: Json
       }
       clear_rate_limit: {
         Args: { _function_name: string; _store_id: string }
+        Returns: undefined
+      }
+      complete_fiscal_job: {
+        Args: {
+          _channel?: string
+          _error?: string
+          _job_id: string
+          _ok: boolean
+          _permanent?: boolean
+        }
         Returns: undefined
       }
       current_open_register: { Args: { _store_id: string }; Returns: string }
@@ -1857,6 +2064,10 @@ export type Database = {
           _window_secs: number
         }
         Returns: undefined
+      }
+      enqueue_fiscal_job: {
+        Args: { _sale_id: string; _store_id: string; _terminal_key?: string }
+        Returns: string
       }
       generate_admin_code: { Args: { _store_id: string }; Returns: string }
       has_role: {
@@ -1899,12 +2110,75 @@ export type Database = {
           user_id: string
         }[]
       }
+      provision_terminal: {
+        Args: {
+          _agent_id?: string
+          _agent_version?: string
+          _name?: string
+          _printer_name?: string
+          _printer_source?: string
+          _scale_port?: string
+          _store_id: string
+          _tef_provider?: string
+          _terminal_key: string
+          _user_agent?: string
+        }
+        Returns: {
+          agent_id: string | null
+          agent_version: string | null
+          created_at: string
+          health_checked_at: string | null
+          health_detail: Json
+          health_status: string
+          id: string
+          last_seen_at: string
+          name: string
+          number: number | null
+          printer_name: string | null
+          printer_source: string | null
+          provisioned_at: string
+          scale_port: string | null
+          status: string
+          store_id: string
+          tef_provider: string | null
+          terminal_key: string
+          updated_at: string
+          user_agent: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "terminals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       purge_print_logs: {
         Args: { _older_than_days?: number; _store_id: string }
         Returns: number
       }
       record_homologacao_test: {
         Args: { _result: Json; _store_id: string }
+        Returns: undefined
+      }
+      record_terminal_alert: {
+        Args: {
+          _context?: Json
+          _detail?: string
+          _kind: string
+          _severity: string
+          _store_id: string
+          _terminal_key: string
+          _title: string
+        }
+        Returns: string
+      }
+      record_terminal_health: {
+        Args: {
+          _detail?: Json
+          _health_status: string
+          _store_id: string
+          _terminal_key: string
+        }
         Returns: undefined
       }
       regenerate_admin_code: {
@@ -1929,6 +2203,11 @@ export type Database = {
           series: number
         }[]
       }
+      resolve_terminal_alerts: {
+        Args: { _kinds?: string[]; _store_id: string; _terminal_key: string }
+        Returns: number
+      }
+      retry_fiscal_job: { Args: { _job_id: string }; Returns: undefined }
       set_store_master_password: {
         Args: { _password: string; _store_id: string }
         Returns: undefined
