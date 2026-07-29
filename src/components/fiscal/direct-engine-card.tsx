@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { testHomologacaoViaAgent } from "@/lib/direct-fiscal";
-import { pingFiscalServer } from "@/lib/fiscal.functions";
+import { pingFiscalServer, validateFiscalServer, type FiscalServerCheck } from "@/lib/fiscal.functions";
+import { FiscalCheckList } from "@/components/fiscal/fiscal-check-list";
 import { pingPrintAgent } from "@/lib/print-agent";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ShieldCheck, ShieldAlert, Rocket, ServerCog } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldAlert, Rocket, ServerCog, ListChecks } from "lucide-react";
 
 interface Props {
   storeId: string;
@@ -30,6 +31,8 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [serverChecks, setServerChecks] = useState<{ summary: string; checks: FiscalServerCheck[] } | null>(null);
   const [lastTest, setLastTest] = useState<{ ok: boolean; msg: string; at: string } | null>(null);
 
   useEffect(() => {
@@ -83,6 +86,25 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
       toast.error(msg);
     } finally {
       setChecking(false);
+    }
+  }
+
+  /** Rotina completa de validação do servidor fiscal central. */
+  async function runServerValidation() {
+    setValidating(true);
+    try {
+      const r = (await validateFiscalServer({ data: { storeId } })) as {
+        ok: boolean;
+        summary: string;
+        checks: FiscalServerCheck[];
+      };
+      setServerChecks({ summary: r.summary, checks: r.checks });
+      if (r.ok) toast.success(r.summary);
+      else toast.error(r.summary);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setValidating(false);
     }
   }
 
@@ -181,8 +203,13 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
             {checking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ServerCog className="h-4 w-4 mr-2" />}
             Testar servidor central
           </Button>
+          <Button variant="outline" onClick={runServerValidation} disabled={validating || engine !== "vps"}>
+            {validating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ListChecks className="h-4 w-4 mr-2" />}
+            Validar servidor central
+          </Button>
         </div>
 
+        {serverChecks && <FiscalCheckList checks={serverChecks.checks} summary={serverChecks.summary} />}
 
         {lastTest && (
           <div className={`rounded-md border p-3 text-sm flex items-start gap-2 ${lastTest.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-destructive/40 bg-destructive/5"}`}>
@@ -194,6 +221,7 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
             </div>
           </div>
         )}
+
 
         <p className="text-xs text-muted-foreground">
           Guia completo em <code className="font-mono">docs/fiscal-direto-sefaz.md</code>.
