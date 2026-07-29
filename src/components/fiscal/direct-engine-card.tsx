@@ -175,15 +175,21 @@ export function DirectEngineCard({ storeId, saleIdForTest }: Props) {
                 emitindo ao mesmo tempo nunca repetem número.
               </p>
               {engine === "vps" && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <Label htmlFor="vps-url" className="text-xs">URL do servidor fiscal</Label>
-                    <Input id="vps-url" placeholder="https://fiscal.suaempresa.com" value={vpsUrl} onChange={(e) => setVpsUrl(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="vps-secret" className="text-xs">Nome do segredo (token Bearer)</Label>
-                    <Input id="vps-secret" placeholder="FISCAL_VPS_TOKEN" value={vpsSecret} onChange={(e) => setVpsSecret(e.target.value)} />
-                  </div>
+                <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
+                  <p className="text-muted-foreground">
+                    Endereço configurado:{" "}
+                    <span className="font-mono text-foreground">{vpsUrl || "— nenhum —"}</span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    Segredo do token: <span className="font-mono text-foreground">{vpsSecret}</span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    O endereço, o servidor reserva e o token são editados em um lugar só, na tela{" "}
+                    <Link to="/servidor-fiscal" className="text-primary underline underline-offset-2">
+                      Servidor fiscal
+                    </Link>
+                    , para não existirem dois valores divergentes.
+                  </p>
                 </div>
               )}
             </div>
