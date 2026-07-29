@@ -529,14 +529,43 @@ function startAgent(options = {}) {
   });
   app.use(express.raw({ type: "application/octet-stream", limit: "10mb" }));
   app.use(express.json({ limit: "1mb" }));
-  app.use((_req, res, next) => { res.setHeader("X-Agent-Version", VERSION); next(); });
+  app.use((_req, res, next) => {
+    res.setHeader("X-Agent-Version", VERSION);
+    res.setHeader("X-Agent-Id", readIdentity().agent_id);
+    next();
+  });
+
+  // Isolamento multi-caixa: quando o agente está vinculado a um terminal,
+  // comandos de hardware vindos de OUTRO terminal são recusados. Assim o
+  // Caixa 2 nunca imprime na impressora ou abre a gaveta do Caixa 1.
+  const GUARDED = [/^\/print/, /^\/open-drawer/, /^\/scale\//, /^\/tef\//, /^\/nfce\//];
+  app.use((req, res, next) => {
+    if (req.method === "OPTIONS") return next();
+    if (!GUARDED.some((re) => re.test(req.path))) return next();
+    const id = readIdentity();
+    if (!id.terminal_key) return next(); // agente livre — aceita o primeiro caixa
+    const sent = req.headers["x-terminal-id"];
+    if (!sent || sent === id.terminal_key) return next();
+    return res.status(409).json({
+      ok: false,
+      error:
+        `Este agente está vinculado ao terminal "${id.terminal_name || id.terminal_key}". ` +
+        "Abra Configurações → Hardware → Caixas e vincule este PC ao caixa correto.",
+      bound_terminal: id.terminal_key,
+      bound_name: id.terminal_name,
+    });
+  });
 
   const respondPrinters = (res) => {
     const printers = listAllPrinters();
+    const id = readIdentity();
     res.json({
       version: VERSION,
       platform: process.platform,
       arch: process.arch,
+      agent_id: id.agent_id,
+      terminal_key: id.terminal_key,
+      terminal_name: id.terminal_name,
       channels: { spooler: !!nodePrinter || process.platform === "win32", usb: true },
       printers,
       generatedAt: new Date().toISOString(),
@@ -545,6 +574,30 @@ function startAgent(options = {}) {
 
   app.get("/status", (_req, res) => respondPrinters(res));
   app.get("/printers", (_req, res) => respondPrinters(res));
+
+  // ── Identidade do terminal (multi-caixa) ──────────────────────
+  app.get("/identity", (_req, res) => {
+    res.json({ ok: true, version: VERSION, ...readIdentity() });
+  });
+
+  app.post("/identity", (req, res) => {
+    try {
+      const body = req.body || {};
+      const current = readIdentity();
+      const next = {
+        ...current,
+        terminal_key: body.terminal_key ? String(body.terminal_key) : null,
+        terminal_name: body.terminal_name ? String(body.terminal_name) : null,
+        store_id: body.store_id ? String(body.store_id) : null,
+        bound_at: body.terminal_key ? new Date().toISOString() : null,
+      };
+      writeIdentity(next);
+      res.json({ ok: true, ...next });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
 
   app.post("/print", async (req, res) => {
     try {
