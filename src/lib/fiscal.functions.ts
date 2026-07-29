@@ -319,6 +319,11 @@ export const emitInvoice = createServerFn({ method: "POST" })
 const emitVpsSchema = z.object({
   storeId: z.string().uuid(),
   dto: z.record(z.string(), z.unknown()),
+  /**
+   * `primary` usa `fiscal_configs.vps_url`; `fallback` usa
+   * `fiscal_configs.vps_fallback_url` (servidor fiscal reserva).
+   */
+  target: z.enum(["primary", "fallback"]).optional().default("primary"),
 });
 
 export const emitViaVps = createServerFn({ method: "POST" })
@@ -328,12 +333,19 @@ export const emitViaVps = createServerFn({ method: "POST" })
     const { supabase } = context;
     const { data: cfg, error: cfgErr } = await supabase
       .from("fiscal_configs")
-      .select("vps_url, vps_auth_secret_name, environment")
+      .select("vps_url, vps_fallback_url, vps_auth_secret_name, environment")
       .eq("store_id", data.storeId)
       .maybeSingle();
     if (cfgErr) throw new Error(cfgErr.message);
-    if (!cfg?.vps_url) throw new Error("URL da VPS não configurada.");
-    const tokenName = cfg.vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
+    const baseUrl = data.target === "fallback" ? cfg?.vps_fallback_url : cfg?.vps_url;
+    if (!baseUrl) {
+      throw new Error(
+        data.target === "fallback"
+          ? "Servidor fiscal reserva não configurado."
+          : "URL do servidor fiscal não configurada.",
+      );
+    }
+    const tokenName = cfg?.vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
     const token = process.env[tokenName];
     if (!token) throw new Error(`Secret ${tokenName} ausente.`);
 
@@ -341,7 +353,7 @@ export const emitViaVps = createServerFn({ method: "POST" })
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 30_000);
-      const res = await fetch(`${cfg.vps_url.replace(/\/+$/, "")}/nfce/emit`, {
+      const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/nfce/emit`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

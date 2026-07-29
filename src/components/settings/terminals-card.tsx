@@ -28,7 +28,40 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Monitor, Link2, Link2Off, RefreshCw, Trash2, Printer } from "lucide-react";
+import {
+  ALERT_KIND_LABEL,
+  dismissTerminalAlert,
+  listTerminalAlerts,
+  severityRank,
+  type TerminalAlertRow,
+} from "@/lib/terminal-alerts";
+import { healthLabel, type HealthStatus } from "@/lib/terminal-health";
+import {
+  Loader2,
+  Monitor,
+  Link2,
+  Link2Off,
+  RefreshCw,
+  Trash2,
+  Printer,
+  AlertTriangle,
+  X,
+} from "lucide-react";
+
+/** Cor do ponto/badge por estado de saúde — só tokens semânticos. */
+const HEALTH_CLASS: Record<HealthStatus, string> = {
+  ok: "bg-success/15 text-success border-success/30",
+  alerta: "bg-warning/15 text-warning border-warning/30",
+  critico: "bg-destructive/15 text-destructive border-destructive/30",
+  offline: "bg-muted text-muted-foreground border-border",
+  desconhecido: "bg-muted text-muted-foreground border-border",
+};
+
+const SEVERITY_CLASS: Record<string, string> = {
+  info: "bg-muted text-muted-foreground border-border",
+  aviso: "bg-warning/15 text-warning border-warning/30",
+  critico: "bg-destructive/15 text-destructive border-destructive/30",
+};
 
 interface Props {
   storeId: string | null;
@@ -40,6 +73,7 @@ export function TerminalsCard({ storeId }: Props) {
   const [name, setName] = useState(getTerminalName());
   const [identity, setIdentity] = useState<AgentIdentity | null>(null);
   const [busy, setBusy] = useState(false);
+  const [alerts, setAlerts] = useState<TerminalAlertRow[]>([]);
 
   const refresh = useCallback(async () => {
     if (!storeId) return;
@@ -47,6 +81,11 @@ export function TerminalsCard({ storeId }: Props) {
     try {
       await registerTerminal({ storeId, agentId: identity?.agent_id ?? null, agentVersion: identity?.version ?? null });
       setRows(await listTerminals(storeId));
+      setAlerts(
+        (await listTerminalAlerts(storeId, { onlyOpen: true, limit: 100 })).sort(
+          (a, b) => severityRank(b.severity) - severityRank(a.severity),
+        ),
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao listar caixas.");
     } finally {
@@ -106,6 +145,15 @@ export function TerminalsCard({ storeId }: Props) {
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao remover caixa.");
+    }
+  }
+
+  async function handleDismiss(id: string) {
+    try {
+      await dismissTerminalAlert(id);
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao dispensar alerta.");
     }
   }
 
@@ -188,6 +236,7 @@ export function TerminalsCard({ storeId }: Props) {
           {rows.map((row) => {
             const mine = isThisTerminal(row);
             const online = isTerminalOnline(row);
+            const rowAlerts = alerts.filter((a) => a.terminal_key === row.terminal_key);
             return (
               <div
                 key={row.id}
@@ -212,6 +261,13 @@ export function TerminalsCard({ storeId }: Props) {
                 {row.agent_version && (
                   <span className="text-xs text-muted-foreground">agente v{row.agent_version}</span>
                 )}
+                <span
+                  className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider ${
+                    HEALTH_CLASS[(row.health_status ?? "desconhecido") as HealthStatus]
+                  }`}
+                >
+                  {healthLabel((row.health_status ?? "desconhecido") as HealthStatus)}
+                </span>
                 <span className="ml-auto text-xs text-muted-foreground">
                   {new Date(row.last_seen_at).toLocaleString("pt-BR")}
                 </span>
@@ -219,6 +275,40 @@ export function TerminalsCard({ storeId }: Props) {
                   <Button variant="ghost" size="icon" onClick={() => void handleRemove(row)} aria-label={`Remover ${row.name}`}>
                     <Trash2 className="size-3" />
                   </Button>
+                )}
+                {rowAlerts.length > 0 && (
+                  <ul className="w-full space-y-1 border-t border-border pt-2">
+                    {rowAlerts.map((a) => (
+                      <li key={a.id} className="flex items-start gap-2 text-xs">
+                        <AlertTriangle className="mt-0.5 size-3 shrink-0 text-warning" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center rounded border px-1 py-0.5 text-[10px] uppercase ${SEVERITY_CLASS[a.severity] ?? SEVERITY_CLASS.info}`}
+                            >
+                              {ALERT_KIND_LABEL[a.kind] ?? a.kind}
+                            </span>
+                            <span className="font-medium">{a.title}</span>
+                            {a.occurrences > 1 && (
+                              <span className="text-muted-foreground">×{a.occurrences}</span>
+                            )}
+                          </div>
+                          {a.detail && (
+                            <p className="break-words text-muted-foreground">{a.detail}</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6"
+                          onClick={() => void handleDismiss(a.id)}
+                          aria-label={`Dispensar alerta ${a.title}`}
+                        >
+                          <X className="size-3" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             );

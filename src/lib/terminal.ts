@@ -35,6 +35,13 @@ export interface TerminalRow {
   tef_provider: string | null;
   user_agent: string | null;
   last_seen_at: string;
+  /** Numeração sequencial atribuída no provisionamento (Caixa 01, 02…). */
+  number?: number | null;
+  status?: string;
+  /** Último retrato de saúde publicado por este caixa. */
+  health_status?: "ok" | "alerta" | "critico" | "offline" | "desconhecido";
+  health_checked_at?: string | null;
+  health_detail?: Record<string, unknown> | null;
 }
 
 export interface AgentIdentity {
@@ -239,6 +246,16 @@ export function startTerminalHeartbeat(storeId: string): () => void {
     });
     // Auto-vincula o agente ao terminal quando ainda estiver livre.
     if (identity && !identity.terminal_key) await bindAgentToTerminal(storeId);
+
+    // Telemetria de saúde: impressora, motor fiscal, balança e TEF.
+    // Importada sob demanda para não pesar o carregamento inicial do PDV.
+    try {
+      const { collectTerminalHealth, publishTerminalHealth } = await import("@/lib/terminal-health");
+      const snapshot = await collectTerminalHealth(storeId);
+      if (!cancelled) await publishTerminalHealth(storeId, getTerminalId(), snapshot);
+    } catch (e) {
+      console.warn("[terminal] telemetria de saúde indisponível:", e);
+    }
   };
 
   void tick();
