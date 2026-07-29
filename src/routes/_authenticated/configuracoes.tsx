@@ -47,6 +47,7 @@ import { RpcAuditLog } from "@/components/security/rpc-audit-log";
 import { DrawerPinTest } from "@/components/pdv/drawer-pin-test";
 
 import { PixSettingsTab } from "@/components/pix-settings-tab";
+import { PrintersCard } from "@/components/settings/printers-card";
 import { ScaleAgentCard } from "@/components/settings/scale-agent-card";
 import { TefConfigCard } from "@/components/settings/tef-config-card";
 import { TerminalsCard } from "@/components/settings/terminals-card";
