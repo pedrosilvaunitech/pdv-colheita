@@ -345,7 +345,7 @@ export const emitViaVps = createServerFn({ method: "POST" })
           : "URL do servidor fiscal não configurada.",
       );
     }
-    const tokenName = cfg.vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
+    const tokenName = cfg?.vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
     const token = process.env[tokenName];
     if (!token) throw new Error(`Secret ${tokenName} ausente.`);
 
