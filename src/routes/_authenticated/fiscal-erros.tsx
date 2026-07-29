@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { runFiscalRetryPass, syncPendingSalesToQueue } from "@/lib/fiscal-scheduler";
 import { listFiscalJobs, retryFiscalJob, type FiscalJob } from "@/lib/fiscal-queue";
 import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
+import { FiscalQueuePanel } from "@/components/fiscal/fiscal-queue-panel";
+import { NumberingAuditCard } from "@/components/fiscal/numbering-audit-card";
 
 export const Route = createFileRoute("/_authenticated/fiscal-erros")({
   head: () => ({
