@@ -239,6 +239,16 @@ export function startTerminalHeartbeat(storeId: string): () => void {
     });
     // Auto-vincula o agente ao terminal quando ainda estiver livre.
     if (identity && !identity.terminal_key) await bindAgentToTerminal(storeId);
+
+    // Telemetria de saúde: impressora, motor fiscal, balança e TEF.
+    // Importada sob demanda para não pesar o carregamento inicial do PDV.
+    try {
+      const { collectTerminalHealth, publishTerminalHealth } = await import("@/lib/terminal-health");
+      const snapshot = await collectTerminalHealth(storeId);
+      if (!cancelled) await publishTerminalHealth(storeId, getTerminalId(), snapshot);
+    } catch (e) {
+      console.warn("[terminal] telemetria de saúde indisponível:", e);
+    }
   };
 
   void tick();
