@@ -472,7 +472,7 @@ function SettingsPage() {
               <QrCode className="size-3" /> PIX
             </TabsTrigger>
             <TabsTrigger value="hardware" className="gap-1">
-              <Cable className="size-3" /> Hardware (Balança / Maquininha)
+              <Cable className="size-3" /> Hardware (Impressora / Balança / Maquininha)
             </TabsTrigger>
             <TabsTrigger value="seguranca" className="gap-1">
               <ShieldCheck className="size-3" /> Segurança
