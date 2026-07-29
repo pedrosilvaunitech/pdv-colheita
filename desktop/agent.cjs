@@ -704,29 +704,101 @@ function startAgent(options = {}) {
   // ────────────────────────────────────────────────────────────────
   // NFC-e — Emissão direta SEFAZ (via node-dfe)
   // ────────────────────────────────────────────────────────────────
-  app.get("/nfce/config", (_req, res) => {
-    if (!nfce) return res.status(501).json({ ok: false, error: "Módulo NFC-e não carregado no agente." });
+  /** Log estruturado de configuração fiscal — nunca imprime senha/CSC completos. */
+  function logFiscal(event, detail) {
+    const stamp = new Date().toISOString();
+    console.log(`[agent][nfce:${event}] ${stamp} ${detail}`);
+  }
+
+  app.get("/nfce/config", (req, res) => {
+    const from = req.headers["x-terminal-id"] || req.ip || "desconhecido";
+    if (!nfce) {
+      logFiscal("config:get", `terminal=${from} FALHA módulo NFC-e não carregado`);
+      return res.status(501).json({ ok: false, error: "Módulo NFC-e não carregado no agente." });
+    }
     const ready = nfce.isAvailable();
+    const cfg = nfce.loadFiscalConfig();
+    const validation = nfce.validateEngine ? nfce.validateEngine() : null;
+    const failed = validation ? validation.checks.filter((c) => c.status === "fail").map((c) => c.key) : [];
+    logFiscal(
+      "config:get",
+      `terminal=${from} engine_ready=${ready} cnpj=${cfg?.cnpj || "—"} uf=${cfg?.uf || "—"} ` +
+        `ambiente=${cfg?.environment || "—"} cert=${cfg?.pfx_path ? "sim" : "não"} ` +
+        `falhas=[${failed.join(",") || "nenhuma"}]`,
+    );
     res.json({
       ok: true,
       engine_ready: ready,
       error: ready ? undefined : (nfce.engineError ? nfce.engineError() : "Motor NFC-e não carregado."),
-      config: nfce.maskFiscalConfig(nfce.loadFiscalConfig()),
+      config: nfce.maskFiscalConfig(cfg),
+      validation,
     });
   });
 
   app.post("/nfce/config", (req, res) => {
-    if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado." });
+    const from = req.headers["x-terminal-id"] || req.ip || "desconhecido";
+    if (!nfce) {
+      logFiscal("config:post", `terminal=${from} FALHA motor NFC-e não carregado`);
+      return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado." });
+    }
     try {
       const body = req.body || {};
       const current = nfce.loadFiscalConfig() || {};
       // Não sobrescreve senha com máscara vazia se o cliente não mandou nova.
       const merged = { ...current, ...body };
       if (!body.pfx_password) merged.pfx_password = current.pfx_password;
+      // Campos alterados (sem valores sensíveis) — rastreabilidade de quem mudou o quê.
+      const changed = Object.keys(body).filter((k) => JSON.stringify(current[k]) !== JSON.stringify(body[k]));
       nfce.saveFiscalConfig(merged);
-      res.json({ ok: true, config: nfce.maskFiscalConfig(merged) });
+      logFiscal(
+        "config:post",
+        `terminal=${from} salvo cnpj=${merged.cnpj || "—"} uf=${merged.uf || "—"} ` +
+          `ambiente=${merged.environment || "—"} campos=[${changed.join(",") || "nenhum"}] arquivo=${nfce.CONFIG_FILE}`,
+      );
+      const validation = nfce.validateEngine ? nfce.validateEngine() : null;
+      res.json({ ok: true, config: nfce.maskFiscalConfig(merged), validation });
+    } catch (e) {
+      logFiscal("config:post", `terminal=${from} ERRO ${e.message}`);
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
+  // Validação profunda do motor fiscal (node-dfe, certificado, config, UF).
+  app.get("/nfce/engine", (_req, res) => {
+    if (!nfce) return res.status(501).json({ ok: false, error: "Módulo NFC-e não carregado no agente." });
+    try { res.json({ ok: true, ...nfce.validateEngine() }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  // Instalação assistida do node-dfe (equivale a `npm run install:fiscal`).
+  app.post("/nfce/engine/install", (_req, res) => {
+    if (!nfce || !nfce.startEngineInstall) {
+      return res.status(501).json({ ok: false, error: "Módulo NFC-e não carregado no agente." });
+    }
+    try {
+      const r = nfce.startEngineInstall();
+      logFiscal("engine:install", `iniciado alreadyRunning=${!!r.alreadyRunning}`);
+      res.json(r);
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
+
+  app.get("/nfce/engine/install", (_req, res) => {
+    if (!nfce || !nfce.getInstallState) {
+      return res.status(501).json({ ok: false, error: "Módulo NFC-e não carregado no agente." });
+    }
+    res.json({ ok: true, state: nfce.getInstallState() });
+  });
+
+  // Recarrega o node-dfe sem reiniciar o agente.
+  app.post("/nfce/engine/reload", (_req, res) => {
+    if (!nfce || !nfce.reloadEngine) {
+      return res.status(501).json({ ok: false, error: "Módulo NFC-e não carregado no agente." });
+    }
+    const r = nfce.reloadEngine();
+    logFiscal("engine:reload", `ok=${r.ok} ${r.error || ""}`);
+    res.json({ ...r, validation: nfce.validateEngine() });
+  });
+
 
   app.get("/nfce/certificate", (_req, res) => {
     if (!nfce) return res.status(501).json({ ok: false, error: "Motor NFC-e não carregado." });
