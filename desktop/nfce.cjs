@@ -332,6 +332,233 @@ async function inutilizarFaixa({ serie, numeroInicial, numeroFinal, justificativ
   return await engine.processarInutilizacao();
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Validação do motor (node-dfe) — diagnóstico acionável no caixa
+// ────────────────────────────────────────────────────────────────────
+
+/** Classes que o wrapper usa; se faltar alguma, a versão instalada é incompatível. */
+const REQUIRED_EXPORTS = ["NFeProcessor", "NFeStatus", "NFeCancelamento", "NFeInutilizacao"];
+
+function moduleMeta(name) {
+  try {
+    const pkgPath = require.resolve(`${name}/package.json`, { paths: [__dirname] });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+    return { installed: true, version: pkg.version || null, path: path.dirname(pkgPath) };
+  } catch (e) {
+    return { installed: false, version: null, path: null, error: e && e.message ? e.message : String(e) };
+  }
+}
+
+/** Recarrega o node-dfe sem reiniciar o agente (após instalar a dependência). */
+function reloadEngine() {
+  for (const mod of ENGINE_CANDIDATES) {
+    try {
+      const resolved = require.resolve(mod, { paths: [__dirname] });
+      delete require.cache[resolved];
+      NodeDfe = require(resolved);
+      engineError = null;
+      return { ok: true, module: mod };
+    } catch (e) {
+      engineError =
+        e && e.code === "MODULE_NOT_FOUND"
+          ? `Dependência "${mod}" não instalada. Rode \`npm run install:fiscal\` na pasta do agente.`
+          : `Falha ao carregar "${mod}": ${e && e.message ? e.message : String(e)}`;
+    }
+  }
+  NodeDfe = null;
+  return { ok: false, error: engineError };
+}
+
+/**
+ * Bateria de checagens do motor fiscal local. Cada item traz
+ * { key, label, status: "ok" | "warn" | "fail", detail, fix }.
+ * Nunca lança — é usado tanto pelo /nfce/engine quanto pelo /diagnostics.
+ */
+function validateEngine() {
+  const checks = [];
+  const push = (key, label, status, detail, fix) => checks.push({ key, label, status, detail, fix: fix || null });
+
+  // 1. Runtime Node
+  const major = Number(process.versions.node.split(".")[0]);
+  push(
+    "node_runtime",
+    "Runtime Node.js",
+    major >= 18 ? "ok" : "fail",
+    `Node ${process.versions.node} (${process.platform}/${process.arch})`,
+    major >= 18 ? null : "O motor NFC-e exige Node 18+. Reinstale o agente com o instalador oficial.",
+  );
+
+  // 2. node-dfe instalado
+  const dfe = moduleMeta("node-dfe");
+  push(
+    "node_dfe",
+    "Biblioteca node-dfe",
+    dfe.installed ? "ok" : "fail",
+    dfe.installed ? `v${dfe.version} em ${dfe.path}` : dfe.error || "não encontrada",
+    dfe.installed ? null : "Rode `npm run install:fiscal` na pasta do agente (ou clique em Instalar motor).",
+  );
+
+  // 3. Motor carregado em memória
+  push(
+    "engine_loaded",
+    "Motor carregado",
+    NodeDfe ? "ok" : "fail",
+    NodeDfe ? "node-dfe carregado no processo do agente." : engineError || "Motor não carregado.",
+    NodeDfe ? null : "Reinicie o Bastion POS Agent após instalar a dependência.",
+  );
+
+  // 4. API compatível
+  if (NodeDfe) {
+    const missing = REQUIRED_EXPORTS.filter((k) => typeof NodeDfe[k] !== "function");
+    push(
+      "engine_api",
+      "API compatível",
+      missing.length ? "fail" : "ok",
+      missing.length ? `Classes ausentes: ${missing.join(", ")}` : REQUIRED_EXPORTS.join(", "),
+      missing.length ? "Versão incompatível do node-dfe. Rode `npm run install:fiscal` para atualizar." : null,
+    );
+  }
+
+  // 5. Dependências auxiliares
+  const forgeMeta = moduleMeta("node-forge");
+  push(
+    "node_forge",
+    "Leitor de certificado (node-forge)",
+    forgeMeta.installed ? "ok" : "warn",
+    forgeMeta.installed ? `v${forgeMeta.version}` : "não instalada — validade do A1 não será exibida",
+    forgeMeta.installed ? null : "Rode `npm run install:fiscal`.",
+  );
+  const qrMeta = moduleMeta("qrcode");
+  push(
+    "qrcode",
+    "Gerador de QR Code",
+    qrMeta.installed ? "ok" : "warn",
+    qrMeta.installed ? `v${qrMeta.version}` : "não instalada — cupom sai sem QR em PNG",
+    qrMeta.installed ? null : "Rode `npm run install:fiscal`.",
+  );
+
+  // 6. Configuração fiscal local
+  const cfg = loadFiscalConfig();
+  const missingCfg = [];
+  if (!cfg) missingCfg.push("fiscal.json");
+  else {
+    if (!cfg.cnpj) missingCfg.push("CNPJ");
+    if (!cfg.uf) missingCfg.push("UF");
+    if (!cfg.csc_id) missingCfg.push("CSC ID");
+    if (!cfg.csc_token) missingCfg.push("CSC Token");
+    if (!cfg.environment) missingCfg.push("ambiente");
+  }
+  push(
+    "fiscal_config",
+    "Configuração fiscal local",
+    missingCfg.length ? "fail" : "ok",
+    missingCfg.length ? `Faltando: ${missingCfg.join(", ")}` : `${cfg.cnpj} · ${cfg.uf} · ${cfg.environment}`,
+    missingCfg.length ? "Preencha em Configurações → Fiscal e clique em Sincronizar com o agente." : null,
+  );
+
+  // 7. Endpoints da UF
+  if (cfg && cfg.uf) {
+    const eps = getEndpoints(cfg.uf, cfg.environment);
+    push(
+      "uf_endpoints",
+      "Endpoints da SEFAZ",
+      eps ? "ok" : "fail",
+      eps ? `UF ${cfg.uf} mapeada (${cfg.environment})` : `UF ${cfg.uf} sem endpoints mapeados`,
+      eps ? null : "Confirme a UF da loja em Configurações → Fiscal.",
+    );
+  }
+
+  // 8. Certificado A1
+  if (cfg && cfg.pfx_path) {
+    const cert = inspectCertificate(cfg.pfx_path, cfg.pfx_password);
+    if (!cert.ok) {
+      push("certificate", "Certificado A1", "fail", cert.error, "Reinstale o .pfx e confirme a senha no agente.");
+    } else {
+      const expired = cert.days_left <= 0;
+      push(
+        "certificate",
+        "Certificado A1",
+        expired ? "fail" : cert.days_left < 30 ? "warn" : "ok",
+        `${cert.subject} · vence em ${cert.days_left} dia(s)`,
+        expired ? "Certificado vencido. Emita um novo A1 e reinstale no caixa." : null,
+      );
+    }
+  } else {
+    push("certificate", "Certificado A1", "fail", "Nenhum .pfx configurado.", "Instale o certificado A1 no agente.");
+  }
+
+  const failed = checks.filter((c) => c.status === "fail");
+  return {
+    ok: failed.length === 0,
+    ready: !!NodeDfe && failed.length === 0,
+    engine_error: engineError,
+    versions: { agent_node: process.versions.node, node_dfe: dfe.version, node_forge: forgeMeta.version, qrcode: qrMeta.version },
+    checks,
+    summary: failed.length ? `${failed.length} problema(s) bloqueando a emissão.` : "Motor fiscal pronto para emitir.",
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Instalação assistida do motor (equivale a `npm run install:fiscal`)
+// ────────────────────────────────────────────────────────────────────
+let installState = { running: false, startedAt: null, finishedAt: null, ok: null, log: [], error: null };
+
+function getInstallState() {
+  return { ...installState, log: installState.log.slice(-200) };
+}
+
+/**
+ * Executa a instalação das dependências fiscais na pasta do agente.
+ * Roda em background: o cliente faz polling em /nfce/engine/install.
+ */
+function startEngineInstall() {
+  if (installState.running) return { ok: true, alreadyRunning: true, state: getInstallState() };
+
+  const { spawn } = require("child_process");
+  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+  const args = ["install", "node-dfe@^0.0.25", "node-forge@^1.3.1", "qrcode@^1.5.4", "--no-audit", "--no-fund"];
+
+  installState = { running: true, startedAt: new Date().toISOString(), finishedAt: null, ok: null, log: [], error: null };
+  const line = (s) => {
+    installState.log.push(s);
+    console.log("[nfce:install]", s);
+  };
+  line(`$ ${npm} ${args.join(" ")} (cwd=${__dirname})`);
+
+  let child;
+  try {
+    child = spawn(npm, args, { cwd: __dirname, shell: process.platform === "win32", windowsHide: true });
+  } catch (e) {
+    installState.running = false;
+    installState.ok = false;
+    installState.error = `Não foi possível executar o npm: ${e.message}. Instale o Node.js no caixa.`;
+    installState.finishedAt = new Date().toISOString();
+    return { ok: false, state: getInstallState() };
+  }
+
+  child.stdout.on("data", (b) => String(b).split(/\r?\n/).filter(Boolean).forEach(line));
+  child.stderr.on("data", (b) => String(b).split(/\r?\n/).filter(Boolean).forEach(line));
+  child.on("error", (e) => {
+    installState.error = e.message;
+    line(`erro: ${e.message}`);
+  });
+  child.on("close", (code) => {
+    installState.running = false;
+    installState.finishedAt = new Date().toISOString();
+    installState.ok = code === 0;
+    if (code !== 0 && !installState.error) installState.error = `npm saiu com código ${code}.`;
+    line(`npm finalizou com código ${code}`);
+    if (code === 0) {
+      const reloaded = reloadEngine();
+      line(reloaded.ok ? "motor node-dfe recarregado com sucesso." : `motor ainda indisponível: ${reloaded.error}`);
+      installState.ok = reloaded.ok;
+      if (!reloaded.ok) installState.error = reloaded.error;
+    }
+  });
+
+  return { ok: true, state: getInstallState() };
+}
+
 module.exports = {
   emitNFCe,
   cancelNFCe,
@@ -343,7 +570,12 @@ module.exports = {
   inspectCertificate,
   getEndpoints,
   buildQRUrl,
+  validateEngine,
+  reloadEngine,
+  startEngineInstall,
+  getInstallState,
   isAvailable: () => !!NodeDfe,
   engineError: () => engineError,
   CONFIG_FILE,
 };
+
