@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { runFiscalRetryPass, syncPendingSalesToQueue } from "@/lib/fiscal-scheduler";
 import { listFiscalJobs, retryFiscalJob, type FiscalJob } from "@/lib/fiscal-queue";
 import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
+import { FiscalQueuePanel } from "@/components/fiscal/fiscal-queue-panel";
+import { NumberingAuditCard } from "@/components/fiscal/numbering-audit-card";
 
 export const Route = createFileRoute("/_authenticated/fiscal-erros")({
   head: () => ({
@@ -174,7 +176,12 @@ function FiscalErrorsPage() {
         }
       />
 
+      {/* Visão operacional (NOC): fila em tempo real + integridade da numeração. */}
+      <FiscalQueuePanel storeId={storeId} />
+      <NumberingAuditCard storeId={storeId} />
+
       <section className="border border-border rounded-md bg-card">
+
         <header className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <AlertTriangle className="size-4 text-warning" />
           <h2 className="text-sm font-semibold">Fila de reemissão</h2>

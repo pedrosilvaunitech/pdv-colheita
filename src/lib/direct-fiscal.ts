@@ -12,9 +12,15 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { pingPrintAgent } from "@/lib/print-agent";
 import { emitInvoice, emitViaVps } from "@/lib/fiscal.functions";
 import { getTerminalId, getTerminalName } from "@/lib/terminal";
+import {
+  invalidateAgentUrlCache,
+  resolveAgentBaseUrl,
+  singleFlight,
+  withSefazSlot,
+} from "@/lib/sefaz-connection";
+import { classifyFiscalError } from "@/lib/fiscal-retry-policy";
 
 
 export interface DirectEmitInput {
@@ -35,22 +41,19 @@ export interface DirectEmitResult {
   channel: "agent_local" | "vps";
   elapsed_ms?: number;
   error?: string;
+  /** Numeração efetivamente reservada e transmitida — base da auditoria. */
+  series?: number;
+  number?: number;
 }
 
-const AGENT_BASE_URLS = ["http://127.0.0.1:9100", "http://localhost:9100"];
-
+/**
+ * Descoberta do agente com cache: uma sonda por minuto em vez de três
+ * requisições por nota (ver `sefaz-connection`).
+ */
 async function findAgentUrl(): Promise<string | null> {
-  const ping = await pingPrintAgent(3000).catch(() => null);
-  if (!ping?.online) return null;
-  // pingPrintAgent tenta os dois hosts internamente; usamos o primeiro que responde no fetch.
-  for (const base of AGENT_BASE_URLS) {
-    try {
-      const r = await fetch(`${base}/status`, { signal: AbortSignal.timeout(2000) });
-      if (r.ok) return base;
-    } catch { /* tenta próximo */ }
-  }
-  return null;
+  return resolveAgentBaseUrl(2500);
 }
+
 
 async function reserveNumber(storeId: string) {
   const { data, error } = await supabase.rpc("reserve_nfce_number", { _store_id: storeId });
@@ -151,16 +154,36 @@ export async function emitViaAgent(input: DirectEmitInput): Promise<DirectEmitRe
   const dto = await buildSaleDto(input.saleId, input.storeId, environment, reserved.series, reserved.number);
 
   const started = Date.now();
-  const res = await fetch(`${agentUrl}/nfce/emit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(dto),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${agentUrl}/nfce/emit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dto),
+    });
+  } catch (e) {
+    // Rede caiu no meio: a URL cacheada pode ter ficado obsoleta.
+    invalidateAgentUrlCache();
+    return {
+      ok: false,
+      channel: "agent_local",
+      error: e instanceof Error ? e.message : String(e),
+      series: reserved.series,
+      number: reserved.number,
+    };
+  }
 
   const elapsed_ms = Date.now() - started;
   const body = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
-  return { ...body, channel: "agent_local", elapsed_ms };
+  return {
+    ...body,
+    channel: "agent_local",
+    elapsed_ms,
+    series: reserved.series,
+    number: reserved.number,
+  };
 }
+
 
 /**
  * Testa emissão em homologação — força ambiente=homologacao e grava histórico.
@@ -205,6 +228,8 @@ export async function emitViaVpsFlow(
     ...(r as Record<string, unknown>),
     channel: "vps",
     elapsed_ms: (r as { elapsed_ms?: number }).elapsed_ms ?? Date.now() - started,
+    series: reserved.series,
+    number: reserved.number,
   } as DirectEmitResult;
 }
 
@@ -308,7 +333,7 @@ function isRecoverableAgentError(error?: string): boolean {
  *
  * Retorna resultado unificado. Não lança — grava "falha" e devolve error.
  */
-export async function emitDirectFiscal(params: {
+async function emitDirectFiscalInner(params: {
   storeId: string;
   saleId: string;
   /** false desliga o fallback (usado em testes de homologação). */
@@ -391,8 +416,10 @@ export async function emitDirectFiscal(params: {
         type: "nfce",
         status: "autorizada",
         environment: (cfg?.environment ?? result.ambiente ?? "homologacao") as "homologacao" | "producao",
-        series: cfg?.nfce_series ?? 1,
-        number: cfg?.nfce_next_number ?? 1,
+        // Numeração REALMENTE reservada e transmitida. Ler `nfce_next_number`
+        // aqui geraria duplicidade quando outro caixa reservasse no intervalo.
+        series: result.series ?? cfg?.nfce_series ?? 1,
+        number: result.number ?? Math.max(1, (cfg?.nfce_next_number ?? 2) - 1),
         total: Number(sale?.total ?? 0),
         access_key: result.chave ?? null,
         protocol: result.protocolo ?? null,
@@ -412,7 +439,24 @@ export async function emitDirectFiscal(params: {
   }
 }
 
+/**
+ * Emissão pública: deduplicada por venda e limitada pelo semáforo de conexões.
+ *
+ * Dois efeitos práticos:
+ *  - o botão "emitir" clicado duas vezes, a fila de background e o fluxo de
+ *    finalização compartilham UMA transmissão por venda (nunca dois números);
+ *  - no máximo `MAX_SEFAZ_CONNECTIONS` transmissões abertas por caixa, o que
+ *    evita o cStat 656 (consumo indevido) em horários de pico.
+ */
+export function emitDirectFiscal(
+  params: Parameters<typeof emitDirectFiscalInner>[0],
+): ReturnType<typeof emitDirectFiscalInner> {
+  return singleFlight(`emit:${params.saleId}`, () =>
+    withSefazSlot(() => emitDirectFiscalInner(params)),
+  );
+}
+
 /** Erro definitivo (rejeição de conteúdo) — a fila não deve reagendar. */
 export function isPermanentFiscalError(error?: string): boolean {
-  return Boolean(error) && !isRecoverableAgentError(error);
+  return Boolean(error) && classifyFiscalError(error) === "permanent";
 }

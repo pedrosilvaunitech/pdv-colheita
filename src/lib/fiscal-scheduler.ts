@@ -16,7 +16,8 @@
 
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { emitDirectFiscal, isPermanentFiscalError, ENGINE_LABEL } from "@/lib/direct-fiscal";
+import { emitDirectFiscal, ENGINE_LABEL } from "@/lib/direct-fiscal";
+import { decideRetry, ERROR_CLASS_LABEL } from "@/lib/fiscal-retry-policy";
 import {
   claimFiscalJobs,
   completeFiscalJob,
@@ -111,7 +112,10 @@ export interface RunRetryResult {
 /** Processa um job reservado e devolve o desfecho. */
 async function processJob(storeId: string, job: FiscalJob): Promise<boolean> {
   const r = await emitDirectFiscal({ storeId, saleId: job.sale_id });
-  const permanent = !r.ok && isPermanentFiscalError(r.error);
+  // Política única de retentativa: classifica o erro e decide se o job volta
+  // ao ciclo automático ou vira pendência manual (ver `fiscal-retry-policy`).
+  const decision = decideRetry(r.error, job.attempts + 1);
+  const permanent = !r.ok && decision.permanent;
 
   await completeFiscalJob({
     jobId: job.id,
@@ -141,9 +145,17 @@ async function processJob(storeId: string, job: FiscalJob): Promise<boolean> {
     storeId,
     kind: "fiscal_emit_failed",
     severity: permanent ? "critico" : "aviso",
-    title: permanent ? "Nota rejeitada — exige correção" : "Falha ao emitir NFC-e",
-    detail: r.error ?? "Erro desconhecido na emissão.",
-    context: { sale_id: job.sale_id, attempts: r.attempts ?? [], permanent },
+    title: permanent
+      ? `${ERROR_CLASS_LABEL[decision.class]} — exige correção`
+      : `Falha ao emitir NFC-e (${ERROR_CLASS_LABEL[decision.class]})`,
+    detail: `${r.error ?? "Erro desconhecido na emissão."} — ${decision.reason}`,
+    context: {
+      sale_id: job.sale_id,
+      attempts: r.attempts ?? [],
+      permanent,
+      error_class: decision.class,
+      retry_in_ms: decision.delayMs,
+    },
   });
   return false;
 }
