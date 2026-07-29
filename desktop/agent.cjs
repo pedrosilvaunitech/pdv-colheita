@@ -49,6 +49,49 @@ catch (e) { console.warn("[agent] módulo Balança indisponível:", e.message); 
 // ── Helpers de diagnóstico ────────────────────────────────────────────────
 const DATA_DIR_PATH = path.join(os.homedir(), ".bastion-pos");
 
+// ── Identidade do agente / terminal (multi-caixa) ─────────────────────────
+// Cada instalação recebe um `agent_id` fixo e pode ser vinculada a um
+// `terminal_key` (o caixa no app web). O vínculo evita que dois PDVs
+// compartilhem impressora, gaveta, balança ou pinpad por engano.
+const IDENTITY_PATH = path.join(DATA_DIR_PATH, "identity.json");
+let identityCache = null;
+
+function readIdentity() {
+  if (identityCache) return identityCache;
+  let data = {};
+  try {
+    if (fs.existsSync(IDENTITY_PATH)) data = JSON.parse(fs.readFileSync(IDENTITY_PATH, "utf8")) || {};
+  } catch (e) {
+    console.warn("[agent] identity.json inválido, recriando:", e.message);
+    data = {};
+  }
+  if (!data.agent_id) {
+    data.agent_id = `agt-${os.hostname().replace(/[^a-zA-Z0-9]/g, "").slice(0, 12).toLowerCase()}-${require("crypto").randomBytes(4).toString("hex")}`;
+    data.created_at = new Date().toISOString();
+    writeIdentity(data);
+  }
+  identityCache = {
+    agent_id: data.agent_id,
+    terminal_key: data.terminal_key || null,
+    terminal_name: data.terminal_name || null,
+    store_id: data.store_id || null,
+    bound_at: data.bound_at || null,
+    hostname: os.hostname(),
+  };
+  return identityCache;
+}
+
+function writeIdentity(next) {
+  try {
+    if (!fs.existsSync(DATA_DIR_PATH)) fs.mkdirSync(DATA_DIR_PATH, { recursive: true });
+    fs.writeFileSync(IDENTITY_PATH, JSON.stringify(next, null, 2), "utf8");
+    identityCache = { ...next, hostname: os.hostname() };
+  } catch (e) {
+    console.warn("[agent] falha ao gravar identity.json:", e.message);
+  }
+}
+
+
 /** Escrita no diretório de configuração (falha típica em perfil roaming/GPO). */
 function isDataDirWritable() {
   try {
