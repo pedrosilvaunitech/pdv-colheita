@@ -12,9 +12,15 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { pingPrintAgent } from "@/lib/print-agent";
 import { emitInvoice, emitViaVps } from "@/lib/fiscal.functions";
 import { getTerminalId, getTerminalName } from "@/lib/terminal";
+import {
+  invalidateAgentUrlCache,
+  resolveAgentBaseUrl,
+  singleFlight,
+  withSefazSlot,
+} from "@/lib/sefaz-connection";
+import { classifyFiscalError } from "@/lib/fiscal-retry-policy";
 
 
 export interface DirectEmitInput {
@@ -35,22 +41,19 @@ export interface DirectEmitResult {
   channel: "agent_local" | "vps";
   elapsed_ms?: number;
   error?: string;
+  /** Numeração efetivamente reservada e transmitida — base da auditoria. */
+  series?: number;
+  number?: number;
 }
 
-const AGENT_BASE_URLS = ["http://127.0.0.1:9100", "http://localhost:9100"];
-
+/**
+ * Descoberta do agente com cache: uma sonda por minuto em vez de três
+ * requisições por nota (ver `sefaz-connection`).
+ */
 async function findAgentUrl(): Promise<string | null> {
-  const ping = await pingPrintAgent(3000).catch(() => null);
-  if (!ping?.online) return null;
-  // pingPrintAgent tenta os dois hosts internamente; usamos o primeiro que responde no fetch.
-  for (const base of AGENT_BASE_URLS) {
-    try {
-      const r = await fetch(`${base}/status`, { signal: AbortSignal.timeout(2000) });
-      if (r.ok) return base;
-    } catch { /* tenta próximo */ }
-  }
-  return null;
+  return resolveAgentBaseUrl(2500);
 }
+
 
 async function reserveNumber(storeId: string) {
   const { data, error } = await supabase.rpc("reserve_nfce_number", { _store_id: storeId });
