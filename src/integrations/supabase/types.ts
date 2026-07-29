@@ -539,6 +539,7 @@ export type Database = {
           series: number
           status: Database["public"]["Enums"]["invoice_status"]
           store_id: string
+          terminal_key: string | null
           total: number
           type: Database["public"]["Enums"]["invoice_type"]
           updated_at: string
@@ -560,6 +561,7 @@ export type Database = {
           series: number
           status?: Database["public"]["Enums"]["invoice_status"]
           store_id: string
+          terminal_key?: string | null
           total?: number
           type: Database["public"]["Enums"]["invoice_type"]
           updated_at?: string
@@ -581,6 +583,7 @@ export type Database = {
           series?: number
           status?: Database["public"]["Enums"]["invoice_status"]
           store_id?: string
+          terminal_key?: string | null
           total?: number
           type?: Database["public"]["Enums"]["invoice_type"]
           updated_at?: string
@@ -1416,6 +1419,7 @@ export type Database = {
           status: Database["public"]["Enums"]["sale_status"]
           store_id: string
           subtotal: number
+          terminal_key: string | null
           total: number
           updated_at: string
         }
@@ -1435,6 +1439,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["sale_status"]
           store_id: string
           subtotal?: number
+          terminal_key?: string | null
           total?: number
           updated_at?: string
         }
@@ -1454,6 +1459,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["sale_status"]
           store_id?: string
           subtotal?: number
+          terminal_key?: string | null
           total?: number
           updated_at?: string
         }
@@ -1645,6 +1651,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "suppliers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      terminals: {
+        Row: {
+          agent_id: string | null
+          agent_version: string | null
+          created_at: string
+          id: string
+          last_seen_at: string
+          name: string
+          printer_name: string | null
+          printer_source: string | null
+          scale_port: string | null
+          store_id: string
+          tef_provider: string | null
+          terminal_key: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          agent_version?: string | null
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          name?: string
+          printer_name?: string | null
+          printer_source?: string | null
+          scale_port?: string | null
+          store_id: string
+          tef_provider?: string | null
+          terminal_key: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          agent_version?: string | null
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          name?: string
+          printer_name?: string | null
+          printer_source?: string | null
+          scale_port?: string | null
+          store_id?: string
+          tef_provider?: string | null
+          terminal_key?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "terminals_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
