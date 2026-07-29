@@ -29,7 +29,7 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.8.0";
+const VERSION = "1.8.1";
 
 // Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
 let nfce = null;
@@ -978,7 +978,12 @@ function startAgent(options = {}) {
       scale: scaleInfo,
       tef: tef ? tef.getStatus() : { ok: false, error: "Módulo TEF não carregado." },
       nfce: nfce
-        ? { available: nfce.isAvailable(), config: nfce.maskFiscalConfig(nfce.loadFiscalConfig()) }
+        ? {
+            available: nfce.isAvailable(),
+            config: nfce.maskFiscalConfig(nfce.loadFiscalConfig()),
+            validation: nfce.validateEngine ? nfce.validateEngine() : null,
+            install: nfce.getInstallState ? nfce.getInstallState() : null,
+          }
         : { available: false },
     });
   });
