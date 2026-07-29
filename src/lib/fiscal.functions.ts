@@ -442,6 +442,121 @@ export const pingFiscalServer = createServerFn({ method: "POST" })
   });
 
 // ─────────────────────────────────────────────────────────────
+// Teste de autenticação do token Bearer do servidor fiscal
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Confere se o token Bearer guardado no backend é aceito pelo servidor fiscal
+ * e — igualmente importante — se o servidor REJEITA requisições sem token.
+ * Um servidor que responde 200 sem credencial está exposto e não deve receber
+ * o certificado A1.
+ *
+ * Roda inteiramente no backend: o valor do token nunca chega ao navegador.
+ * Nunca lança — sempre devolve um resultado descritivo.
+ */
+export const testFiscalServerToken = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d) => pingSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: cfg, error } = await supabase
+      .from("fiscal_configs")
+      .select("vps_url, vps_auth_secret_name")
+      .eq("store_id", data.storeId)
+      .maybeSingle();
+
+    if (error) return { ok: false, message: error.message, unprotected: false };
+    if (!cfg?.vps_url) {
+      return { ok: false, message: "URL do servidor fiscal não configurada.", unprotected: false };
+    }
+
+    const tokenName = cfg.vps_auth_secret_name ?? "FISCAL_VPS_TOKEN";
+    const token = process.env[tokenName];
+    if (!token) {
+      return {
+        ok: false,
+        unprotected: false,
+        message: `Segredo ${tokenName} não está cadastrado no backend. Cadastre-o com o mesmo valor do .env do servidor.`,
+      };
+    }
+
+    const base = cfg.vps_url.replace(/\/+$/, "");
+    // `/nfce/status` exige autenticação — é o alvo certo para provar o token.
+    const target = `${base}/nfce/status`;
+
+    const call = async (headers: Record<string, string>) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 12_000);
+      try {
+        const res = await fetch(target, { headers, signal: ctrl.signal });
+        return { status: res.status, body: await res.text().catch(() => "") };
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    const started = Date.now();
+    try {
+      const withToken = await call({ Authorization: `Bearer ${token}` });
+
+      if (withToken.status === 401 || withToken.status === 403) {
+        return {
+          ok: false,
+          unprotected: false,
+          elapsed_ms: Date.now() - started,
+          message: `Token recusado (HTTP ${withToken.status}). O valor do segredo ${tokenName} está diferente do FISCAL_VPS_TOKEN do servidor.`,
+        };
+      }
+      if (withToken.status === 404) {
+        return {
+          ok: false,
+          unprotected: false,
+          elapsed_ms: Date.now() - started,
+          message: "Endpoint /nfce/status não existe nesse endereço. Confira se a URL aponta para o servidor fiscal (vps-fiscal) e não para outro serviço.",
+        };
+      }
+      if (withToken.status >= 500) {
+        return {
+          ok: false,
+          unprotected: false,
+          elapsed_ms: Date.now() - started,
+          message: `Token aceito, mas o servidor respondeu HTTP ${withToken.status} ao consultar a SEFAZ. Rode a validação completa.`,
+        };
+      }
+
+      // Segunda chamada: sem credencial. Esperado 401/403.
+      let unprotected = false;
+      try {
+        const anon = await call({});
+        unprotected = anon.status < 400;
+      } catch {
+        /* se falhar, não conseguimos afirmar exposição — segue como protegido */
+      }
+
+      return {
+        ok: true,
+        unprotected,
+        elapsed_ms: Date.now() - started,
+        message: unprotected
+          ? `Token aceito (HTTP ${withToken.status}), mas o servidor respondeu SEM token. Ele está exposto: verifique o FISCAL_VPS_TOKEN e o firewall antes de emitir em produção.`
+          : `Token válido: autenticado em ${Date.now() - started}ms e acesso sem token corretamente recusado.`,
+      };
+    } catch (e) {
+      const err = e as Error;
+      return {
+        ok: false,
+        unprotected: false,
+        elapsed_ms: Date.now() - started,
+        message:
+          err.name === "AbortError"
+            ? "O servidor fiscal não respondeu em 12s ao teste de autenticação."
+            : `Falha ao autenticar no servidor fiscal: ${err.message}`,
+      };
+    }
+  });
+
+
+// ─────────────────────────────────────────────────────────────
 // Rotina de validação do servidor fiscal central (VPS)
 // ─────────────────────────────────────────────────────────────
 
