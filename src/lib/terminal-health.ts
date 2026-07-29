@@ -113,7 +113,7 @@ export async function collectTerminalHealth(storeId: string): Promise<TerminalHe
   });
 
   // 4) Balança serial — degradação, não bloqueio de venda.
-  const scaleConfigured = Boolean(diagnostics?.scale?.config?.port);
+  const scaleConfigured = Boolean(diagnostics?.scale?.config?.enabled && diagnostics?.scale?.config?.path);
   const scaleOk = !scaleConfigured || Boolean(diagnostics?.scale?.connected);
   checks.push({
     key: "scale_offline",
@@ -123,7 +123,7 @@ export async function collectTerminalHealth(storeId: string): Promise<TerminalHe
     detail: !scaleConfigured
       ? "Nenhuma balança configurada neste caixa."
       : scaleOk
-        ? `Balança conectada em ${String(diagnostics?.scale?.config?.port)}.`
+        ? `Balança conectada em ${String(diagnostics?.scale?.config?.path)}.`
         : (diagnostics?.scale?.lastError ?? "Balança configurada não respondeu."),
   });
 
