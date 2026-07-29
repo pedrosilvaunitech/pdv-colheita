@@ -1133,6 +1133,7 @@ function SettingsPage() {
                 </Link>
               </Button>
             </div>
+            <TerminalsCard storeId={storeId ?? null} />
             <ScaleAgentCard />
             <TefConfigCard />
           </TabsContent>
