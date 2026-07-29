@@ -333,7 +333,7 @@ function isRecoverableAgentError(error?: string): boolean {
  *
  * Retorna resultado unificado. Não lança — grava "falha" e devolve error.
  */
-export async function emitDirectFiscal(params: {
+async function emitDirectFiscalInner(params: {
   storeId: string;
   saleId: string;
   /** false desliga o fallback (usado em testes de homologação). */
@@ -416,8 +416,10 @@ export async function emitDirectFiscal(params: {
         type: "nfce",
         status: "autorizada",
         environment: (cfg?.environment ?? result.ambiente ?? "homologacao") as "homologacao" | "producao",
-        series: cfg?.nfce_series ?? 1,
-        number: cfg?.nfce_next_number ?? 1,
+        // Numeração REALMENTE reservada e transmitida. Ler `nfce_next_number`
+        // aqui geraria duplicidade quando outro caixa reservasse no intervalo.
+        series: result.series ?? cfg?.nfce_series ?? 1,
+        number: result.number ?? Math.max(1, (cfg?.nfce_next_number ?? 2) - 1),
         total: Number(sale?.total ?? 0),
         access_key: result.chave ?? null,
         protocol: result.protocolo ?? null,
@@ -437,7 +439,24 @@ export async function emitDirectFiscal(params: {
   }
 }
 
+/**
+ * Emissão pública: deduplicada por venda e limitada pelo semáforo de conexões.
+ *
+ * Dois efeitos práticos:
+ *  - o botão "emitir" clicado duas vezes, a fila de background e o fluxo de
+ *    finalização compartilham UMA transmissão por venda (nunca dois números);
+ *  - no máximo `MAX_SEFAZ_CONNECTIONS` transmissões abertas por caixa, o que
+ *    evita o cStat 656 (consumo indevido) em horários de pico.
+ */
+export function emitDirectFiscal(
+  params: Parameters<typeof emitDirectFiscalInner>[0],
+): ReturnType<typeof emitDirectFiscalInner> {
+  return singleFlight(`emit:${params.saleId}`, () =>
+    withSefazSlot(() => emitDirectFiscalInner(params)),
+  );
+}
+
 /** Erro definitivo (rejeição de conteúdo) — a fila não deve reagendar. */
 export function isPermanentFiscalError(error?: string): boolean {
-  return Boolean(error) && !isRecoverableAgentError(error);
+  return Boolean(error) && classifyFiscalError(error) === "permanent";
 }
