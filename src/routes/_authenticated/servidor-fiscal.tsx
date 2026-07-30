@@ -330,15 +330,17 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
         title="Servidor fiscal"
         description="Onde roda o Node que assina e transmite a NFC-e de todos os caixas."
         actions={
-          {!canManage && (
-            <span className="text-xs text-muted-foreground">
-              Somente administrador ou gerente pode alterar esta configuração.
-            </span>
-          )}
-          <Button onClick={save} disabled={saving || !dirty || !canManage}>
-            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Salvar
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {!canManage && (
+              <span className="text-xs text-muted-foreground">
+                Somente administrador ou gerente pode alterar esta configuração.
+              </span>
+            )}
+            <Button onClick={save} disabled={saving || !dirty || !canManage}>
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              Salvar
+            </Button>
+          </div>
         }
       />
 
