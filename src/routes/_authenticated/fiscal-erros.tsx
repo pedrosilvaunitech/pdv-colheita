@@ -13,6 +13,7 @@ import { listFiscalJobs, retryFiscalJob, type FiscalJob } from "@/lib/fiscal-que
 import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
 import { FiscalQueuePanel } from "@/components/fiscal/fiscal-queue-panel";
 import { NumberingAuditCard } from "@/components/fiscal/numbering-audit-card";
+import { FiscalAuditLog } from "@/components/fiscal/fiscal-audit-log";
 
 export const Route = createFileRoute("/_authenticated/fiscal-erros")({
   head: () => ({
@@ -179,6 +180,7 @@ function FiscalErrorsPage() {
       {/* Visão operacional (NOC): fila em tempo real + integridade da numeração. */}
       <FiscalQueuePanel storeId={storeId} />
       <NumberingAuditCard storeId={storeId} />
+      <FiscalAuditLog storeId={storeId} />
 
       <section className="border border-border rounded-md bg-card">
 

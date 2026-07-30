@@ -32,6 +32,10 @@ import {
   buildCalibrationPayload,
 } from "@/lib/printer-config";
 import { CODEPAGE_OPTIONS, type Codepage } from "@/lib/escpos-codepage";
+import { buildTerminalTestPayload, newVerificationCode } from "@/lib/printer-test";
+import { appendPrintHistory } from "@/lib/print-history";
+import { syncPrintHistoryToCloud } from "@/lib/print-cloud-sync";
+import { getTerminalName } from "@/lib/terminal";
 import { sendRawEscPos } from "@/lib/escpos";
 
 interface Props {
@@ -52,6 +56,8 @@ export function PrintersCard({ storeId }: Props) {
   const [paper, setPaper] = useState<"58" | "80" | "auto">("auto");
   const [codepage, setCodepage] = useState<Codepage>("cp850");
   const [testing, setTesting] = useState(false);
+  /** Código impresso no último teste — o operador confere com o papel. */
+  const [lastCode, setLastCode] = useState<string | null>(null);
 
   /** Recarrega a lista do agente e sincroniza os overrides da impressora ativa. */
   const refresh = useCallback(async () => {
@@ -100,6 +106,46 @@ export function PrintersCard({ storeId }: Props) {
   function changeCodepage(v: Codepage) {
     setCodepage(v);
     if (selected) setPrinterCodepage(selected.name, v);
+  }
+
+  /**
+   * Teste de impressão IDENTIFICANDO o terminal.
+   * Responde "o papel saiu neste caixa?" — imprime um código de conferência,
+   * registra a tentativa no histórico local e sobe para `print_logs`.
+   */
+  async function printTerminalTest() {
+    setTesting(true);
+    const code = newVerificationCode();
+    try {
+      const bytes = buildTerminalTestPayload({
+        terminalLabel: getTerminalLabel(),
+        terminalName: getTerminalName(),
+        printerName: selected?.name ?? null,
+        printerSource: selected ? SOURCE_LABEL[selected.source] : null,
+        verification: code,
+      });
+      const result = await sendRawEscPos(bytes);
+      appendPrintHistory({
+        ts: Date.now(),
+        channel: result.channel ?? "none",
+        ok: result.ok,
+        printer: selected?.name,
+        error: result.ok ? undefined : (result.error ?? "falha no teste de impressão"),
+      });
+      void syncPrintHistoryToCloud();
+      if (result.ok) {
+        setLastCode(code);
+        toast.success(`Teste enviado (canal: ${result.channel ?? "—"}). Confira o código ${code} no papel.`);
+      } else {
+        setLastCode(null);
+        toast.error(result.error ?? "Não foi possível imprimir o teste.");
+      }
+    } catch (e) {
+      setLastCode(null);
+      toast.error(e instanceof Error ? e.message : "Falha ao imprimir o teste.");
+    } finally {
+      setTesting(false);
+    }
   }
 
   /** Régua de calibração: revela largura errada e acentos quebrados de uma vez. */
@@ -223,10 +269,24 @@ export function PrintersCard({ storeId }: Props) {
           </div>
         </div>
 
-        <Button variant="outline" onClick={() => void printCalibration()} disabled={testing || !selected}>
-          {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Ruler className="mr-2 size-4" />}
-          Imprimir régua de calibração
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => void printTerminalTest()} disabled={testing}>
+            {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Printer className="mr-2 size-4" />}
+            Teste de impressão deste terminal
+          </Button>
+          <Button variant="outline" onClick={() => void printCalibration()} disabled={testing || !selected}>
+            {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Ruler className="mr-2 size-4" />}
+            Imprimir régua de calibração
+          </Button>
+        </div>
+
+        {lastCode && (
+          <p className="rounded border border-primary/40 bg-primary/5 p-3 text-xs">
+            Código de conferência deste teste:{" "}
+            <span className="font-mono text-base font-semibold tracking-widest text-primary">{lastCode}</span>. Se o
+            papel saiu em outra impressora, o código não vai bater — troque a impressora selecionada acima.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
