@@ -111,9 +111,6 @@ function urlProblem(value: string): string | null {
 
 function FiscalServerPage() {
   const { storeId } = useCurrentStore();
-  // Configuração fiscal é ação de gestão: caixa/estoquista só visualiza.
-  const { permissions } = useStorePermissions(storeId);
-  const canManage = permissions.canManageSettings;
   if (!storeId) {
     return (
       <>
@@ -128,6 +125,9 @@ function FiscalServerPage() {
 }
 
 function FiscalServerForm({ storeId }: { storeId: string }) {
+  // Configuração fiscal é ação de gestão: caixa/estoquista só visualiza.
+  const { permissions } = useStorePermissions(storeId);
+  const canManage = permissions.canManageSettings;
   const qc = useQueryClient();
   const [draft, setDraft] = useState<FiscalServerConfig | null>(null);
   const [saving, setSaving] = useState(false);
