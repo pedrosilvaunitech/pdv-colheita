@@ -16,6 +16,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentStore } from "@/lib/current-store";
+import { useStorePermissions } from "@/hooks/use-store-permissions";
+import { buildBackup, downloadBackup, parseBackup } from "@/lib/config-backup";
 import { PageHeader, StoreRequired } from "@/components/page-header";
 import { FiscalCheckList } from "@/components/fiscal/fiscal-check-list";
 import {
@@ -254,41 +256,31 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
    * Exporta a configuração (sem segredos — só o NOME do segredo) para replicar
    * o mesmo servidor em outra loja/instalação sem redigitar nada.
    */
-  function exportConfig() {
+  /**
+   * Exporta a configuração (sem segredos — só o NOME do segredo) em envelope
+   * versionado e com hash SHA-256, para detectar arquivo corrompido/editado.
+   */
+  async function exportConfig() {
     if (!form) return;
-    const payload = {
-      kind: "bastion-pos.fiscal-server",
-      version: 1,
-      exported_at: new Date().toISOString(),
-      config: {
-        direct_engine: form.direct_engine,
-        vps_url: normalizeServerUrl(form.vps_url),
-        vps_fallback_url: normalizeServerUrl(form.vps_fallback_url),
-        vps_auth_secret_name: form.vps_auth_secret_name,
-        fallback_enabled: form.fallback_enabled,
-      },
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `servidor-fiscal-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Configuração exportada (sem o valor do token).");
+    const envelope = await buildBackup("bastion-pos.fiscal-server", {
+      direct_engine: form.direct_engine,
+      vps_url: normalizeServerUrl(form.vps_url),
+      vps_fallback_url: normalizeServerUrl(form.vps_fallback_url),
+      vps_auth_secret_name: form.vps_auth_secret_name,
+      fallback_enabled: form.fallback_enabled,
+    });
+    downloadBackup(envelope, "servidor-fiscal");
+    toast.success(`Backup v${envelope.version} exportado (hash ${envelope.hash.slice(0, 8)}).`);
   }
 
-  /** Importa o JSON exportado. Só preenche o formulário — salvar continua manual. */
+  /** Importa o backup. Só preenche o formulário — salvar continua manual. */
   async function importConfig(file: File) {
     try {
-      const parsed = JSON.parse(await file.text()) as {
-        kind?: string;
-        config?: Partial<FiscalServerConfig>;
-      };
-      if (parsed.kind !== "bastion-pos.fiscal-server" || !parsed.config) {
-        throw new Error("Arquivo não é uma exportação de servidor fiscal do Bastion POS.");
-      }
-      const c = parsed.config;
+      const result = await parseBackup<Partial<FiscalServerConfig>>(
+        await file.text(),
+        "bastion-pos.fiscal-server",
+      );
+      const c = result.payload;
       const engine: Engine = c.direct_engine === "vps" ? "vps" : "agent_local";
       setDraft({
         direct_engine: engine,
@@ -300,7 +292,13 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
             : "FISCAL_VPS_TOKEN",
         fallback_enabled: c.fallback_enabled !== false,
       });
-      toast.success("Configuração carregada. Confira os campos e clique em Salvar.");
+      if (result.legacy) {
+        toast.warning("Backup antigo (sem hash). Confira cada campo antes de salvar.");
+      } else if (!result.hashValid) {
+        toast.error("Hash não confere: o arquivo foi alterado ou corrompeu. Revise tudo antes de salvar.");
+      } else {
+        toast.success(`Backup v${result.version} íntegro. Confira os campos e clique em Salvar.`);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Arquivo inválido.");
     } finally {
@@ -530,10 +528,10 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={exportConfig}>
+            <Button variant="outline" onClick={() => void exportConfig()} disabled={!canManage}>
               <Download className="h-4 w-4 mr-2" /> Exportar JSON
             </Button>
-            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={!canManage}>
               <Upload className="h-4 w-4 mr-2" /> Importar JSON
             </Button>
             <input
