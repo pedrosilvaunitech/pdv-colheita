@@ -2198,6 +2198,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      log_sensitive_change: {
+        Args: {
+          _action: string
+          _area: string
+          _detail?: string
+          _store_id: string
+        }
+        Returns: undefined
+      }
       lookup_admin_code: {
         Args: { _code: string }
         Returns: {
