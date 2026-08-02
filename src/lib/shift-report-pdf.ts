@@ -177,8 +177,11 @@ export function buildShiftReportPdf(input: ShiftPdfInput): Blob {
       const row = cards.slice(i, i + perRow);
       row.forEach((card, idx) => {
         const x = MARGIN + idx * (cardWidth + gap);
+        // Tuplas explícitas: o spread de uma união de tuplas não passa no strict.
+        const edge: readonly [number, number, number] = card.alert ? COLOR.danger : COLOR.line;
+        const text: readonly [number, number, number] = card.alert ? COLOR.danger : COLOR.ink;
         doc.setFillColor(...COLOR.soft);
-        doc.setDrawColor(...(card.alert ? COLOR.danger : COLOR.line));
+        doc.setDrawColor(edge[0], edge[1], edge[2]);
         doc.setLineWidth(card.alert ? 1 : 0.5);
         doc.roundedRect(x, y, cardWidth, cardHeight, 4, 4, "FD");
 
@@ -189,7 +192,8 @@ export function buildShiftReportPdf(input: ShiftPdfInput): Blob {
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
-        doc.setTextColor(...(card.alert ? COLOR.danger : COLOR.ink));
+        doc.setTextColor(text[0], text[1], text[2]);
+
         doc.text(fit(doc, card.value, cardWidth - 16), x + 8, y + 32);
 
         if (card.hint) {
