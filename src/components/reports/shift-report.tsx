@@ -414,7 +414,48 @@ export function ShiftReport({ storeId }: ShiftReportProps) {
           </div>
         </>
       )}
+
+      <Dialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          setPreviewOpen(open);
+          if (!open) releasePreview();
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="size-4" /> Relatório do turno
+            </DialogTitle>
+            <DialogDescription>
+              {selected
+                ? `${selected.terminal} · ${fmtDateTime(selected.opened_at)} até ${selected.closed_at ? fmtDateTime(selected.closed_at) : "agora (turno aberto)"}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewUrl ? (
+            <iframe
+              title="Pré-visualização do relatório do turno"
+              src={previewUrl}
+              className="h-[70vh] w-full rounded-md border border-border bg-muted"
+            />
+          ) : (
+            <p className="p-6 text-sm text-muted-foreground">Gerando a pré-visualização…</p>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              Use o botão de impressão do visualizador para enviar à impressora A4.
+            </p>
+            <Button variant="secondary" className="gap-2" onClick={handleDownload} disabled={!canExport}>
+              <Download className="size-4" /> Baixar PDF
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
+
   );
 }
 
