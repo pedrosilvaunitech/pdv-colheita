@@ -372,7 +372,7 @@ const REQUIRED_EXPORTS = ["NFeProcessor", "NFeStatus", "NFeCancelamento", "NFeIn
 
 function moduleMeta(name) {
   try {
-    const pkgPath = require.resolve(`${name}/package.json`, { paths: [__dirname] });
+    const pkgPath = require.resolve(`${name}/package.json`, { paths: resolvePaths() });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
     return { installed: true, version: pkg.version || null, path: path.dirname(pkgPath) };
   } catch (e) {
@@ -384,21 +384,105 @@ function moduleMeta(name) {
 function reloadEngine() {
   for (const mod of ENGINE_CANDIDATES) {
     try {
-      const resolved = require.resolve(mod, { paths: [__dirname] });
-      delete require.cache[resolved];
+      const resolved = require.resolve(mod, { paths: resolvePaths() });
+      // Limpa o cache do módulo e de tudo que ele carregou, senão uma versão
+      // antiga (ou parcialmente baixada) continuaria em memória.
+      for (const key of Object.keys(require.cache)) {
+        if (key.includes(`${path.sep}node-dfe${path.sep}`) || key === resolved) delete require.cache[key];
+      }
       NodeDfe = require(resolved);
       engineError = null;
-      return { ok: true, module: mod };
+      forge = loadOptional("node-forge").mod || forge;
+      qrcode = loadOptional("qrcode").mod || qrcode;
+      return { ok: true, module: mod, path: resolved };
     } catch (e) {
       engineError =
         e && e.code === "MODULE_NOT_FOUND"
-          ? `Dependência "${mod}" não instalada. Rode \`npm run install:fiscal\` na pasta do agente.`
+          ? `Motor "${mod}" não encontrado em ${ENGINE_DIR}. Clique em "Instalar motor fiscal".`
           : `Falha ao carregar "${mod}": ${e && e.message ? e.message : String(e)}`;
     }
   }
   NodeDfe = null;
   return { ok: false, error: engineError };
 }
+
+// ── Ambiente de instalação do motor (pasta externa + npm disponível) ─────────
+
+/** Cria a pasta externa do motor com um package.json próprio. Nunca lança. */
+function ensureEngineDir() {
+  try {
+    fs.mkdirSync(ENGINE_DIR, { recursive: true });
+    const pkgFile = path.join(ENGINE_DIR, "package.json");
+    if (!fs.existsSync(pkgFile)) {
+      fs.writeFileSync(
+        pkgFile,
+        JSON.stringify(
+          { name: "bastion-fiscal-engine", private: true, version: "1.0.0", description: "Motor fiscal do Bastion POS Agent" },
+          null,
+          2,
+        ),
+      );
+    }
+    // Teste real de escrita: pasta em OneDrive/Program Files pode negar acesso.
+    const probe = path.join(ENGINE_DIR, ".write-test");
+    fs.writeFileSync(probe, "ok");
+    fs.unlinkSync(probe);
+    return { ok: true, dir: ENGINE_DIR };
+  } catch (e) {
+    return { ok: false, dir: ENGINE_DIR, error: e && e.message ? e.message : String(e) };
+  }
+}
+
+/**
+ * Localiza um npm utilizável. No caixa o agente costuma rodar dentro do
+ * Electron empacotado, onde `npm` não está no PATH do processo — por isso
+ * procuramos também nos caminhos padrão de instalação do Node no Windows.
+ */
+function findNpm() {
+  const win = process.platform === "win32";
+  const exe = win ? "npm.cmd" : "npm";
+  const candidates = [];
+
+  if (process.env.BASTION_NPM_PATH) candidates.push(process.env.BASTION_NPM_PATH);
+  if (process.env.npm_execpath && /npm/i.test(process.env.npm_execpath)) candidates.push(process.env.npm_execpath);
+
+  if (win) {
+    const pf = process.env.ProgramFiles || "C:\\Program Files";
+    const pf86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+    candidates.push(
+      path.join(pf, "nodejs", exe),
+      path.join(pf86, "nodejs", exe),
+      path.join(process.env.APPDATA || "", "npm", exe),
+      path.join(process.env.LOCALAPPDATA || "", "Programs", "nodejs", exe),
+    );
+  } else {
+    candidates.push("/usr/local/bin/npm", "/usr/bin/npm", "/opt/homebrew/bin/npm");
+  }
+
+  for (const c of candidates) {
+    try { if (c && fs.existsSync(c)) return { ok: true, npm: c, fromPath: false }; } catch { /* ignora */ }
+  }
+
+  // Última tentativa: confiar no PATH (funciona quando o agente roda via `node agent.cjs`).
+  try {
+    const { execFileSync } = require("child_process");
+    const out = execFileSync(win ? "where" : "which", [exe], { windowsHide: true, timeout: 8000 })
+      .toString()
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (out.length) return { ok: true, npm: out[0], fromPath: true };
+  } catch { /* npm ausente */ }
+
+  return {
+    ok: false,
+    npm: null,
+    error:
+      "npm não encontrado nesta máquina. Instale o Node.js LTS (nodejs.org) e reinicie o Bastion POS Agent — " +
+      "o motor fiscal precisa do npm apenas na primeira instalação.",
+  };
+}
+
 
 /**
  * Bateria de checagens do motor fiscal local. Cada item traz
