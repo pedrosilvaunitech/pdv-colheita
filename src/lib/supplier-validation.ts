@@ -249,3 +249,13 @@ export function auditSupplierLinks(
     totalActiveProducts: activeProducts.length,
   };
 }
+
+/** Patch das edições inline da tabela de vínculos. */
+export const linkPatchSchema = z.object({
+  supplier_sku: z.string().trim().max(60).nullable().optional(),
+  unit_cost: z.number().min(0, "Custo não pode ser negativo").max(1_000_000, "Custo acima do limite").optional(),
+  min_order_qty: z.number().min(0, "Mínimo de pedido não pode ser negativo").max(1_000_000).optional(),
+  lead_time_days: z.number().int().min(0, "Prazo inválido").max(365, "Prazo máximo: 365 dias").optional(),
+  is_preferred: z.boolean().optional(),
+  notes: z.string().trim().max(1000).nullable().optional(),
+});
