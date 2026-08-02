@@ -723,7 +723,7 @@ function PdvPage() {
         }
       />
 
-      {monitorSefaz && <SefazHealthBanner enabled className="mx-6 mt-4" />}
+      
 
 
       {!openReg.data && (
