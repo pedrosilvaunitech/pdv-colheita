@@ -167,6 +167,36 @@ function ReposicaoPage() {
   });
 
 
+  /**
+   * Vendas dos últimos 7 dias por produto. A view `v_reorder` só traz 30 dias;
+   * a semana recente é o que revela mudança de demanda (promoção, sazonal).
+   * Consulta somente leitura — nada é gravado.
+   */
+  const { data: sold7dMap } = useQuery({
+    queryKey: ["reorder-sold-7d", storeId],
+    enabled: Boolean(storeId),
+    queryFn: async () => {
+      const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      const { data, error } = await supabase
+        .from("sale_items")
+        .select("product_id,quantity,sales!inner(status,finalized_at)")
+        .eq("store_id", storeId!)
+        .gte("created_at", since);
+      if (error) throw new Error(error.message);
+
+      const map = new Map<string, number>();
+      for (const row of (data ?? []) as unknown as {
+        product_id: string;
+        quantity: number | null;
+        sales: { status: string | null } | null;
+      }[]) {
+        if (row.sales?.status !== "finalizada") continue;
+        map.set(row.product_id, (map.get(row.product_id) ?? 0) + Number(row.quantity ?? 0));
+      }
+      return map;
+    },
+  });
+
   const filtered = useMemo(() => {
     if (!rows) return [];
     return rows.filter((r) => {
@@ -181,6 +211,38 @@ function ReposicaoPage() {
     });
   }, [rows, search, statusFilter]);
 
+  /**
+   * Projeção determinística por produto: dias até a ruptura e prazo-limite para
+   * emitir o pedido (já descontando o prazo de entrega do fornecedor).
+   */
+  const forecasts = useMemo(() => {
+    return forecastAll(
+      (rows ?? []).map((r) => {
+        const link = supplierMap?.get(r.product_id)?.[0];
+        return {
+          productId: r.product_id,
+          name: r.name,
+          unit: r.unit,
+          currentStock: Number(r.current_stock ?? 0),
+          minStock: Number(r.min_stock ?? 0),
+          sold30d: Number(r.sold_30d ?? 0),
+          sold7d: sold7dMap?.get(r.product_id) ?? 0,
+          leadTimeDays: Number(link?.leadTimeDays || r.lead_time_days || 0),
+          suggestedQty: Number(r.suggested_qty ?? 0),
+          supplierName: link?.name ?? null,
+          unitCost: Number(link?.unitCost ?? 0),
+        };
+      }),
+    );
+  }, [rows, supplierMap, sold7dMap]);
+
+  /** Índice por produto para pintar as colunas de prazo na tabela. */
+  const forecastById = useMemo(() => {
+    const map = new Map<string, ForecastResult>();
+    for (const f of forecasts) map.set(f.productId, f);
+    return map;
+  }, [forecasts]);
+
   const counts = useMemo(() => {
     const c = { ruptura: 0, critico: 0, atencao: 0, ok: 0, suggested_total: 0 };
     for (const r of rows ?? []) {
@@ -189,6 +251,7 @@ function ReposicaoPage() {
     }
     return c;
   }, [rows]);
+
 
   const exportCsv = () => {
     const header = ["Produto", "EAN", "SKU", "Estoque", "Vendas 30d", "Média/dia", "Dias cobertura", "Status", "Sugestão compra", "Fornecedor", "Contato", "Pagamento"];
