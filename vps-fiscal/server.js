@@ -231,6 +231,43 @@ app.post("/nfce/inutilizar", auth, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.listen(PORT, () => {
-  console.log(`[bastion-fiscal] http://0.0.0.0:${PORT} · engine=${nfce.isAvailable() ? "ready" : "sem node-dfe"}`);
+/** Endereços que o lojista pode digitar no PDV (IPv4 da máquina). */
+function localAddresses() {
+  const out = [];
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (net.family === "IPv4" && !net.internal) out.push(net.address);
+    }
+  }
+  return out;
+}
+
+const server = app.listen(PORT, HOST, () => {
+  const urls = ["127.0.0.1", ...localAddresses()].map((h) => `http://${h}:${PORT}`);
+  console.log("");
+  console.log(`[bastion-fiscal] v${VERSION} de pé · engine=${nfce.isAvailable() ? "pronto" : "SEM node-dfe"}`);
+  console.log(`[bastion-fiscal] escutando em ${HOST}:${PORT}`);
+  console.log(`[bastion-fiscal] use no PDV um destes endereços: ${urls.join("  |  ")}`);
+  console.log(`[bastion-fiscal] token (${TOKEN_ORIGIN}): ${TOKEN}`);
+  if (TOKEN_ORIGIN !== "env") console.log(`[bastion-fiscal] token salvo em ${TOKEN_FILE}`);
+  if (!nfce.isAvailable()) {
+    console.log("[bastion-fiscal] ATENÇÃO: rode `npm install` nesta pasta — sem node-dfe não emite nota.");
+  }
+  console.log("");
 });
+
+// Porta ocupada é o erro mais comum ao rodar no PC do caixa (duas instâncias).
+server.on("error", (err) => {
+  if (err && err.code === "EADDRINUSE") {
+    console.error(
+      `[bastion-fiscal] a porta ${PORT} já está em uso. ` +
+        "Provavelmente o servidor já está rodando (confira a bandeja/serviço) " +
+        `ou rode com outra porta: PORT=3738 node server.js`,
+    );
+    process.exit(1);
+  }
+  console.error("[bastion-fiscal] falha ao subir:", err.message);
+  process.exit(1);
+});
+
