@@ -1,16 +1,30 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Clock, Archive, ArrowDownCircle, ArrowUpCircle, Printer } from "lucide-react";
+import { Clock, Archive, ArrowDownCircle, ArrowUpCircle, Printer, Download, FileText } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  buildShiftReportPdf,
+  shiftReportFileName,
+  type ShiftPdfRegister,
+} from "@/lib/shift-report-pdf";
 
 export interface ShiftReportProps {
   storeId: string;
 }
+
 
 interface Register {
   id: string;
