@@ -287,9 +287,13 @@ export function ShiftReport({ storeId }: ShiftReportProps) {
               </SelectContent>
             </Select>
           </div>
-          <Button size="sm" variant="outline" className="gap-2" onClick={() => window.print()} disabled={!selected}>
-            <Printer className="size-4" /> Imprimir
+          <Button size="sm" variant="outline" className="gap-2" onClick={handlePreview} disabled={!canExport}>
+            <Printer className="size-4" /> Imprimir turno
           </Button>
+          <Button size="sm" variant="ghost" className="gap-2" onClick={handleDownload} disabled={!canExport}>
+            <Download className="size-4" /> PDF
+          </Button>
+
         </div>
       </div>
 
