@@ -2259,6 +2259,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      purge_fiscal_errors: {
+        Args: {
+          _environment?: string
+          _include_invoices?: boolean
+          _include_queue?: boolean
+          _invoice_ids?: string[]
+          _queue_ids?: string[]
+          _store_id: string
+        }
+        Returns: Json
+      }
       purge_print_logs: {
         Args: { _older_than_days?: number; _store_id: string }
         Returns: number
