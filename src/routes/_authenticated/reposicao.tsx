@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, TrendingDown, PackageX, PackageCheck, Search, Download } from "lucide-react";
+import { AlertTriangle, TrendingDown, PackageX, PackageCheck, Search, Download, Star, Phone, Mail, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/reposicao")({
@@ -293,6 +293,89 @@ function KpiCard({ label, value, tone }: { label: string; value: number; tone: "
     <div className={`border rounded-md bg-card px-4 py-3 ${cls}`}>
       <div className="text-[10px] font-mono uppercase tracking-wider opacity-80">{label}</div>
       <div className="text-2xl font-semibold mt-1 tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+const METHOD_LABEL: Record<string, string> = {
+  pix: "Pix", boleto: "Boleto", transferencia: "TED", dinheiro: "Dinheiro",
+  cartao: "Cartão", cheque: "Cheque", prazo: "Faturado",
+};
+
+/** Resumo textual das condições de pagamento (também usado no CSV). */
+function describePayment(link?: SupplierLink): string {
+  if (!link) return "";
+  const parts: string[] = [];
+  if (link.paymentMethods.length) {
+    parts.push(link.paymentMethods.map((m) => METHOD_LABEL[m] ?? m).join(", "));
+  }
+  if (link.paymentDay) parts.push(`vence dia ${link.paymentDay}`);
+  if (link.paymentTermDays > 0) parts.push(`${link.paymentTermDays} dias`);
+  return parts.join(" · ");
+}
+
+/**
+ * Quem contatar para repor o item. O preferencial vem primeiro; alternativas
+ * ficam listadas abaixo para o comprador negociar quando faltar produto.
+ */
+function SupplierContactCell({ links }: { links: SupplierLink[] }) {
+  const [main, ...others] = links;
+
+  if (!main) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        Sem fornecedor vinculado
+      </span>
+    );
+  }
+
+  const phoneDigits = (main.phone ?? "").replace(/\D/g, "");
+  const payment = describePayment(main);
+
+  return (
+    <div className="text-xs space-y-1">
+      <div className="flex items-center gap-1 font-medium">
+        {main.isPreferred && <Star className="size-3 text-primary fill-current" />}
+        {main.name}
+      </div>
+      {main.contactName && <div className="text-muted-foreground">{main.contactName}</div>}
+      <div className="flex flex-wrap items-center gap-1">
+        {phoneDigits.length >= 10 && (
+          <a
+            href={`https://wa.me/55${phoneDigits.slice(-11)}`}
+            target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1 text-primary hover:underline"
+          >
+            <Phone className="size-3" />{main.phone}
+          </a>
+        )}
+        {main.email && (
+          <a href={`mailto:${main.email}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+            <Mail className="size-3" />{main.email}
+          </a>
+        )}
+      </div>
+      {payment && (
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <CreditCard className="size-3" />{payment}
+        </div>
+      )}
+      {main.pixKey && (
+        <div className="font-mono text-[10px] text-muted-foreground truncate" title={main.pixKey}>
+          Pix: {main.pixKey}
+        </div>
+      )}
+      {main.unitCost > 0 && (
+        <div className="font-mono text-[10px] text-muted-foreground">
+          Custo: R$ {main.unitCost.toFixed(2)}
+          {main.leadTimeDays > 0 ? ` · entrega ${main.leadTimeDays}d` : ""}
+        </div>
+      )}
+      {others.length > 0 && (
+        <div className="text-[10px] text-muted-foreground">
+          Alternativas: {others.map((o) => o.name).join(", ")}
+        </div>
+      )}
     </div>
   );
 }
