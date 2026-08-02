@@ -122,22 +122,9 @@ function PdvPage() {
     },
   });
 
-  // Provedor fiscal da loja — define se monitoramos o motor Direto SEFAZ.
-  const fiscalProvider = useQuery({
-    queryKey: ["pdv-fiscal-provider", storeId],
-    enabled: !!storeId,
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("fiscal_configs")
-        .select("provider")
-        .eq("store_id", storeId!)
-        .maybeSingle();
-      if (error) throw error;
-      return data?.provider ?? "none";
-    },
-  });
-  const monitorSefaz = fiscalProvider.data === "direto_sefaz";
+  // A verificação do motor fiscal (Direto SEFAZ) fica restrita às telas fiscais;
+  // o PDV não exibe esse monitoramento para não poluir a operação do caixa.
+
 
 
 
