@@ -15,7 +15,6 @@ import { tryPrintEscPos } from "@/lib/escpos";
 import { emitDirectFiscal } from "@/lib/direct-fiscal";
 import { enqueueFiscalJob, completeFiscalJob, listFiscalJobs } from "@/lib/fiscal-queue";
 import { reprintAuthorizedReceipt } from "@/lib/fiscal-reprint";
-import { SefazHealthBanner } from "@/components/fiscal/sefaz-health-banner";
 import { diagnoseSefazFailure } from "@/lib/sefaz-diagnostics";
 import { EscPosPrinterButton } from "@/components/pdv/escpos-printer-button";
 import { CashDrawerButton } from "@/components/pdv/cash-drawer-button";
