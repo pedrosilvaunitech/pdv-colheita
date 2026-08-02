@@ -39,6 +39,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useBranding } from "@/lib/branding";
 import { useFiscalRetryScheduler } from "@/lib/fiscal-scheduler";
+import { useFiscalErrorNotifications } from "@/hooks/use-fiscal-error-notifications";
+
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -73,6 +75,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Reemissão automática de NFC-e pendentes enquanto o app estiver aberto.
   useFiscalRetryScheduler(store?.id);
+
+  // Avisa o gerente quando notas falham em segundo plano (fila, travadas, rejeitadas).
+  useFiscalErrorNotifications(store?.id ?? null, () => navigate({ to: "/fiscal-erros" }));
+
 
   const kiosk = (() => {
     if (search && (search.kiosk === "1" || search.kiosk === 1 || search.kiosk === true)) return true;

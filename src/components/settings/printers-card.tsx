@@ -37,6 +37,8 @@ import { appendPrintHistory } from "@/lib/print-history";
 import { syncPrintHistoryToCloud } from "@/lib/print-cloud-sync";
 import { getTerminalName } from "@/lib/terminal";
 import { sendRawEscPos } from "@/lib/escpos";
+import { PrinterCompatPanel } from "@/components/settings/printer-compat-panel";
+
 
 interface Props {
   storeId: string | null;
@@ -287,7 +289,9 @@ export function PrintersCard({ storeId }: Props) {
             papel saiu em outra impressora, o código não vai bater — troque a impressora selecionada acima.
           </p>
         )}
+        <PrinterCompatPanel storeId={storeId} />
       </CardContent>
     </Card>
+
   );
 }
