@@ -503,15 +503,36 @@ function validateEngine() {
     major >= 18 ? null : "O motor NFC-e exige Node 18+. Reinstale o agente com o instalador oficial.",
   );
 
-  // 2. node-dfe instalado
+  // 2. Pasta externa do motor (precisa existir e aceitar escrita)
+  const dir = ensureEngineDir();
+  push(
+    "engine_dir",
+    "Pasta do motor fiscal",
+    dir.ok ? "ok" : "fail",
+    dir.ok ? `${dir.dir} (gravável)${PACKAGED ? " — agente empacotado" : ""}` : `${dir.dir}: ${dir.error}`,
+    dir.ok ? null : "Rode o agente com o usuário do caixa ou defina BASTION_ENGINE_DIR para uma pasta gravável.",
+  );
+
+  // 3. npm disponível (necessário só na primeira instalação do motor)
+  const npm = findNpm();
+  push(
+    "npm_available",
+    "npm disponível",
+    npm.ok ? "ok" : NodeDfe ? "warn" : "fail",
+    npm.ok ? npm.npm : npm.error,
+    npm.ok ? null : "Instale o Node.js LTS (nodejs.org) e reinicie o agente.",
+  );
+
+  // 4. node-dfe instalado
   const dfe = moduleMeta("node-dfe");
   push(
     "node_dfe",
     "Biblioteca node-dfe",
     dfe.installed ? "ok" : "fail",
     dfe.installed ? `v${dfe.version} em ${dfe.path}` : dfe.error || "não encontrada",
-    dfe.installed ? null : "Rode `npm run install:fiscal` na pasta do agente (ou clique em Instalar motor).",
+    dfe.installed ? null : `Clique em "Instalar motor fiscal" — será baixado para ${ENGINE_DIR}.`,
   );
+
 
   // 3. Motor carregado em memória
   push(
