@@ -173,27 +173,52 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
 
   const patchSchedule = (patch: Partial<PurgeSchedule>) => setSchedule(setPurgeSchedule(storeId, patch));
 
+  /** Normaliza os registros para o formato compartilhado de auditoria. */
+  const auditRows = () =>
+    (audit.data ?? []).map((r) => ({
+      function_name: "purge_fiscal_errors",
+      allowed: r.allowed,
+      user_id: r.userId,
+      store_id: storeId,
+      detail: r.detail,
+      created_at: r.createdAt,
+    }));
+
   /** Exporta o histórico de limpezas no mesmo formato dos demais CSVs (pt-BR). */
   const exportAudit = () => {
-    const rows = audit.data ?? [];
+    const rows = auditRows();
     if (rows.length === 0) {
       toast.info("Nenhuma limpeza registrada para exportar.");
       return;
     }
-    const csv = buildAuditCsv(
-      rows.map((r) => ({
-        function_name: "purge_fiscal_errors",
-        allowed: r.allowed,
-        user_id: r.userId,
-        store_id: storeId,
-        detail: r.detail,
-        created_at: r.createdAt,
-      })),
-      () => "Limpeza de registros fiscais",
-    );
+    const csv = buildAuditCsv(rows, () => "Limpeza de registros fiscais");
     downloadCsv(csvFilename("auditoria-limpeza-fiscal"), csv);
     toast.success(`${rows.length} registro(s) exportado(s).`);
   };
+
+  /**
+   * Excel formatado (cabeçalho com a loja, resumo e autofiltro) — é o formato
+   * que a contabilidade pede quando precisa arquivar a justificativa da limpeza.
+   */
+  const exportAuditXlsx = useMutation({
+    mutationFn: async () => {
+      const rows = auditRows();
+      if (rows.length === 0) throw new Error("Nenhuma limpeza registrada para exportar.");
+      const workbook = await buildAuditWorkbook(rows, {
+        store: {
+          name: store.data?.name ?? null,
+          cnpj: store.data?.cnpj ?? null,
+          logoUrl: store.data?.logoUrl ?? null,
+        },
+        filterLabel: "Limpeza de registros fiscais",
+        labelFor: () => "Limpeza de registros fiscais",
+      });
+      await downloadWorkbook(xlsxFilename("auditoria-limpeza-fiscal"), workbook);
+      return rows.length;
+    },
+    onSuccess: (n) => toast.success(`${n} registro(s) exportado(s) em Excel.`),
+    onError: (e: Error) => toast.info(e.message),
+  });
 
   const p = preview.data;
   const eligible = (() => {
