@@ -62,6 +62,52 @@ function ReposicaoPage() {
     },
   });
 
+  /**
+   * Fornecedores vinculados a cada produto. O preferencial (estrela na tela de
+   * Fornecedores) é quem aparece primeiro, porque é ele que o operador deve
+   * contatar para repor. Os demais ficam como alternativa.
+   */
+  const { data: supplierMap } = useQuery({
+    queryKey: ["reorder-suppliers", storeId],
+    enabled: Boolean(storeId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("product_suppliers")
+        .select(
+          "product_id,is_preferred,unit_cost,lead_time_days," +
+          "suppliers(id,name,phone,email,whatsapp:phone,payment_methods,payment_day,payment_term_days,pix_key,contact_name)",
+        )
+        .eq("store_id", storeId!);
+      if (error) throw new Error(error.message);
+
+      const map = new Map<string, SupplierLink[]>();
+      for (const row of (data ?? []) as unknown as RawLink[]) {
+        if (!row.suppliers) continue;
+        const list = map.get(row.product_id) ?? [];
+        list.push({
+          id: row.suppliers.id,
+          name: row.suppliers.name,
+          phone: row.suppliers.phone,
+          email: row.suppliers.email,
+          contactName: row.suppliers.contact_name,
+          paymentMethods: row.suppliers.payment_methods ?? [],
+          paymentDay: row.suppliers.payment_day,
+          paymentTermDays: row.suppliers.payment_term_days,
+          pixKey: row.suppliers.pix_key,
+          isPreferred: Boolean(row.is_preferred),
+          unitCost: Number(row.unit_cost ?? 0),
+          leadTimeDays: Number(row.lead_time_days ?? 0),
+        });
+        map.set(row.product_id, list);
+      }
+      for (const list of map.values()) {
+        list.sort((a, b) => Number(b.isPreferred) - Number(a.isPreferred) || a.name.localeCompare(b.name));
+      }
+      return map;
+    },
+  });
+
+
   const filtered = useMemo(() => {
     if (!rows) return [];
     return rows.filter((r) => {
