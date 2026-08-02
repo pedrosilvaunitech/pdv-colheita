@@ -417,7 +417,10 @@ export async function buildSalesReportXlsx(
   // dependem das outras, e mexer na ordem interna do ExcelJS é frágil).
   const summaryIndex = wb.worksheets.findIndex((s) => s.name === "Resumo");
   if (summaryIndex >= 0) {
-    wb.views = [{ activeTab: summaryIndex, x: 0, y: 0, width: 20000, height: 12000 }];
+    wb.views = [
+      { activeTab: summaryIndex, firstSheet: 0, visibility: "visible", x: 0, y: 0, width: 20000, height: 12000 },
+    ];
+
   }
 
 
