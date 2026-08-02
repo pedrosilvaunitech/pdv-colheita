@@ -557,6 +557,11 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
           </CardContent>
         </Card>
 
+        {/* Exportação por seção + geração automática de backup. */}
+        <BackupScheduleCard storeId={storeId ?? null} canManage={canManage} />
+
+
+
         <Card>
           <CardHeader>
             <CardTitle>Como subir o servidor</CardTitle>
