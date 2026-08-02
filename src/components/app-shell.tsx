@@ -39,6 +39,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useBranding } from "@/lib/branding";
 import { useFiscalRetryScheduler } from "@/lib/fiscal-scheduler";
+import { useFiscalErrorNotifications } from "@/hooks/use-fiscal-error-notifications";
+
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
