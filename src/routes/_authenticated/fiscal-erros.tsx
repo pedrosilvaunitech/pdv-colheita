@@ -15,6 +15,7 @@ import { FiscalQueuePanel } from "@/components/fiscal/fiscal-queue-panel";
 import { NumberingAuditCard } from "@/components/fiscal/numbering-audit-card";
 import { FiscalAuditLog } from "@/components/fiscal/fiscal-audit-log";
 import { FiscalPurgeCard } from "@/components/fiscal/fiscal-purge-card";
+import { FiscalRetentionCard } from "@/components/fiscal/fiscal-retention-card";
 
 
 export const Route = createFileRoute("/_authenticated/fiscal-erros")({
