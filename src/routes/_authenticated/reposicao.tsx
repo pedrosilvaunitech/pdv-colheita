@@ -433,6 +433,8 @@ function ReposicaoPage() {
           <KpiCard label="Sugestão total (unid.)" value={Math.ceil(counts.suggested_total)} tone="primary" />
         </div>
 
+        <ReplenishmentAiCard forecasts={forecasts} storeName={store?.name ?? null} />
+
         <div className="border border-border rounded-md bg-card overflow-hidden">
           <Table>
             <TableHeader>
@@ -444,24 +446,28 @@ function ReposicaoPage() {
                 <TableHead className="w-24 text-right">Mín.</TableHead>
                 <TableHead className="w-24 text-right">Vendas 30d</TableHead>
                 <TableHead className="w-24 text-right">Média/dia</TableHead>
-                <TableHead className="w-24 text-right">Cobertura</TableHead>
+                <TableHead className="w-24 text-right">Dura até</TableHead>
+                <TableHead className="w-32">Pedir até</TableHead>
                 <TableHead className="w-28 text-right">Sugestão</TableHead>
                 <TableHead className="w-64">Fornecedor para contato</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
-                <TableRow><TableCell colSpan={10} className="text-center py-10 text-muted-foreground text-sm">Calculando previsão…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="text-center py-10 text-muted-foreground text-sm">Calculando previsão…</TableCell></TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={10} className="p-0">
+                <TableRow><TableCell colSpan={11} className="p-0">
                   <EmptyState title="Nada a repor" description="Todos os produtos ativos estão dentro do estoque desejado." />
                 </TableCell></TableRow>
               )}
               {filtered.map((r) => {
                 const meta = STATUS_META[r.status ?? "ok"] ?? STATUS_META.ok;
                 const Icon = meta.icon;
-                const suggest = Math.max(0, Math.ceil(Number(r.suggested_qty ?? 0)));
+                const forecast = forecastById.get(r.product_id);
+                const suggest = forecast
+                  ? forecast.recommendedQty
+                  : Math.max(0, Math.ceil(Number(r.suggested_qty ?? 0)));
                 return (
                   <TableRow key={r.product_id}>
                     <TableCell>
@@ -474,8 +480,28 @@ function ReposicaoPage() {
                     <TableCell className="text-right font-mono">{Number(r.current_stock ?? 0).toFixed(3)}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">{Number(r.min_stock ?? 0).toFixed(0)}</TableCell>
                     <TableCell className="text-right font-mono">{Number(r.sold_30d ?? 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-mono">{Number(r.avg_daily_sales ?? 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-mono">{r.days_of_stock == null ? "—" : `${r.days_of_stock}d`}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {(forecast?.avgDailyWeighted ?? Number(r.avg_daily_sales ?? 0)).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {forecast?.daysUntilStockout == null
+                        ? "—"
+                        : `${Math.floor(forecast.daysUntilStockout)}d · ${formatDate(forecast.stockoutDate)}`}
+                    </TableCell>
+                    <TableCell>
+                      {forecast && forecast.daysToOrder != null ? (
+                        <div className="flex flex-col gap-1">
+                          <Badge variant="outline" className={URGENCY_META[forecast.urgency].className}>
+                            {URGENCY_META[forecast.urgency].label}
+                          </Badge>
+                          <span className="text-xs font-mono text-muted-foreground">
+                            {formatDate(forecast.orderByDate)} · {formatDaysToOrder(forecast)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">sem histórico</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-mono font-semibold">{suggest > 0 ? `${suggest} ${r.unit}` : "—"}</TableCell>
                     <TableCell>
                       <SupplierContactCell links={supplierMap?.get(r.product_id) ?? []} />
@@ -483,6 +509,7 @@ function ReposicaoPage() {
                   </TableRow>
                 );
               })}
+
             </TableBody>
           </Table>
         </div>
