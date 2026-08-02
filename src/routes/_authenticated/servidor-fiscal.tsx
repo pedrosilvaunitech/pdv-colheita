@@ -33,6 +33,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { BackupScheduleCard } from "@/components/settings/backup-schedule-card";
+
 import {
   Loader2,
   ServerCog,
