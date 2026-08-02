@@ -176,6 +176,91 @@ export function ShiftReport({ storeId }: ShiftReportProps) {
   });
 
   const d = detail.data;
+  const canExport = !!selected && !!d;
+
+  useEffect(() => {
+    return () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    };
+  }, []);
+
+  function releasePreview() {
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    previewRef.current = null;
+    setPreviewUrl(null);
+  }
+
+  /**
+   * Monta o PDF do turno. Trocamos o `window.print()` por um documento próprio
+   * porque o Ctrl+P levava a interface inteira (menu, tema escuro, tabelas com
+   * scroll cortado) para o papel.
+   */
+  function buildPdf(): Blob | null {
+    if (!selected || !d) return null;
+    const register: ShiftPdfRegister = {
+      terminal: selected.terminal,
+      status: selected.status,
+      openedAt: selected.opened_at,
+      closedAt: selected.closed_at,
+      openingAmount: Number(selected.opening_amount),
+      closingAmount: selected.closing_amount == null ? null : Number(selected.closing_amount),
+      expectedAmount: selected.expected_amount == null ? null : Number(selected.expected_amount),
+      difference: selected.difference == null ? null : Number(selected.difference),
+    };
+    return buildShiftReportPdf({
+      register,
+      detail: d,
+      reasonLabel: DRAWER_REASON_LABEL,
+      store: {
+        name: store.data?.name ?? null,
+        fantasyName: store.data?.fantasy_name ?? null,
+        cnpj: store.data?.cnpj ?? null,
+        city: store.data?.city ?? null,
+        state: store.data?.state ?? null,
+      },
+    });
+  }
+
+  function handlePreview() {
+    try {
+      const blob = buildPdf();
+      if (!blob) return;
+      releasePreview();
+      const url = URL.createObjectURL(blob);
+      previewRef.current = url;
+      setPreviewUrl(url);
+      setPreviewOpen(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível gerar o relatório do turno.");
+    }
+  }
+
+  function handleDownload() {
+    try {
+      const blob = buildPdf();
+      if (!blob || !selected) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = shiftReportFileName({
+        terminal: selected.terminal,
+        status: selected.status,
+        openedAt: selected.opened_at,
+        closedAt: selected.closed_at,
+        openingAmount: Number(selected.opening_amount),
+        closingAmount: null,
+        expectedAmount: null,
+        difference: null,
+      });
+      a.click();
+      // Revogar imediatamente cancelaria o download em alguns navegadores.
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível baixar o relatório do turno.");
+    }
+  }
+
+
 
   return (
     <section className="border border-border rounded-md bg-card p-4 space-y-4">
