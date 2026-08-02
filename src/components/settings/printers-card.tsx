@@ -287,7 +287,9 @@ export function PrintersCard({ storeId }: Props) {
             papel saiu em outra impressora, o código não vai bater — troque a impressora selecionada acima.
           </p>
         )}
+        <PrinterCompatPanel storeId={storeId} />
       </CardContent>
     </Card>
+
   );
 }
