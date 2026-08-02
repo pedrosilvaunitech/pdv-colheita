@@ -55,6 +55,27 @@ const DRAWER_REASON_LABEL: Record<string, string> = {
  */
 export function ShiftReport({ storeId }: ShiftReportProps) {
   const [registerId, setRegisterId] = useState<string>("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // O blob URL vive até ser revogado; guardamos para limpar e não vazar memória.
+  const previewRef = useRef<string | null>(null);
+
+  // Dados do emitente para o cabeçalho do documento impresso.
+  const store = useQuery({
+    queryKey: ["shift-report-store", storeId],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("stores")
+        .select("name,fantasy_name,cnpj,city,state")
+        .eq("id", storeId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+
 
   const registers = useQuery({
     queryKey: ["shift-registers", storeId],
