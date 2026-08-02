@@ -121,15 +121,21 @@ app.get("/", (_req, res) => {
 });
 
 
+// /health é público de propósito: o PDV precisa distinguir "não achei o
+// servidor" de "achei mas o token está errado". Não devolve nada sensível.
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "1.1.0",
+    service: "bastion-fiscal",
+    version: VERSION,
     engine_ready: nfce.isAvailable(),
+    environment: process.env.FISCAL_ENVIRONMENT || "homologacao",
+    token_origin: TOKEN_ORIGIN,
     node: process.version,
     uptime_s: Math.floor(process.uptime()),
   });
 });
+
 
 /**
  * Rotina de validação do servidor fiscal central.
