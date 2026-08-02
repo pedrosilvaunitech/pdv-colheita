@@ -313,6 +313,19 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
               <Download className="mr-1.5 h-4 w-4" /> Auditoria CSV
               {audit.data?.length ? <Badge variant="outline" className="ml-1.5 font-mono">{audit.data.length}</Badge> : null}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportAuditXlsx.mutate()}
+              disabled={audit.isLoading || exportAuditXlsx.isPending}
+            >
+              {exportAuditXlsx.isPending ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+              )}
+              Auditoria Excel
+            </Button>
             <Button variant="outline" size="sm" disabled={!canManage} onClick={() => setSelectOpen(true)}>
               <ListChecks className="mr-1.5 h-4 w-4" /> Selecionar itens
             </Button>
