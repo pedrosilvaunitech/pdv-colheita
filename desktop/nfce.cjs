@@ -754,6 +754,10 @@ module.exports = {
   getInstallState,
   isAvailable: () => !!NodeDfe,
   engineError: () => engineError,
+  ensureEngineDir,
+  findNpm,
+  ENGINE_DIR,
+  PACKAGED,
   CONFIG_FILE,
 };
 
