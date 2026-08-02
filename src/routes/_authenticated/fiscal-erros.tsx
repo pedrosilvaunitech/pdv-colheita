@@ -183,6 +183,7 @@ function FiscalErrorsPage() {
       <FiscalQueuePanel storeId={storeId} />
       <NumberingAuditCard storeId={storeId} />
       <FiscalPurgeCard storeId={storeId} />
+      <FiscalRetentionCard storeId={storeId} />
       <FiscalAuditLog storeId={storeId} />
 
 
