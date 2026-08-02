@@ -114,6 +114,24 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
     queryFn: () => listPurgeAudit(storeId),
   });
 
+  /** Identidade da loja usada no cabeçalho da planilha (nome, CNPJ e logo). */
+  const store = useQuery({
+    queryKey: ["purge-audit-store", storeId],
+    enabled: Boolean(storeId),
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const [{ data: s }, { data: r }] = await Promise.all([
+        supabase.from("stores").select("name, fantasy_name, cnpj").eq("id", storeId).maybeSingle(),
+        supabase.from("receipt_settings").select("logo_url").eq("store_id", storeId).maybeSingle(),
+      ]);
+      return {
+        name: s?.fantasy_name || s?.name || null,
+        cnpj: s?.cnpj ?? null,
+        logoUrl: r?.logo_url ?? null,
+      };
+    },
+  });
+
   // Agendamento: roda só para quem tem permissão, para não gerar erro em loop
   // no caixa comum, que veria a RLS recusar a cada verificação.
   useEffect(() => {
