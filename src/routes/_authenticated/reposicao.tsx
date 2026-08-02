@@ -270,6 +270,9 @@ function ReposicaoPage() {
                     <TableCell className="text-right font-mono">{Number(r.avg_daily_sales ?? 0).toFixed(2)}</TableCell>
                     <TableCell className="text-right font-mono">{r.days_of_stock == null ? "—" : `${r.days_of_stock}d`}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{suggest > 0 ? `${suggest} ${r.unit}` : "—"}</TableCell>
+                    <TableCell>
+                      <SupplierContactCell links={supplierMap?.get(r.product_id) ?? []} />
+                    </TableCell>
                   </TableRow>
                 );
               })}
