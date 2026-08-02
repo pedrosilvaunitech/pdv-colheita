@@ -17,6 +17,14 @@ import {
   purchaseOrderFileName,
   type PurchaseOrderBlock,
 } from "@/lib/purchase-order-pdf";
+import {
+  forecastAll,
+  formatDate,
+  formatDaysToOrder,
+  URGENCY_META,
+  type ForecastResult,
+} from "@/lib/replenishment-forecast";
+import { ReplenishmentAiCard } from "@/components/reposicao/replenishment-ai-card";
 
 export const Route = createFileRoute("/_authenticated/reposicao")({
   component: ReposicaoPage,
