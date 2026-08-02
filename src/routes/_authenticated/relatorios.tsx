@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ShiftReport } from "@/components/reports/shift-report";
+import { SalesReportPanel } from "@/components/reports/sales-report-panel";
+
 
 export const Route = createFileRoute("/_authenticated/relatorios")({ component: RelatoriosPage });
 
@@ -124,7 +126,11 @@ function RelatoriosPage() {
           <Kpi label="Ticket médio" value={brl(data.avgTicket)} icon={BarChart3} />
         </section>
 
+        {/* Relatório de vendas por dia/semana/mês/caixa com PDF e Excel. */}
+        {storeId && <SalesReportPanel storeId={storeId} store={store} />}
+
         {storeId && <ShiftReport storeId={storeId} />}
+
 
 
         <section className="grid gap-4 xl:grid-cols-3">
