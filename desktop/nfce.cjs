@@ -26,35 +26,66 @@ const crypto = require("crypto");
 const os = require("os");
 
 // ────────────────────────────────────────────────────────────────────
-// Dependências opcionais
+// Motor fiscal: pasta EXTERNA e gravável
+//
+// Por que isto existe: quando o agente é compilado (electron-packager --asar),
+// `__dirname` aponta para dentro de `resources/app.asar`, que é um arquivo
+// somente-leitura. Nessa condição:
+//   1) `require("node-dfe")` falha se a dependência não foi empacotada;
+//   2) `npm install` na pasta do agente falha (não há onde escrever e o .asar
+//      não é um diretório real).
+// Resultado prático no caixa: "motor fiscal não funciona" mesmo com o EXE
+// instalado. A solução é manter o motor fora do pacote, em uma pasta gravável
+// do usuário, e resolver os módulos a partir dela.
 // ────────────────────────────────────────────────────────────────────
+const CONFIG_DIR = process.env.BASTION_CONFIG_DIR || path.join(os.homedir(), ".bastion-pos");
+const ENGINE_DIR = process.env.BASTION_ENGINE_DIR || path.join(CONFIG_DIR, "fiscal-engine");
+
+/** Agente rodando empacotado dentro de app.asar (somente leitura). */
+const PACKAGED = /[\\/]app\.asar([\\/]|$)/.test(__dirname);
+
+/** Ordem de resolução: pasta externa primeiro, pasta do agente como fallback. */
+function resolvePaths() {
+  return [path.join(ENGINE_DIR, "node_modules"), ENGINE_DIR, __dirname];
+}
+
+/** require() tolerante: procura na pasta externa e depois no pacote. */
+function loadOptional(name) {
+  try {
+    const resolved = require.resolve(name, { paths: resolvePaths() });
+    return { mod: require(resolved), error: null };
+  } catch (e1) {
+    try {
+      return { mod: require(name), error: null };
+    } catch (e2) {
+      const err = e1 && e1.code === "MODULE_NOT_FOUND" ? e2 : e1;
+      return { mod: null, error: err };
+    }
+  }
+}
+
 let NodeDfe = null;
 /** Motivo exato da indisponibilidade — exposto no /nfce/config para diagnóstico. */
 let engineError = null;
 /** Candidatos de motor fiscal, em ordem de preferência. */
 const ENGINE_CANDIDATES = ["node-dfe"];
 for (const mod of ENGINE_CANDIDATES) {
-  try {
-    NodeDfe = require(mod);
+  const r = loadOptional(mod);
+  if (r.mod) {
+    NodeDfe = r.mod;
     engineError = null;
     break;
-  } catch (e) {
-    // MODULE_NOT_FOUND => não instalado. Outro erro => instalado porém quebrado.
-    engineError =
-      e && e.code === "MODULE_NOT_FOUND"
-        ? `Dependência "${mod}" não instalada. Rode \`npm run install:fiscal\` na pasta do agente e reinicie.`
-        : `Falha ao carregar "${mod}": ${e && e.message ? e.message : String(e)}`;
   }
+  engineError =
+    r.error && r.error.code === "MODULE_NOT_FOUND"
+      ? `Motor "${mod}" ainda não instalado nesta máquina. Clique em "Instalar motor fiscal" — ele será baixado para ${ENGINE_DIR}.`
+      : `Falha ao carregar "${mod}": ${r.error && r.error.message ? r.error.message : String(r.error)}`;
 }
 if (!NodeDfe) console.warn("[nfce] motor indisponível —", engineError);
 
-let forge = null;
-try { forge = require("node-forge"); }
-catch { /* opcional */ }
+let forge = loadOptional("node-forge").mod;
+let qrcode = loadOptional("qrcode").mod;
 
-let qrcode = null;
-try { qrcode = require("qrcode"); }
-catch { /* opcional */ }
 
 // ────────────────────────────────────────────────────────────────────
 // Configuração local (config.json ao lado do agent.cjs)
