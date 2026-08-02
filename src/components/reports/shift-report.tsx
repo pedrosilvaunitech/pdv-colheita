@@ -1,16 +1,30 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Clock, Archive, ArrowDownCircle, ArrowUpCircle, Printer } from "lucide-react";
+import { Clock, Archive, ArrowDownCircle, ArrowUpCircle, Printer, Download, FileText } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  buildShiftReportPdf,
+  shiftReportFileName,
+  type ShiftPdfRegister,
+} from "@/lib/shift-report-pdf";
 
 export interface ShiftReportProps {
   storeId: string;
 }
+
 
 interface Register {
   id: string;
@@ -41,6 +55,27 @@ const DRAWER_REASON_LABEL: Record<string, string> = {
  */
 export function ShiftReport({ storeId }: ShiftReportProps) {
   const [registerId, setRegisterId] = useState<string>("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // O blob URL vive até ser revogado; guardamos para limpar e não vazar memória.
+  const previewRef = useRef<string | null>(null);
+
+  // Dados do emitente para o cabeçalho do documento impresso.
+  const store = useQuery({
+    queryKey: ["shift-report-store", storeId],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("stores")
+        .select("name,fantasy_name,cnpj,city,state")
+        .eq("id", storeId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+
 
   const registers = useQuery({
     queryKey: ["shift-registers", storeId],
@@ -141,6 +176,91 @@ export function ShiftReport({ storeId }: ShiftReportProps) {
   });
 
   const d = detail.data;
+  const canExport = !!selected && !!d;
+
+  useEffect(() => {
+    return () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    };
+  }, []);
+
+  function releasePreview() {
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    previewRef.current = null;
+    setPreviewUrl(null);
+  }
+
+  /**
+   * Monta o PDF do turno. Trocamos o `window.print()` por um documento próprio
+   * porque o Ctrl+P levava a interface inteira (menu, tema escuro, tabelas com
+   * scroll cortado) para o papel.
+   */
+  function buildPdf(): Blob | null {
+    if (!selected || !d) return null;
+    const register: ShiftPdfRegister = {
+      terminal: selected.terminal,
+      status: selected.status,
+      openedAt: selected.opened_at,
+      closedAt: selected.closed_at,
+      openingAmount: Number(selected.opening_amount),
+      closingAmount: selected.closing_amount == null ? null : Number(selected.closing_amount),
+      expectedAmount: selected.expected_amount == null ? null : Number(selected.expected_amount),
+      difference: selected.difference == null ? null : Number(selected.difference),
+    };
+    return buildShiftReportPdf({
+      register,
+      detail: d,
+      reasonLabel: DRAWER_REASON_LABEL,
+      store: {
+        name: store.data?.name ?? null,
+        fantasyName: store.data?.fantasy_name ?? null,
+        cnpj: store.data?.cnpj ?? null,
+        city: store.data?.city ?? null,
+        state: store.data?.state ?? null,
+      },
+    });
+  }
+
+  function handlePreview() {
+    try {
+      const blob = buildPdf();
+      if (!blob) return;
+      releasePreview();
+      const url = URL.createObjectURL(blob);
+      previewRef.current = url;
+      setPreviewUrl(url);
+      setPreviewOpen(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível gerar o relatório do turno.");
+    }
+  }
+
+  function handleDownload() {
+    try {
+      const blob = buildPdf();
+      if (!blob || !selected) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = shiftReportFileName({
+        terminal: selected.terminal,
+        status: selected.status,
+        openedAt: selected.opened_at,
+        closedAt: selected.closed_at,
+        openingAmount: Number(selected.opening_amount),
+        closingAmount: null,
+        expectedAmount: null,
+        difference: null,
+      });
+      a.click();
+      // Revogar imediatamente cancelaria o download em alguns navegadores.
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível baixar o relatório do turno.");
+    }
+  }
+
+
 
   return (
     <section className="border border-border rounded-md bg-card p-4 space-y-4">
@@ -167,9 +287,13 @@ export function ShiftReport({ storeId }: ShiftReportProps) {
               </SelectContent>
             </Select>
           </div>
-          <Button size="sm" variant="outline" className="gap-2" onClick={() => window.print()} disabled={!selected}>
-            <Printer className="size-4" /> Imprimir
+          <Button size="sm" variant="outline" className="gap-2" onClick={handlePreview} disabled={!canExport}>
+            <Printer className="size-4" /> Imprimir turno
           </Button>
+          <Button size="sm" variant="ghost" className="gap-2" onClick={handleDownload} disabled={!canExport}>
+            <Download className="size-4" /> PDF
+          </Button>
+
         </div>
       </div>
 
@@ -290,7 +414,48 @@ export function ShiftReport({ storeId }: ShiftReportProps) {
           </div>
         </>
       )}
+
+      <Dialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          setPreviewOpen(open);
+          if (!open) releasePreview();
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="size-4" /> Relatório do turno
+            </DialogTitle>
+            <DialogDescription>
+              {selected
+                ? `${selected.terminal} · ${fmtDateTime(selected.opened_at)} até ${selected.closed_at ? fmtDateTime(selected.closed_at) : "agora (turno aberto)"}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewUrl ? (
+            <iframe
+              title="Pré-visualização do relatório do turno"
+              src={previewUrl}
+              className="h-[70vh] w-full rounded-md border border-border bg-muted"
+            />
+          ) : (
+            <p className="p-6 text-sm text-muted-foreground">Gerando a pré-visualização…</p>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              Use o botão de impressão do visualizador para enviar à impressora A4.
+            </p>
+            <Button variant="secondary" className="gap-2" onClick={handleDownload} disabled={!canExport}>
+              <Download className="size-4" /> Baixar PDF
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
+
   );
 }
 
