@@ -90,6 +90,21 @@ function ReposicaoPage() {
   const { store, storeId } = useCurrentStore();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  /** Fornecedor selecionado para o pedido de compra ("all" = todos). */
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
+  /** Blob URL do PDF em pré-visualização (nada sai do dispositivo). */
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  const closePdf = () => {
+    setPdfUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  };
+
+  // Libera o blob ao desmontar para não vazar memória entre navegações.
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
+
 
   const { data: rows, isLoading } = useQuery({
     queryKey: ["reorder", storeId],
