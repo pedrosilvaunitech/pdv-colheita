@@ -100,16 +100,17 @@ export async function purgeFiscalErrors(
   storeId: string,
   options: PurgeFiscalOptions = {},
 ): Promise<PurgeFiscalResult> {
-  const env = options.environment && options.environment !== "todos" ? options.environment : null;
+  const env = options.environment && options.environment !== "todos" ? options.environment : undefined;
 
   const { data, error } = await supabase.rpc("purge_fiscal_errors", {
     _store_id: storeId,
-    _environment: env,
+    ...(env ? { _environment: env } : {}),
     _include_queue: options.includeQueue ?? true,
     _include_invoices: options.includeInvoices ?? true,
-    _invoice_ids: options.invoiceIds ?? null,
-    _queue_ids: options.queueIds ?? null,
+    ...(options.invoiceIds ? { _invoice_ids: options.invoiceIds } : {}),
+    ...(options.queueIds ? { _queue_ids: options.queueIds } : {}),
   });
+
 
   if (error) throw new Error(error.message);
 
