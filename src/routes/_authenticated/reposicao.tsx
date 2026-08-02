@@ -111,7 +111,7 @@ function ReposicaoPage() {
         .from("product_suppliers")
         .select(
           "product_id,is_preferred,unit_cost,lead_time_days," +
-          "suppliers(id,name,phone,email,whatsapp:phone,payment_methods,payment_day,payment_term_days,pix_key,contact_name)",
+          "suppliers(id,name,phone,email,payment_methods,payment_day,payment_term_days,pix_key,contact_name)",
         )
         .eq("store_id", storeId!);
       if (error) throw new Error(error.message);
@@ -168,7 +168,7 @@ function ReposicaoPage() {
   }, [rows]);
 
   const exportCsv = () => {
-    const header = ["Produto", "EAN", "SKU", "Estoque", "Vendas 30d", "Média/dia", "Dias cobertura", "Status", "Sugestão compra"];
+    const header = ["Produto", "EAN", "SKU", "Estoque", "Vendas 30d", "Média/dia", "Dias cobertura", "Status", "Sugestão compra", "Fornecedor", "Contato", "Pagamento"];
     const lines = filtered.map((r) => [
       r.name,
       r.barcode ?? "",
@@ -179,6 +179,9 @@ function ReposicaoPage() {
       r.days_of_stock == null ? "" : String(r.days_of_stock),
       r.status ?? "",
       Math.max(0, Math.ceil(Number(r.suggested_qty ?? 0))),
+      supplierMap?.get(r.product_id)?.[0]?.name ?? "",
+      [supplierMap?.get(r.product_id)?.[0]?.phone, supplierMap?.get(r.product_id)?.[0]?.email].filter(Boolean).join(" / "),
+      describePayment(supplierMap?.get(r.product_id)?.[0]),
     ].join(";"));
     const blob = new Blob([header.join(";") + "\n" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -236,14 +239,15 @@ function ReposicaoPage() {
                 <TableHead className="w-24 text-right">Média/dia</TableHead>
                 <TableHead className="w-24 text-right">Cobertura</TableHead>
                 <TableHead className="w-28 text-right">Sugestão</TableHead>
+                <TableHead className="w-64">Fornecedor para contato</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
-                <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground text-sm">Calculando previsão…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-10 text-muted-foreground text-sm">Calculando previsão…</TableCell></TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={9} className="p-0">
+                <TableRow><TableCell colSpan={10} className="p-0">
                   <EmptyState title="Nada a repor" description="Todos os produtos ativos estão dentro do estoque desejado." />
                 </TableCell></TableRow>
               )}
