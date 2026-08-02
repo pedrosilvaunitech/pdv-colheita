@@ -126,7 +126,11 @@ function RelatoriosPage() {
           <Kpi label="Ticket médio" value={brl(data.avgTicket)} icon={BarChart3} />
         </section>
 
+        {/* Relatório de vendas por dia/semana/mês/caixa com PDF e Excel. */}
+        {storeId && <SalesReportPanel storeId={storeId} store={store} />}
+
         {storeId && <ShiftReport storeId={storeId} />}
+
 
 
         <section className="grid gap-4 xl:grid-cols-3">
