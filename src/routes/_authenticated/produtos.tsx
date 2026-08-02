@@ -13,7 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Barcode, Pencil, Trash2, Percent, Power, PowerOff, TagIcon, Camera } from "lucide-react";
+import { Plus, Search, Barcode, Pencil, Trash2, Percent, Power, PowerOff, TagIcon, Camera, Truck } from "lucide-react";
+import { ProductSuppliersDialog } from "@/components/suppliers/product-suppliers-dialog";
 import { BarcodeScannerDialog, isBarcodeScannerSupported } from "@/components/barcode-scanner-dialog";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -57,6 +58,8 @@ function ProdutosPage() {
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
+  /** Produto cujo painel de fornecedores está aberto (vínculo N:N). */
+  const [suppliersFor, setSuppliersFor] = useState<{ id: string; name: string } | null>(null);
 
   const { data: products = [] } = useQuery({
     queryKey: ["products", storeId, search],
@@ -226,6 +229,7 @@ function ProdutosPage() {
                     <TableCell>{p.active ? <Badge variant="outline" className="border-primary/40 text-primary">ativo</Badge> : <Badge variant="secondary">inativo</Badge>}</TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex gap-1">
+                        <Button size="icon" variant="ghost" className="size-8" onClick={() => setSuppliersFor({ id: p.id, name: p.name })} aria-label="Fornecedores" title="Fornecedores deste produto"><Truck className="size-3.5" /></Button>
                         <Button size="icon" variant="ghost" className="size-8" onClick={() => setEditing(p)} aria-label="Editar"><Pencil className="size-3.5" /></Button>
                         <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive" onClick={() => setConfirmDelete({ ids: [p.id], label: p.name })} aria-label="Excluir"><Trash2 className="size-3.5" /></Button>
                       </div>
@@ -237,6 +241,14 @@ function ProdutosPage() {
           </Table>
         </div>
       </div>
+
+      {storeId && (
+        <ProductSuppliersDialog
+          storeId={storeId}
+          product={suppliersFor}
+          onOpenChange={(o) => !o && setSuppliersFor(null)}
+        />
+      )}
 
       {/* Editar */}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
