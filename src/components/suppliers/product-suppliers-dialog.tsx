@@ -44,6 +44,16 @@ const LINK_SELECT =
   "id,product_id,supplier_id,supplier_sku,unit_cost,min_order_qty,lead_time_days,is_preferred," +
   "products(name,barcode,unit),suppliers(name,phone,email)";
 
+/** Campos editáveis de um vínculo (usado nas edições inline da tabela). */
+type LinkPatch = Partial<{
+  supplier_sku: string | null;
+  unit_cost: number;
+  min_order_qty: number;
+  lead_time_days: number;
+  is_preferred: boolean;
+  notes: string | null;
+}>;
+
 /** Invalidação compartilhada: reposição e listagens dependem desses vínculos. */
 function useLinkMutations(storeId: string) {
   const qc = useQueryClient();
