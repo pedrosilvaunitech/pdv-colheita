@@ -37,6 +37,8 @@ import { appendPrintHistory } from "@/lib/print-history";
 import { syncPrintHistoryToCloud } from "@/lib/print-cloud-sync";
 import { getTerminalName } from "@/lib/terminal";
 import { sendRawEscPos } from "@/lib/escpos";
+import { PrinterCompatPanel } from "@/components/settings/printer-compat-panel";
+
 
 interface Props {
   storeId: string | null;
