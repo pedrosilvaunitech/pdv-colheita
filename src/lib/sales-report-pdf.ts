@@ -120,12 +120,16 @@ export function buildSalesReportPdf(report: SalesReport, store: PdfStoreInfo = {
     doc.setFontSize(11);
     doc.setTextColor(...COLOR.ink);
     doc.text(text, MARGIN, y);
+    // A largura precisa ser medida com a fonte do título ainda ativa; medir
+    // depois de trocar para 8pt subestimava o espaço e sobrepunha os textos.
+    const titleWidth = doc.getTextWidth(text);
     if (hint) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(...COLOR.muted);
-      doc.text(hint, MARGIN + doc.getTextWidth(text) + 8, y);
+      doc.text(hint, MARGIN + titleWidth + 10, y);
     }
+
     y += 6;
     doc.setDrawColor(...COLOR.accent);
     doc.setLineWidth(1.2);
