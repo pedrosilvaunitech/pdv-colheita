@@ -29,7 +29,7 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.8.1";
+const VERSION = "1.9.0";
 
 // Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
 let nfce = null;
@@ -581,7 +581,7 @@ function startAgent(options = {}) {
   // Isolamento multi-caixa: quando o agente está vinculado a um terminal,
   // comandos de hardware vindos de OUTRO terminal são recusados. Assim o
   // Caixa 2 nunca imprime na impressora ou abre a gaveta do Caixa 1.
-  const GUARDED = [/^\/print/, /^\/open-drawer/, /^\/scale\//, /^\/tef\//, /^\/nfce\//];
+  const GUARDED = [/^\/print/, /^\/open-drawer/, /^\/scale\//, /^\/tef\//, /^\/nfce\//, /^\/fiscal\/proxy/];
   app.use((req, res, next) => {
     if (req.method === "OPTIONS") return next();
     if (!GUARDED.some((re) => re.test(req.path))) return next();
