@@ -413,14 +413,13 @@ export async function buildSalesReportXlsx(
     row += 1;
   }
 
-  // Resumo é a primeira aba que o usuário vê ao abrir o arquivo.
+  // O arquivo abre já no Resumo (não reordenamos as abas: as fórmulas do Resumo
+  // dependem das outras, e mexer na ordem interna do ExcelJS é frágil).
   const summaryIndex = wb.worksheets.findIndex((s) => s.name === "Resumo");
-  if (summaryIndex > 0) {
-    wb.worksheets.splice(0, 0, ...wb.worksheets.splice(summaryIndex, 1));
-    wb.worksheets.forEach((s, i) => {
-      s.orderNo = i + 1;
-    });
+  if (summaryIndex >= 0) {
+    wb.views = [{ activeTab: summaryIndex, x: 0, y: 0, width: 20000, height: 12000 }];
   }
+
 
   const buffer = await wb.xlsx.writeBuffer();
   return new Blob([buffer], {
