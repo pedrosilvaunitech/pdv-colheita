@@ -644,33 +644,74 @@ function getInstallState() {
 }
 
 /**
- * Executa a instalação das dependências fiscais na pasta do agente.
+ * Executa a instalação das dependências fiscais na PASTA EXTERNA gravável.
  * Roda em background: o cliente faz polling em /nfce/engine/install.
+ *
+ * Nunca instala dentro de __dirname quando o agente está empacotado — o .asar
+ * é somente leitura e o npm falharia com EACCES/ENOTDIR.
  */
 function startEngineInstall() {
   if (installState.running) return { ok: true, alreadyRunning: true, state: getInstallState() };
 
   const { spawn } = require("child_process");
-  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-  const args = ["install", "node-dfe@^0.0.25", "node-forge@^1.3.1", "qrcode@^1.5.4", "--no-audit", "--no-fund"];
 
   installState = { running: true, startedAt: new Date().toISOString(), finishedAt: null, ok: null, log: [], error: null };
   const line = (s) => {
     installState.log.push(s);
     console.log("[nfce:install]", s);
   };
-  line(`$ ${npm} ${args.join(" ")} (cwd=${__dirname})`);
+
+  const fail = (msg) => {
+    installState.running = false;
+    installState.ok = false;
+    installState.error = msg;
+    installState.finishedAt = new Date().toISOString();
+    line(`erro: ${msg}`);
+    return { ok: false, state: getInstallState() };
+  };
+
+  // 1. Garante uma pasta gravável fora do pacote.
+  const dir = ensureEngineDir();
+  if (!dir.ok) {
+    return fail(
+      `Não foi possível preparar a pasta do motor (${dir.dir}): ${dir.error}. ` +
+        "Rode o agente com o usuário do caixa ou defina BASTION_ENGINE_DIR.",
+    );
+  }
+  line(`pasta do motor: ${dir.dir}${PACKAGED ? " (agente empacotado — instalação externa)" : ""}`);
+
+  // 2. Localiza o npm, inclusive fora do PATH do processo empacotado.
+  const npmInfo = findNpm();
+  if (!npmInfo.ok) return fail(npmInfo.error);
+
+  const npm = npmInfo.npm;
+  const args = [
+    "install",
+    "node-dfe@^0.0.25",
+    "node-forge@^1.3.1",
+    "qrcode@^1.5.4",
+    "--no-audit",
+    "--no-fund",
+    "--omit=dev",
+    "--prefix",
+    ENGINE_DIR,
+  ];
+
+  line(`$ ${npm} ${args.join(" ")} (cwd=${ENGINE_DIR})`);
 
   let child;
   try {
-    child = spawn(npm, args, { cwd: __dirname, shell: process.platform === "win32", windowsHide: true });
+    child = spawn(npm, args, {
+      cwd: ENGINE_DIR,
+      shell: process.platform === "win32",
+      windowsHide: true,
+      // Electron define ELECTRON_RUN_AS_NODE/NODE_OPTIONS que confundem o npm.
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, NODE_OPTIONS: undefined },
+    });
   } catch (e) {
-    installState.running = false;
-    installState.ok = false;
-    installState.error = `Não foi possível executar o npm: ${e.message}. Instale o Node.js no caixa.`;
-    installState.finishedAt = new Date().toISOString();
-    return { ok: false, state: getInstallState() };
+    return fail(`Não foi possível executar o npm (${npm}): ${e.message}. Instale o Node.js LTS no caixa.`);
   }
+
 
   child.stdout.on("data", (b) => String(b).split(/\r?\n/).filter(Boolean).forEach(line));
   child.stderr.on("data", (b) => String(b).split(/\r?\n/).filter(Boolean).forEach(line));
