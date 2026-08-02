@@ -29,7 +29,7 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.9.0";
+const VERSION = "1.9.1";
 
 // Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
 let nfce = null;
@@ -920,11 +920,21 @@ function startAgent(options = {}) {
   });
 
   // Validação profunda do motor fiscal (node-dfe, certificado, config, UF).
+  // Expõe também a pasta externa do motor, para o PDV mostrar o caminho exato
+  // ao operador quando a instalação falhar por permissão.
   app.get("/nfce/engine", (_req, res) => {
     if (!nfce) return res.status(501).json({ ok: false, error: "Módulo NFC-e não carregado no agente." });
-    try { res.json({ ok: true, ...nfce.validateEngine() }); }
-    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+    try {
+      res.json({
+        ok: true,
+        agentVersion: VERSION,
+        engineDir: nfce.ENGINE_DIR || null,
+        packaged: !!nfce.PACKAGED,
+        ...nfce.validateEngine(),
+      });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
+
 
   // Instalação assistida do node-dfe (equivale a `npm run install:fiscal`).
   app.post("/nfce/engine/install", (_req, res) => {

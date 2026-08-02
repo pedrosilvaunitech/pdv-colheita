@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Download, Eraser, ListChecks, Loader2, ShieldAlert, Trash2 } from "lucide-react";
+import { CalendarClock, Download, Eraser, FileSpreadsheet, ListChecks, Loader2, ShieldAlert, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,8 @@ import {
   type PurgeSchedule,
 } from "@/lib/fiscal-purge-schedule";
 import { buildAuditCsv, csvFilename, downloadCsv } from "@/lib/audit-csv";
+import { buildAuditWorkbook, downloadWorkbook, xlsxFilename } from "@/lib/audit-xlsx";
+import { supabase } from "@/integrations/supabase/client";
 import { FiscalPurgeSelectDialog } from "@/components/fiscal/fiscal-purge-select-dialog";
 
 export interface FiscalPurgeCardProps {
@@ -110,6 +112,24 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
     enabled: Boolean(storeId),
     staleTime: 30_000,
     queryFn: () => listPurgeAudit(storeId),
+  });
+
+  /** Identidade da loja usada no cabeçalho da planilha (nome, CNPJ e logo). */
+  const store = useQuery({
+    queryKey: ["purge-audit-store", storeId],
+    enabled: Boolean(storeId),
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const [{ data: s }, { data: r }] = await Promise.all([
+        supabase.from("stores").select("name, fantasy_name, cnpj").eq("id", storeId).maybeSingle(),
+        supabase.from("receipt_settings").select("logo_url").eq("store_id", storeId).maybeSingle(),
+      ]);
+      return {
+        name: s?.fantasy_name || s?.name || null,
+        cnpj: s?.cnpj ?? null,
+        logoUrl: r?.logo_url ?? null,
+      };
+    },
   });
 
   // Agendamento: roda só para quem tem permissão, para não gerar erro em loop
@@ -173,27 +193,52 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
 
   const patchSchedule = (patch: Partial<PurgeSchedule>) => setSchedule(setPurgeSchedule(storeId, patch));
 
+  /** Normaliza os registros para o formato compartilhado de auditoria. */
+  const auditRows = () =>
+    (audit.data ?? []).map((r) => ({
+      function_name: "purge_fiscal_errors",
+      allowed: r.allowed,
+      user_id: r.userId,
+      store_id: storeId,
+      detail: r.detail,
+      created_at: r.createdAt,
+    }));
+
   /** Exporta o histórico de limpezas no mesmo formato dos demais CSVs (pt-BR). */
   const exportAudit = () => {
-    const rows = audit.data ?? [];
+    const rows = auditRows();
     if (rows.length === 0) {
       toast.info("Nenhuma limpeza registrada para exportar.");
       return;
     }
-    const csv = buildAuditCsv(
-      rows.map((r) => ({
-        function_name: "purge_fiscal_errors",
-        allowed: r.allowed,
-        user_id: r.userId,
-        store_id: storeId,
-        detail: r.detail,
-        created_at: r.createdAt,
-      })),
-      () => "Limpeza de registros fiscais",
-    );
+    const csv = buildAuditCsv(rows, () => "Limpeza de registros fiscais");
     downloadCsv(csvFilename("auditoria-limpeza-fiscal"), csv);
     toast.success(`${rows.length} registro(s) exportado(s).`);
   };
+
+  /**
+   * Excel formatado (cabeçalho com a loja, resumo e autofiltro) — é o formato
+   * que a contabilidade pede quando precisa arquivar a justificativa da limpeza.
+   */
+  const exportAuditXlsx = useMutation({
+    mutationFn: async () => {
+      const rows = auditRows();
+      if (rows.length === 0) throw new Error("Nenhuma limpeza registrada para exportar.");
+      const workbook = await buildAuditWorkbook(rows, {
+        store: {
+          name: store.data?.name ?? null,
+          cnpj: store.data?.cnpj ?? null,
+          logoUrl: store.data?.logoUrl ?? null,
+        },
+        filterLabel: "Limpeza de registros fiscais",
+        labelFor: () => "Limpeza de registros fiscais",
+      });
+      await downloadWorkbook(xlsxFilename("auditoria-limpeza-fiscal"), workbook);
+      return rows.length;
+    },
+    onSuccess: (n) => toast.success(`${n} registro(s) exportado(s) em Excel.`),
+    onError: (e: Error) => toast.info(e.message),
+  });
 
   const p = preview.data;
   const eligible = (() => {
@@ -267,6 +312,19 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
             <Button variant="outline" size="sm" onClick={exportAudit} disabled={audit.isLoading}>
               <Download className="mr-1.5 h-4 w-4" /> Auditoria CSV
               {audit.data?.length ? <Badge variant="outline" className="ml-1.5 font-mono">{audit.data.length}</Badge> : null}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportAuditXlsx.mutate()}
+              disabled={audit.isLoading || exportAuditXlsx.isPending}
+            >
+              {exportAuditXlsx.isPending ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+              )}
+              Auditoria Excel
             </Button>
             <Button variant="outline" size="sm" disabled={!canManage} onClick={() => setSelectOpen(true)}>
               <ListChecks className="mr-1.5 h-4 w-4" /> Selecionar itens

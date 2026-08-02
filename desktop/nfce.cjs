@@ -26,35 +26,66 @@ const crypto = require("crypto");
 const os = require("os");
 
 // ────────────────────────────────────────────────────────────────────
-// Dependências opcionais
+// Motor fiscal: pasta EXTERNA e gravável
+//
+// Por que isto existe: quando o agente é compilado (electron-packager --asar),
+// `__dirname` aponta para dentro de `resources/app.asar`, que é um arquivo
+// somente-leitura. Nessa condição:
+//   1) `require("node-dfe")` falha se a dependência não foi empacotada;
+//   2) `npm install` na pasta do agente falha (não há onde escrever e o .asar
+//      não é um diretório real).
+// Resultado prático no caixa: "motor fiscal não funciona" mesmo com o EXE
+// instalado. A solução é manter o motor fora do pacote, em uma pasta gravável
+// do usuário, e resolver os módulos a partir dela.
 // ────────────────────────────────────────────────────────────────────
+const CONFIG_DIR = process.env.BASTION_CONFIG_DIR || path.join(os.homedir(), ".bastion-pos");
+const ENGINE_DIR = process.env.BASTION_ENGINE_DIR || path.join(CONFIG_DIR, "fiscal-engine");
+
+/** Agente rodando empacotado dentro de app.asar (somente leitura). */
+const PACKAGED = /[\\/]app\.asar([\\/]|$)/.test(__dirname);
+
+/** Ordem de resolução: pasta externa primeiro, pasta do agente como fallback. */
+function resolvePaths() {
+  return [path.join(ENGINE_DIR, "node_modules"), ENGINE_DIR, __dirname];
+}
+
+/** require() tolerante: procura na pasta externa e depois no pacote. */
+function loadOptional(name) {
+  try {
+    const resolved = require.resolve(name, { paths: resolvePaths() });
+    return { mod: require(resolved), error: null };
+  } catch (e1) {
+    try {
+      return { mod: require(name), error: null };
+    } catch (e2) {
+      const err = e1 && e1.code === "MODULE_NOT_FOUND" ? e2 : e1;
+      return { mod: null, error: err };
+    }
+  }
+}
+
 let NodeDfe = null;
 /** Motivo exato da indisponibilidade — exposto no /nfce/config para diagnóstico. */
 let engineError = null;
 /** Candidatos de motor fiscal, em ordem de preferência. */
 const ENGINE_CANDIDATES = ["node-dfe"];
 for (const mod of ENGINE_CANDIDATES) {
-  try {
-    NodeDfe = require(mod);
+  const r = loadOptional(mod);
+  if (r.mod) {
+    NodeDfe = r.mod;
     engineError = null;
     break;
-  } catch (e) {
-    // MODULE_NOT_FOUND => não instalado. Outro erro => instalado porém quebrado.
-    engineError =
-      e && e.code === "MODULE_NOT_FOUND"
-        ? `Dependência "${mod}" não instalada. Rode \`npm run install:fiscal\` na pasta do agente e reinicie.`
-        : `Falha ao carregar "${mod}": ${e && e.message ? e.message : String(e)}`;
   }
+  engineError =
+    r.error && r.error.code === "MODULE_NOT_FOUND"
+      ? `Motor "${mod}" ainda não instalado nesta máquina. Clique em "Instalar motor fiscal" — ele será baixado para ${ENGINE_DIR}.`
+      : `Falha ao carregar "${mod}": ${r.error && r.error.message ? r.error.message : String(r.error)}`;
 }
 if (!NodeDfe) console.warn("[nfce] motor indisponível —", engineError);
 
-let forge = null;
-try { forge = require("node-forge"); }
-catch { /* opcional */ }
+let forge = loadOptional("node-forge").mod;
+let qrcode = loadOptional("qrcode").mod;
 
-let qrcode = null;
-try { qrcode = require("qrcode"); }
-catch { /* opcional */ }
 
 // ────────────────────────────────────────────────────────────────────
 // Configuração local (config.json ao lado do agent.cjs)
@@ -155,10 +186,11 @@ function getEndpoints(uf, environment) {
 async function emitNFCe(sale) {
   if (!NodeDfe) {
     throw new Error(
-      "Motor NFC-e indisponível: instale a dependência node-dfe rodando " +
-      "`npm install node-dfe qrcode node-forge` na pasta do agente e reinicie."
+      `Motor NFC-e indisponível: ${engineError || "node-dfe não carregado"}. ` +
+        `Abra "Servidor fiscal" no PDV e clique em "Instalar motor fiscal" (destino: ${ENGINE_DIR}).`,
     );
   }
+
 
   const cfg = loadFiscalConfig();
   if (!cfg) throw new Error("Configuração fiscal local ausente. Configure em POST /nfce/config.");
@@ -341,7 +373,7 @@ const REQUIRED_EXPORTS = ["NFeProcessor", "NFeStatus", "NFeCancelamento", "NFeIn
 
 function moduleMeta(name) {
   try {
-    const pkgPath = require.resolve(`${name}/package.json`, { paths: [__dirname] });
+    const pkgPath = require.resolve(`${name}/package.json`, { paths: resolvePaths() });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
     return { installed: true, version: pkg.version || null, path: path.dirname(pkgPath) };
   } catch (e) {
@@ -353,21 +385,105 @@ function moduleMeta(name) {
 function reloadEngine() {
   for (const mod of ENGINE_CANDIDATES) {
     try {
-      const resolved = require.resolve(mod, { paths: [__dirname] });
-      delete require.cache[resolved];
+      const resolved = require.resolve(mod, { paths: resolvePaths() });
+      // Limpa o cache do módulo e de tudo que ele carregou, senão uma versão
+      // antiga (ou parcialmente baixada) continuaria em memória.
+      for (const key of Object.keys(require.cache)) {
+        if (key.includes(`${path.sep}node-dfe${path.sep}`) || key === resolved) delete require.cache[key];
+      }
       NodeDfe = require(resolved);
       engineError = null;
-      return { ok: true, module: mod };
+      forge = loadOptional("node-forge").mod || forge;
+      qrcode = loadOptional("qrcode").mod || qrcode;
+      return { ok: true, module: mod, path: resolved };
     } catch (e) {
       engineError =
         e && e.code === "MODULE_NOT_FOUND"
-          ? `Dependência "${mod}" não instalada. Rode \`npm run install:fiscal\` na pasta do agente.`
+          ? `Motor "${mod}" não encontrado em ${ENGINE_DIR}. Clique em "Instalar motor fiscal".`
           : `Falha ao carregar "${mod}": ${e && e.message ? e.message : String(e)}`;
     }
   }
   NodeDfe = null;
   return { ok: false, error: engineError };
 }
+
+// ── Ambiente de instalação do motor (pasta externa + npm disponível) ─────────
+
+/** Cria a pasta externa do motor com um package.json próprio. Nunca lança. */
+function ensureEngineDir() {
+  try {
+    fs.mkdirSync(ENGINE_DIR, { recursive: true });
+    const pkgFile = path.join(ENGINE_DIR, "package.json");
+    if (!fs.existsSync(pkgFile)) {
+      fs.writeFileSync(
+        pkgFile,
+        JSON.stringify(
+          { name: "bastion-fiscal-engine", private: true, version: "1.0.0", description: "Motor fiscal do Bastion POS Agent" },
+          null,
+          2,
+        ),
+      );
+    }
+    // Teste real de escrita: pasta em OneDrive/Program Files pode negar acesso.
+    const probe = path.join(ENGINE_DIR, ".write-test");
+    fs.writeFileSync(probe, "ok");
+    fs.unlinkSync(probe);
+    return { ok: true, dir: ENGINE_DIR };
+  } catch (e) {
+    return { ok: false, dir: ENGINE_DIR, error: e && e.message ? e.message : String(e) };
+  }
+}
+
+/**
+ * Localiza um npm utilizável. No caixa o agente costuma rodar dentro do
+ * Electron empacotado, onde `npm` não está no PATH do processo — por isso
+ * procuramos também nos caminhos padrão de instalação do Node no Windows.
+ */
+function findNpm() {
+  const win = process.platform === "win32";
+  const exe = win ? "npm.cmd" : "npm";
+  const candidates = [];
+
+  if (process.env.BASTION_NPM_PATH) candidates.push(process.env.BASTION_NPM_PATH);
+  if (process.env.npm_execpath && /npm/i.test(process.env.npm_execpath)) candidates.push(process.env.npm_execpath);
+
+  if (win) {
+    const pf = process.env.ProgramFiles || "C:\\Program Files";
+    const pf86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+    candidates.push(
+      path.join(pf, "nodejs", exe),
+      path.join(pf86, "nodejs", exe),
+      path.join(process.env.APPDATA || "", "npm", exe),
+      path.join(process.env.LOCALAPPDATA || "", "Programs", "nodejs", exe),
+    );
+  } else {
+    candidates.push("/usr/local/bin/npm", "/usr/bin/npm", "/opt/homebrew/bin/npm");
+  }
+
+  for (const c of candidates) {
+    try { if (c && fs.existsSync(c)) return { ok: true, npm: c, fromPath: false }; } catch { /* ignora */ }
+  }
+
+  // Última tentativa: confiar no PATH (funciona quando o agente roda via `node agent.cjs`).
+  try {
+    const { execFileSync } = require("child_process");
+    const out = execFileSync(win ? "where" : "which", [exe], { windowsHide: true, timeout: 8000 })
+      .toString()
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (out.length) return { ok: true, npm: out[0], fromPath: true };
+  } catch { /* npm ausente */ }
+
+  return {
+    ok: false,
+    npm: null,
+    error:
+      "npm não encontrado nesta máquina. Instale o Node.js LTS (nodejs.org) e reinicie o Bastion POS Agent — " +
+      "o motor fiscal precisa do npm apenas na primeira instalação.",
+  };
+}
+
 
 /**
  * Bateria de checagens do motor fiscal local. Cada item traz
@@ -388,15 +504,36 @@ function validateEngine() {
     major >= 18 ? null : "O motor NFC-e exige Node 18+. Reinstale o agente com o instalador oficial.",
   );
 
-  // 2. node-dfe instalado
+  // 2. Pasta externa do motor (precisa existir e aceitar escrita)
+  const dir = ensureEngineDir();
+  push(
+    "engine_dir",
+    "Pasta do motor fiscal",
+    dir.ok ? "ok" : "fail",
+    dir.ok ? `${dir.dir} (gravável)${PACKAGED ? " — agente empacotado" : ""}` : `${dir.dir}: ${dir.error}`,
+    dir.ok ? null : "Rode o agente com o usuário do caixa ou defina BASTION_ENGINE_DIR para uma pasta gravável.",
+  );
+
+  // 3. npm disponível (necessário só na primeira instalação do motor)
+  const npm = findNpm();
+  push(
+    "npm_available",
+    "npm disponível",
+    npm.ok ? "ok" : NodeDfe ? "warn" : "fail",
+    npm.ok ? npm.npm : npm.error,
+    npm.ok ? null : "Instale o Node.js LTS (nodejs.org) e reinicie o agente.",
+  );
+
+  // 4. node-dfe instalado
   const dfe = moduleMeta("node-dfe");
   push(
     "node_dfe",
     "Biblioteca node-dfe",
     dfe.installed ? "ok" : "fail",
     dfe.installed ? `v${dfe.version} em ${dfe.path}` : dfe.error || "não encontrada",
-    dfe.installed ? null : "Rode `npm run install:fiscal` na pasta do agente (ou clique em Instalar motor).",
+    dfe.installed ? null : `Clique em "Instalar motor fiscal" — será baixado para ${ENGINE_DIR}.`,
   );
+
 
   // 3. Motor carregado em memória
   push(
@@ -508,33 +645,74 @@ function getInstallState() {
 }
 
 /**
- * Executa a instalação das dependências fiscais na pasta do agente.
+ * Executa a instalação das dependências fiscais na PASTA EXTERNA gravável.
  * Roda em background: o cliente faz polling em /nfce/engine/install.
+ *
+ * Nunca instala dentro de __dirname quando o agente está empacotado — o .asar
+ * é somente leitura e o npm falharia com EACCES/ENOTDIR.
  */
 function startEngineInstall() {
   if (installState.running) return { ok: true, alreadyRunning: true, state: getInstallState() };
 
   const { spawn } = require("child_process");
-  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-  const args = ["install", "node-dfe@^0.0.25", "node-forge@^1.3.1", "qrcode@^1.5.4", "--no-audit", "--no-fund"];
 
   installState = { running: true, startedAt: new Date().toISOString(), finishedAt: null, ok: null, log: [], error: null };
   const line = (s) => {
     installState.log.push(s);
     console.log("[nfce:install]", s);
   };
-  line(`$ ${npm} ${args.join(" ")} (cwd=${__dirname})`);
+
+  const fail = (msg) => {
+    installState.running = false;
+    installState.ok = false;
+    installState.error = msg;
+    installState.finishedAt = new Date().toISOString();
+    line(`erro: ${msg}`);
+    return { ok: false, state: getInstallState() };
+  };
+
+  // 1. Garante uma pasta gravável fora do pacote.
+  const dir = ensureEngineDir();
+  if (!dir.ok) {
+    return fail(
+      `Não foi possível preparar a pasta do motor (${dir.dir}): ${dir.error}. ` +
+        "Rode o agente com o usuário do caixa ou defina BASTION_ENGINE_DIR.",
+    );
+  }
+  line(`pasta do motor: ${dir.dir}${PACKAGED ? " (agente empacotado — instalação externa)" : ""}`);
+
+  // 2. Localiza o npm, inclusive fora do PATH do processo empacotado.
+  const npmInfo = findNpm();
+  if (!npmInfo.ok) return fail(npmInfo.error);
+
+  const npm = npmInfo.npm;
+  const args = [
+    "install",
+    "node-dfe@^0.0.25",
+    "node-forge@^1.3.1",
+    "qrcode@^1.5.4",
+    "--no-audit",
+    "--no-fund",
+    "--omit=dev",
+    "--prefix",
+    ENGINE_DIR,
+  ];
+
+  line(`$ ${npm} ${args.join(" ")} (cwd=${ENGINE_DIR})`);
 
   let child;
   try {
-    child = spawn(npm, args, { cwd: __dirname, shell: process.platform === "win32", windowsHide: true });
+    child = spawn(npm, args, {
+      cwd: ENGINE_DIR,
+      shell: process.platform === "win32",
+      windowsHide: true,
+      // Electron define ELECTRON_RUN_AS_NODE/NODE_OPTIONS que confundem o npm.
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, NODE_OPTIONS: undefined },
+    });
   } catch (e) {
-    installState.running = false;
-    installState.ok = false;
-    installState.error = `Não foi possível executar o npm: ${e.message}. Instale o Node.js no caixa.`;
-    installState.finishedAt = new Date().toISOString();
-    return { ok: false, state: getInstallState() };
+    return fail(`Não foi possível executar o npm (${npm}): ${e.message}. Instale o Node.js LTS no caixa.`);
   }
+
 
   child.stdout.on("data", (b) => String(b).split(/\r?\n/).filter(Boolean).forEach(line));
   child.stderr.on("data", (b) => String(b).split(/\r?\n/).filter(Boolean).forEach(line));
@@ -576,6 +754,10 @@ module.exports = {
   getInstallState,
   isAvailable: () => !!NodeDfe,
   engineError: () => engineError,
+  ensureEngineDir,
+  findNpm,
+  ENGINE_DIR,
+  PACKAGED,
   CONFIG_FILE,
 };
 

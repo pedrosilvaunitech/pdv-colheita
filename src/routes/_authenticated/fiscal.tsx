@@ -21,6 +21,7 @@ import { DirectEngineCard } from "@/components/fiscal/direct-engine-card";
 import { AgentEngineCard } from "@/components/fiscal/agent-engine-card";
 import { SefazHealthBanner } from "@/components/fiscal/sefaz-health-banner";
 import { FiscalPurgeCard } from "@/components/fiscal/fiscal-purge-card";
+import { FiscalRetentionCard } from "@/components/fiscal/fiscal-retention-card";
 
 import { validateIE, SEFAZ_LINKS, lookupCnpj, suggestCRT } from "@/lib/cnpj-lookup";
 import { getNfceEngineStatus, syncFiscalConfigToAgent, testSefazViaAgent, type NfceEngineStatus } from "@/lib/nfce-agent";
@@ -287,6 +288,7 @@ function FiscalPage() {
             <AgentEngineCard />
             <PendingFiscalCard storeId={storeId!} />
             <FiscalPurgeCard storeId={storeId!} />
+            <FiscalRetentionCard storeId={storeId!} />
 
             <div className="border border-border rounded-md bg-card p-5">
               <h3 className="text-sm font-semibold mb-3">Notas recentes</h3>
