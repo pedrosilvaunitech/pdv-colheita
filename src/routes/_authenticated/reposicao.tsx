@@ -35,6 +35,42 @@ type Row = {
   suggested_qty: number | null;
 };
 
+/** Linha crua do join `product_suppliers` → `suppliers`. */
+type RawLink = {
+  product_id: string;
+  is_preferred: boolean | null;
+  unit_cost: number | null;
+  lead_time_days: number | null;
+  suppliers: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    contact_name: string | null;
+    payment_methods: string[] | null;
+    payment_day: number | null;
+    payment_term_days: number | null;
+    pix_key: string | null;
+  } | null;
+};
+
+/** Fornecedor pronto para exibição na sugestão de reposição. */
+type SupplierLink = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  contactName: string | null;
+  paymentMethods: string[];
+  paymentDay: number | null;
+  paymentTermDays: number | null;
+  pixKey: string | null;
+  isPreferred: boolean;
+  unitCost: number;
+  leadTimeDays: number;
+};
+
+
 const STATUS_META: Record<string, { label: string; className: string; icon: typeof AlertTriangle }> = {
   ruptura: { label: "Ruptura", className: "bg-destructive/15 text-destructive border-destructive/40", icon: PackageX },
   critico: { label: "Crítico", className: "bg-destructive/10 text-destructive border-destructive/30", icon: AlertTriangle },
