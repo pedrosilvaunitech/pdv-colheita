@@ -102,6 +102,15 @@ export function AgentEngineCard() {
           </Button>
         </div>
 
+        {validation?.engineDir && (
+          <p className="text-[11px] text-muted-foreground">
+            Motor instalado em{" "}
+            <span className="font-mono text-foreground break-all">{validation.engineDir}</span>
+            {validation.packaged ? " (fora do pacote do agente, pasta gravável)" : null}
+            {validation.agentVersion ? ` · agente v${validation.agentVersion}` : null}
+          </p>
+        )}
+
         {validation && <FiscalCheckList checks={validation.checks} summary={validation.summary} />}
 
         {install && install.log.length > 0 && (
