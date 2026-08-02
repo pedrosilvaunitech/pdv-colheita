@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentStore } from "@/lib/current-store";
@@ -8,12 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, TrendingDown, PackageX, PackageCheck, Search, Download, Star, Phone, Mail, CreditCard } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertTriangle, TrendingDown, PackageX, PackageCheck, Search, Download, Star, Phone, Mail, CreditCard, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  buildPurchaseOrderPdf,
+  purchaseOrderFileName,
+  type PurchaseOrderBlock,
+} from "@/lib/purchase-order-pdf";
 
 export const Route = createFileRoute("/_authenticated/reposicao")({
   component: ReposicaoPage,
 });
+
 
 type Row = {
   product_id: string;
@@ -82,6 +90,21 @@ function ReposicaoPage() {
   const { store, storeId } = useCurrentStore();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  /** Fornecedor selecionado para o pedido de compra ("all" = todos). */
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
+  /** Blob URL do PDF em pré-visualização (nada sai do dispositivo). */
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  const closePdf = () => {
+    setPdfUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  };
+
+  // Libera o blob ao desmontar para não vazar memória entre navegações.
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
+
 
   const { data: rows, isLoading } = useQuery({
     queryKey: ["reorder", storeId],
@@ -190,6 +213,82 @@ function ReposicaoPage() {
     URL.revokeObjectURL(url);
   };
 
+  /**
+   * Agrupa as sugestões por fornecedor preferencial: cada fornecedor recebe um
+   * pedido próprio (uma página no PDF), porque é assim que o comprador envia.
+   */
+  const orderBlocks = useMemo<PurchaseOrderBlock[]>(() => {
+    const bySupplier = new Map<string, PurchaseOrderBlock>();
+    for (const r of filtered) {
+      const qty = Math.max(0, Math.ceil(Number(r.suggested_qty ?? 0)));
+      if (qty <= 0) continue;
+      const links = supplierMap?.get(r.product_id) ?? [];
+      const main = links[0];
+      if (!main) continue;
+      if (supplierFilter !== "all" && main.id !== supplierFilter) continue;
+
+      const block = bySupplier.get(main.id) ?? {
+        supplier: {
+          id: main.id,
+          name: main.name,
+          contactName: main.contactName,
+          phone: main.phone,
+          email: main.email,
+          paymentSummary: describePayment(main) || null,
+          pixKey: main.pixKey,
+          leadTimeDays: main.leadTimeDays,
+        },
+        items: [],
+      };
+      block.items.push({
+        name: r.name,
+        barcode: r.barcode,
+        unit: r.unit,
+        quantity: qty,
+        unitCost: main.unitCost,
+        currentStock: r.current_stock == null ? null : Number(r.current_stock),
+        coverageDays: r.days_of_stock,
+      });
+      bySupplier.set(main.id, block);
+    }
+    return Array.from(bySupplier.values()).sort((a, b) =>
+      a.supplier.name.localeCompare(b.supplier.name));
+  }, [filtered, supplierMap, supplierFilter]);
+
+  /** Fornecedores disponíveis para o filtro do pedido. */
+  const supplierOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const list of supplierMap?.values() ?? []) {
+      for (const link of list) map.set(link.id, link.name);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [supplierMap]);
+
+  const openOrderPdf = () => {
+    if (orderBlocks.length === 0) {
+      toast.error("Nenhum item sugerido com fornecedor vinculado para gerar pedido");
+      return;
+    }
+    const blob = buildPurchaseOrderPdf(orderBlocks, {
+      name: store?.name ?? null,
+      fantasyName: (store as { fantasy_name?: string | null } | null)?.fantasy_name ?? null,
+      cnpj: (store as { cnpj?: string | null } | null)?.cnpj ?? null,
+      phone: (store as { phone?: string | null } | null)?.phone ?? null,
+    });
+    setPdfUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(blob);
+    });
+  };
+
+  const downloadOrderPdf = () => {
+    if (!pdfUrl) return;
+    const a = document.createElement("a");
+    a.href = pdfUrl;
+    a.download = purchaseOrderFileName(orderBlocks);
+    a.click();
+  };
+
   if (!store) return <StoreRequired />;
 
   return (
@@ -213,10 +312,47 @@ function ReposicaoPage() {
                 <SelectItem value="ok">OK</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Fornecedor" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os fornecedores</SelectItem>
+                {supplierOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button size="sm" variant="outline" onClick={exportCsv} className="gap-2"><Download className="size-4" /> CSV</Button>
+            <Button size="sm" onClick={openOrderPdf} className="gap-2">
+              <FileText className="size-4" /> Pedido PDF
+            </Button>
           </>
         }
       />
+
+      <Dialog open={Boolean(pdfUrl)} onOpenChange={(o) => { if (!o) closePdf(); }}>
+        <DialogContent className="max-w-5xl h-[88vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              Pedido de compra · {orderBlocks.length} fornecedor(es) ·{" "}
+              {orderBlocks.reduce((acc, b) => acc + b.items.length, 0)} item(ns)
+            </DialogTitle>
+          </DialogHeader>
+          {pdfUrl && (
+            <iframe
+              title="Pré-visualização do pedido de compra"
+              src={pdfUrl}
+              className="flex-1 w-full rounded-md border border-border bg-muted"
+            />
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={closePdf}>Fechar</Button>
+            <Button onClick={downloadOrderPdf} className="gap-2">
+              <Download className="size-4" /> Baixar PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <div className="p-6 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
