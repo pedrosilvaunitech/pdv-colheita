@@ -310,7 +310,7 @@ function describePayment(link?: SupplierLink): string {
     parts.push(link.paymentMethods.map((m) => METHOD_LABEL[m] ?? m).join(", "));
   }
   if (link.paymentDay) parts.push(`vence dia ${link.paymentDay}`);
-  if (link.paymentTermDays > 0) parts.push(`${link.paymentTermDays} dias`);
+  if ((link.paymentTermDays ?? 0) > 0) parts.push(`${link.paymentTermDays} dias`);
   return parts.join(" · ");
 }
 
