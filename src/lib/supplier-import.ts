@@ -36,7 +36,6 @@ for (const m of PAYMENT_METHODS) {
   METHOD_BY_LABEL.set(normalize(m.value), m.value);
   METHOD_BY_LABEL.set(normalize(m.label), m.value);
 }
-METHOD_BY_LABEL.set("ted", "transencia_placeholder");
 METHOD_BY_LABEL.set("ted", "transferencia");
 METHOD_BY_LABEL.set("faturado", "prazo");
 METHOD_BY_LABEL.set("cartao de credito", "cartao");
