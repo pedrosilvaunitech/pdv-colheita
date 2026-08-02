@@ -182,7 +182,9 @@ function FiscalErrorsPage() {
       {/* Visão operacional (NOC): fila em tempo real + integridade da numeração. */}
       <FiscalQueuePanel storeId={storeId} />
       <NumberingAuditCard storeId={storeId} />
+      <FiscalPurgeCard storeId={storeId} />
       <FiscalAuditLog storeId={storeId} />
+
 
       <section className="border border-border rounded-md bg-card">
 
