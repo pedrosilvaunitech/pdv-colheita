@@ -534,6 +534,62 @@ export type Database = {
           },
         ]
       }
+      fiscal_purge_settings: {
+        Row: {
+          audit_retention_days: number
+          created_at: string
+          enabled: boolean
+          homolog_retention_days: number
+          include_producao: boolean
+          last_result: Json
+          last_run_at: string | null
+          producao_retention_days: number
+          purge_invoices: boolean
+          purge_queue: boolean
+          queue_retention_days: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          audit_retention_days?: number
+          created_at?: string
+          enabled?: boolean
+          homolog_retention_days?: number
+          include_producao?: boolean
+          last_result?: Json
+          last_run_at?: string | null
+          producao_retention_days?: number
+          purge_invoices?: boolean
+          purge_queue?: boolean
+          queue_retention_days?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          audit_retention_days?: number
+          created_at?: string
+          enabled?: boolean
+          homolog_retention_days?: number
+          include_producao?: boolean
+          last_result?: Json
+          last_run_at?: string | null
+          producao_retention_days?: number
+          purge_invoices?: boolean
+          purge_queue?: boolean
+          queue_retention_days?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_purge_settings_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fiscal_queue: {
         Row: {
           attempts: number
@@ -2099,6 +2155,8 @@ export type Database = {
       }
     }
     Functions: {
+      _apply_fiscal_retention: { Args: { _store_id: string }; Returns: Json }
+      apply_fiscal_retention: { Args: { _store_id: string }; Returns: Json }
       can_manage_store: {
         Args: { _store_id: string; _user_id: string }
         Returns: boolean
@@ -2152,6 +2210,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      cron_fiscal_retention: { Args: never; Returns: Json }
       current_open_register: { Args: { _store_id: string }; Returns: string }
       enforce_rate_limit: {
         Args: {
@@ -2217,6 +2276,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      preview_fiscal_retention: { Args: { _store_id: string }; Returns: Json }
       provision_terminal: {
         Args: {
           _agent_id?: string
