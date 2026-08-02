@@ -50,6 +50,8 @@ import {
   type PurgeSchedule,
 } from "@/lib/fiscal-purge-schedule";
 import { buildAuditCsv, csvFilename, downloadCsv } from "@/lib/audit-csv";
+import { buildAuditWorkbook, downloadWorkbook, xlsxFilename } from "@/lib/audit-xlsx";
+import { supabase } from "@/integrations/supabase/client";
 import { FiscalPurgeSelectDialog } from "@/components/fiscal/fiscal-purge-select-dialog";
 
 export interface FiscalPurgeCardProps {
