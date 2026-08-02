@@ -956,6 +956,80 @@ export type Database = {
           },
         ]
       }
+      product_suppliers: {
+        Row: {
+          created_at: string
+          id: string
+          is_preferred: boolean
+          lead_time_days: number
+          min_order_qty: number
+          notes: string | null
+          product_id: string
+          store_id: string
+          supplier_id: string
+          supplier_sku: string | null
+          unit_cost: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_preferred?: boolean
+          lead_time_days?: number
+          min_order_qty?: number
+          notes?: string | null
+          product_id: string
+          store_id: string
+          supplier_id: string
+          supplier_sku?: string | null
+          unit_cost?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_preferred?: boolean
+          lead_time_days?: number
+          min_order_qty?: number
+          notes?: string | null
+          product_id?: string
+          store_id?: string
+          supplier_id?: string
+          supplier_sku?: string | null
+          unit_cost?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_suppliers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_suppliers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_reorder"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_suppliers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_suppliers_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean
@@ -1694,12 +1768,20 @@ export type Database = {
           address_line: string | null
           city: string | null
           cnpj: string | null
+          contact_name: string | null
           created_at: string
           email: string | null
           id: string
+          lead_time_days: number
           name: string
           notes: string | null
+          payment_condition: string | null
+          payment_day: number | null
+          payment_methods: string[]
+          payment_term_days: number
           phone: string | null
+          pix_key: string | null
+          pix_key_type: string | null
           state: string | null
           store_id: string
           updated_at: string
@@ -1708,12 +1790,20 @@ export type Database = {
           address_line?: string | null
           city?: string | null
           cnpj?: string | null
+          contact_name?: string | null
           created_at?: string
           email?: string | null
           id?: string
+          lead_time_days?: number
           name: string
           notes?: string | null
+          payment_condition?: string | null
+          payment_day?: number | null
+          payment_methods?: string[]
+          payment_term_days?: number
           phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           state?: string | null
           store_id: string
           updated_at?: string
@@ -1722,12 +1812,20 @@ export type Database = {
           address_line?: string | null
           city?: string | null
           cnpj?: string | null
+          contact_name?: string | null
           created_at?: string
           email?: string | null
           id?: string
+          lead_time_days?: number
           name?: string
           notes?: string | null
+          payment_condition?: string | null
+          payment_day?: number | null
+          payment_methods?: string[]
+          payment_term_days?: number
           phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           state?: string | null
           store_id?: string
           updated_at?: string
