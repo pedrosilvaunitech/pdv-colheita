@@ -175,6 +175,11 @@ export interface EngineValidation {
   summary: string;
   engine_error?: string | null;
   versions?: Record<string, string | null>;
+  /** Pasta externa gravável onde o motor é instalado (agente 1.9.1+). */
+  engineDir?: string | null;
+  /** Agente rodando empacotado (app.asar somente leitura). */
+  packaged?: boolean;
+  agentVersion?: string | null;
   checks: EngineCheck[];
 }
 
