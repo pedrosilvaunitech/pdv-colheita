@@ -29,7 +29,7 @@ try { nodePrinter = require("@thiagoelg/node-printer"); }
 catch { console.warn("[agent] @thiagoelg/node-printer não instalado — apenas canal USB bruto disponível."); }
 
 const PORT = Number(process.env.BASTION_AGENT_PORT || 9100);
-const VERSION = "1.8.1";
+const VERSION = "1.9.0";
 
 // Motor NFC-e opcional (só carrega se node-dfe estiver instalado).
 let nfce = null;
@@ -581,7 +581,7 @@ function startAgent(options = {}) {
   // Isolamento multi-caixa: quando o agente está vinculado a um terminal,
   // comandos de hardware vindos de OUTRO terminal são recusados. Assim o
   // Caixa 2 nunca imprime na impressora ou abre a gaveta do Caixa 1.
-  const GUARDED = [/^\/print/, /^\/open-drawer/, /^\/scale\//, /^\/tef\//, /^\/nfce\//];
+  const GUARDED = [/^\/print/, /^\/open-drawer/, /^\/scale\//, /^\/tef\//, /^\/nfce\//, /^\/fiscal\/proxy/];
   app.use((req, res, next) => {
     if (req.method === "OPTIONS") return next();
     if (!GUARDED.some((re) => re.test(req.path))) return next();
@@ -640,6 +640,162 @@ function startAgent(options = {}) {
       res.status(500).json({ ok: false, error: e.message });
     }
   });
+
+  // ── Ponte para o servidor fiscal Node (local ou na rede) ──────
+  //
+  // Por que existe: o PDV é uma página HTTPS. Ela NÃO consegue chamar
+  // http://192.168.0.50:3737 (conteúdo misto) nem um endereço privado a partir
+  // da nuvem (o backend publicado não enxerga a rede da loja). O agente já roda
+  // no PC do caixa e é alcançável pelo navegador, então ele faz a ponte: o PDV
+  // fala com o agente em 127.0.0.1 e o agente fala com o motor fiscal.
+  //
+  // O token do servidor fiscal fica guardado AQUI, no PC, e não é devolvido nas
+  // consultas — a página nunca precisa carregar o segredo.
+  const FISCAL_SERVER_FILE = path.join(DATA_DIR_PATH, "fiscal-server.json");
+
+  function readFiscalServer() {
+    try {
+      if (!fs.existsSync(FISCAL_SERVER_FILE)) return { url: null, token: null, updated_at: null };
+      const raw = JSON.parse(fs.readFileSync(FISCAL_SERVER_FILE, "utf8"));
+      return {
+        url: typeof raw.url === "string" ? raw.url : null,
+        token: typeof raw.token === "string" ? raw.token : null,
+        updated_at: raw.updated_at || null,
+      };
+    } catch (e) {
+      console.warn("[agent] fiscal-server.json ilegível:", e.message);
+      return { url: null, token: null, updated_at: null };
+    }
+  }
+
+  function writeFiscalServer(next) {
+    fs.mkdirSync(DATA_DIR_PATH, { recursive: true });
+    fs.writeFileSync(FISCAL_SERVER_FILE, JSON.stringify(next, null, 2), { mode: 0o600 });
+  }
+
+  /** Normaliza o que o lojista digita: "192.168.0.50:3737" → URL completa. */
+  function normalizeFiscalUrl(input) {
+    let value = String(input || "").trim();
+    if (!value) return null;
+    if (!/^https?:\/\//i.test(value)) value = `http://${value}`;
+    value = value.replace(/\/+$/, "");
+    try {
+      const u = new URL(value);
+      if (!u.port && u.protocol === "http:") u.port = "3737";
+      return u.toString().replace(/\/+$/, "");
+    } catch {
+      return null;
+    }
+  }
+
+  app.get("/fiscal/server", (_req, res) => {
+    const cfg = readFiscalServer();
+    res.json({
+      ok: true,
+      version: VERSION,
+      url: cfg.url,
+      token_set: !!cfg.token,
+      updated_at: cfg.updated_at,
+    });
+  });
+
+  app.post("/fiscal/server", (req, res) => {
+    try {
+      const body = req.body || {};
+      const current = readFiscalServer();
+      const url = body.url === null ? null : normalizeFiscalUrl(body.url ?? current.url);
+      if (body.url && !url) {
+        return res.status(400).json({ ok: false, error: "Endereço inválido. Exemplo: 192.168.0.50:3737" });
+      }
+      // token ausente no corpo = manter o atual; string vazia = apagar.
+      const token =
+        body.token === undefined ? current.token : body.token ? String(body.token).trim() : null;
+      const next = { url, token, updated_at: new Date().toISOString() };
+      writeFiscalServer(next);
+      res.json({ ok: true, url: next.url, token_set: !!next.token, updated_at: next.updated_at });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
+  /**
+   * Repassa uma chamada para o motor fiscal.
+   *
+   * Corpo: { path: "/health" | "/nfce/emit" | ..., method?, body?, url?, token?, timeoutMs? }
+   * `url`/`token` no corpo servem para TESTAR um endereço antes de salvar.
+   */
+  app.post("/fiscal/proxy", async (req, res) => {
+    const body = req.body || {};
+    const saved = readFiscalServer();
+    const base = normalizeFiscalUrl(body.url || saved.url);
+    const token = body.token !== undefined && body.token !== null ? String(body.token) : saved.token;
+    const route = typeof body.path === "string" && body.path.startsWith("/") ? body.path : "/health";
+    const method = String(body.method || "GET").toUpperCase();
+    const timeoutMs = Math.min(Math.max(Number(body.timeoutMs) || 20000, 2000), 120000);
+
+    if (!base) {
+      return res.status(400).json({
+        ok: false,
+        error: "Endereço do servidor fiscal não configurado neste PC. Informe o IP e a porta no PDV.",
+      });
+    }
+    if (typeof fetch !== "function") {
+      return res.status(501).json({
+        ok: false,
+        error: "Este agente roda em uma versão antiga do Node. Atualize o Bastion POS Agent.",
+      });
+    }
+
+    const started = Date.now();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const headers = { Accept: "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (method !== "GET" && body.body !== undefined) headers["Content-Type"] = "application/json";
+      const upstream = await fetch(`${base}${route}`, {
+        method,
+        headers,
+        body: method === "GET" || body.body === undefined ? undefined : JSON.stringify(body.body),
+        signal: ctrl.signal,
+      });
+      const text = await upstream.text();
+      let parsed = null;
+      try { parsed = text ? JSON.parse(text) : null; } catch { parsed = null; }
+      res.status(200).json({
+        ok: upstream.ok,
+        status: upstream.status,
+        elapsed_ms: Date.now() - started,
+        target: `${base}${route}`,
+        data: parsed,
+        raw: parsed ? undefined : text.slice(0, 2000),
+      });
+    } catch (e) {
+      // Mensagens de rede do Node não dizem nada ao lojista: traduzimos.
+      const msg = String((e && e.message) || e);
+      let friendly = msg;
+      if (/aborted|timeout/i.test(msg)) {
+        friendly = `O servidor fiscal em ${base} não respondeu em ${Math.round(timeoutMs / 1000)}s.`;
+      } else if (/ECONNREFUSED/i.test(msg)) {
+        friendly = `Nada escutando em ${base}. Rode \`node server.js\` na pasta vps-fiscal (ou inicie o serviço).`;
+      } else if (/EHOSTUNREACH|ENETUNREACH|ENOTFOUND|EAI_AGAIN/i.test(msg)) {
+        friendly = `Não foi possível alcançar ${base}. Confira o IP e se o PC está na mesma rede.`;
+      } else if (/ETIMEDOUT/i.test(msg)) {
+        friendly = `Conexão com ${base} expirou — normalmente é o Firewall do Windows bloqueando a porta.`;
+      }
+      res.status(200).json({
+        ok: false,
+        status: 0,
+        elapsed_ms: Date.now() - started,
+        target: `${base}${route}`,
+        error: friendly,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
+
 
 
   app.post("/print", async (req, res) => {

@@ -34,6 +34,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { BackupScheduleCard } from "@/components/settings/backup-schedule-card";
+import { LocalFiscalServerCard } from "@/components/fiscal/local-fiscal-server-card";
+
 
 import {
   Loader2,
@@ -347,7 +349,11 @@ function FiscalServerForm({ storeId }: { storeId: string }) {
       />
 
       <div className="p-6 space-y-6 max-w-4xl">
+        {/* Diagnóstico feito no caixa: único caminho que alcança a rede da loja. */}
+        <LocalFiscalServerCard />
+
         <Card>
+
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ServerCog className="h-5 w-5" /> Quem emite a nota

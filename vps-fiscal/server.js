@@ -19,40 +19,123 @@
 
 const express = require("express");
 const crypto = require("crypto");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const nfce = require("./nfce"); // símile ao desktop/nfce.cjs, adaptado pra ler cfg via env
 
 const PORT = Number(process.env.PORT || 3737);
-const TOKEN = process.env.FISCAL_VPS_TOKEN;
+// Bind: por padrão escuta em todas as interfaces para o PDV de outro caixa
+// alcançar o servidor pela rede local. Restrinja com FISCAL_BIND=127.0.0.1
+// quando o motor rodar no MESMO PC do único caixa.
+const HOST = process.env.FISCAL_BIND || "0.0.0.0";
+const VERSION = "1.2.0";
 
-if (!TOKEN) {
-  console.error("FISCAL_VPS_TOKEN não configurado. Defina no ambiente antes de subir.");
-  process.exit(1);
+/**
+ * Token de acesso.
+ *
+ * Antes o servidor SAÍA com exit(1) quando `FISCAL_VPS_TOKEN` não estava
+ * definido — na prática o lojista dava `node server.js`, a janela fechava e a
+ * conclusão era "o servidor não funciona". Agora, sem token, geramos um e
+ * gravamos em ~/.bastion-pos/fiscal-server-token.txt: o servidor sobe, imprime o
+ * token no console e o operador cola no PDV. Segurança mantida (o token continua
+ * obrigatório nas rotas), sem tela preta inexplicável.
+ */
+const TOKEN_DIR = path.join(os.homedir(), ".bastion-pos");
+const TOKEN_FILE = path.join(TOKEN_DIR, "fiscal-server-token.txt");
+
+function resolveToken() {
+  const fromEnv = (process.env.FISCAL_VPS_TOKEN || "").trim();
+  if (fromEnv) return { token: fromEnv, origin: "env" };
+  try {
+    if (fs.existsSync(TOKEN_FILE)) {
+      const saved = fs.readFileSync(TOKEN_FILE, "utf8").trim();
+      if (saved) return { token: saved, origin: "arquivo" };
+    }
+    const generated = crypto.randomBytes(24).toString("hex");
+    fs.mkdirSync(TOKEN_DIR, { recursive: true });
+    fs.writeFileSync(TOKEN_FILE, generated, { mode: 0o600 });
+    return { token: generated, origin: "gerado" };
+  } catch (e) {
+    // Sem disco gravável (container read-only): token só desta execução.
+    console.warn(`[bastion-fiscal] não foi possível gravar o token (${e.message}); usando token temporário.`);
+    return { token: crypto.randomBytes(24).toString("hex"), origin: "temporario" };
+  }
 }
+
+const { token: TOKEN, origin: TOKEN_ORIGIN } = resolveToken();
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
+/**
+ * CORS + Private Network Access.
+ *
+ * O PDV é uma página HTTPS e o motor fiscal roda em http://127.0.0.1 ou num IP
+ * da rede local. Sem estes cabeçalhos o navegador barra o preflight e a
+ * requisição falha com "Failed to fetch" — que na tela virava "servidor não
+ * reconhecido". `Access-Control-Allow-Private-Network` é o que autoriza o
+ * Chrome a sair de uma origem pública para um endereço privado.
+ */
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  res.setHeader("Vary", "Origin, Access-Control-Request-Headers, Access-Control-Request-Private-Network");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    req.headers["access-control-request-headers"] ||
+      "Authorization, Content-Type, X-Terminal-Id, Accept, Origin",
+  );
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
+  res.setHeader("Access-Control-Max-Age", "86400");
+  res.setHeader("Access-Control-Expose-Headers", "X-Fiscal-Server-Version");
+  res.setHeader("X-Fiscal-Server-Version", VERSION);
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+
 // Timing-safe bearer check
 function auth(req, res, next) {
   const h = req.headers.authorization || "";
-  if (!h.startsWith("Bearer ")) return res.status(401).json({ error: "Missing bearer token" });
-  const provided = Buffer.from(h.slice(7));
+  if (!h.startsWith("Bearer ")) {
+    return res.status(401).json({
+      error: "Token ausente. Configure o mesmo token no PDV (Servidor fiscal → Token).",
+    });
+  }
+  const provided = Buffer.from(h.slice(7).trim());
   const expected = Buffer.from(TOKEN);
   if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
-    return res.status(401).json({ error: "Invalid token" });
+    return res.status(401).json({ error: "Token inválido para este servidor fiscal." });
   }
   next();
 }
 
+// Página de cortesia: abrir o endereço no navegador mostra que está de pé.
+app.get("/", (_req, res) => {
+  res.type("text/plain").send(
+    `Bastion POS — Motor Fiscal v${VERSION}\n` +
+      `engine=${nfce.isAvailable() ? "pronto" : "sem node-dfe"}\n` +
+      `Use /health para checagem e configure este endereço no PDV.\n`,
+  );
+});
+
+
+// /health é público de propósito: o PDV precisa distinguir "não achei o
+// servidor" de "achei mas o token está errado". Não devolve nada sensível.
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "1.1.0",
+    service: "bastion-fiscal",
+    version: VERSION,
     engine_ready: nfce.isAvailable(),
+    environment: process.env.FISCAL_ENVIRONMENT || "homologacao",
+    token_origin: TOKEN_ORIGIN,
     node: process.version,
     uptime_s: Math.floor(process.uptime()),
   });
 });
+
 
 /**
  * Rotina de validação do servidor fiscal central.
@@ -148,6 +231,43 @@ app.post("/nfce/inutilizar", auth, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.listen(PORT, () => {
-  console.log(`[bastion-fiscal] http://0.0.0.0:${PORT} · engine=${nfce.isAvailable() ? "ready" : "sem node-dfe"}`);
+/** Endereços que o lojista pode digitar no PDV (IPv4 da máquina). */
+function localAddresses() {
+  const out = [];
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (net.family === "IPv4" && !net.internal) out.push(net.address);
+    }
+  }
+  return out;
+}
+
+const server = app.listen(PORT, HOST, () => {
+  const urls = ["127.0.0.1", ...localAddresses()].map((h) => `http://${h}:${PORT}`);
+  console.log("");
+  console.log(`[bastion-fiscal] v${VERSION} de pé · engine=${nfce.isAvailable() ? "pronto" : "SEM node-dfe"}`);
+  console.log(`[bastion-fiscal] escutando em ${HOST}:${PORT}`);
+  console.log(`[bastion-fiscal] use no PDV um destes endereços: ${urls.join("  |  ")}`);
+  console.log(`[bastion-fiscal] token (${TOKEN_ORIGIN}): ${TOKEN}`);
+  if (TOKEN_ORIGIN !== "env") console.log(`[bastion-fiscal] token salvo em ${TOKEN_FILE}`);
+  if (!nfce.isAvailable()) {
+    console.log("[bastion-fiscal] ATENÇÃO: rode `npm install` nesta pasta — sem node-dfe não emite nota.");
+  }
+  console.log("");
 });
+
+// Porta ocupada é o erro mais comum ao rodar no PC do caixa (duas instâncias).
+server.on("error", (err) => {
+  if (err && err.code === "EADDRINUSE") {
+    console.error(
+      `[bastion-fiscal] a porta ${PORT} já está em uso. ` +
+        "Provavelmente o servidor já está rodando (confira a bandeja/serviço) " +
+        `ou rode com outra porta: PORT=3738 node server.js`,
+    );
+    process.exit(1);
+  }
+  console.error("[bastion-fiscal] falha ao subir:", err.message);
+  process.exit(1);
+});
+
