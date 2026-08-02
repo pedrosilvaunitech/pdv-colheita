@@ -119,3 +119,128 @@ export async function purgeFiscalErrors(
   const queueDeleted = Number(payload.queue_deleted ?? 0);
   return { invoicesDeleted, queueDeleted, total: invoicesDeleted + queueDeleted };
 }
+
+// ── seleção item a item ──────────────────────────────────────────────────────
+
+export interface PurgeableInvoice {
+  id: string;
+  label: string;
+  environment: string;
+  status: string;
+  reason: string | null;
+  createdAt: string;
+  total: number;
+}
+
+export interface PurgeableJob {
+  id: string;
+  saleId: string;
+  status: string;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+}
+
+export interface PurgeableRecords {
+  invoices: PurgeableInvoice[];
+  jobs: PurgeableJob[];
+}
+
+/**
+ * Lista exatamente o que o gerente PODE apagar, para escolher item a item.
+ * O filtro repete a regra do banco: homologação inteira + produção apenas
+ * quando a nota nunca foi autorizada.
+ */
+export async function listPurgeableRecords(
+  storeId: string,
+  environment: PurgeEnvironment = "todos",
+  limit = 200,
+): Promise<PurgeableRecords> {
+  const stuckBefore = new Date(Date.now() - STUCK_MINUTES * 60_000).toISOString();
+
+  let invoiceQuery = supabase
+    .from("invoices")
+    .select("id, type, series, number, status, environment, rejection_reason, total, created_at")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (environment !== "todos") invoiceQuery = invoiceQuery.eq("environment", environment);
+
+  const [invRes, jobRes] = await Promise.all([
+    invoiceQuery,
+    supabase
+      .from("fiscal_queue")
+      .select("id, sale_id, status, attempts, last_error, created_at")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+  ]);
+
+  if (invRes.error) throw new Error(invRes.error.message);
+  if (jobRes.error) throw new Error(jobRes.error.message);
+
+  const invoices: PurgeableInvoice[] = (invRes.data ?? [])
+    .filter(
+      (i) =>
+        String(i.environment) === "homologacao" ||
+        ["rascunho", "rejeitada", "processando"].includes(String(i.status)),
+    )
+    .map((i) => ({
+      id: i.id,
+      label: `${String(i.type).toUpperCase()} ${i.series}/${i.number}`,
+      environment: String(i.environment),
+      status: String(i.status),
+      reason: i.rejection_reason ?? null,
+      createdAt: i.created_at,
+      total: Number(i.total ?? 0),
+    }));
+
+  const jobs: PurgeableJob[] = (jobRes.data ?? [])
+    .filter(
+      (j) =>
+        j.status === "falha" ||
+        (["pendente", "processando"].includes(j.status) && j.created_at < stuckBefore),
+    )
+    .map((j) => ({
+      id: j.id,
+      saleId: j.sale_id,
+      status: j.status,
+      attempts: Number(j.attempts ?? 0),
+      lastError: j.last_error ?? null,
+      createdAt: j.created_at,
+    }));
+
+  return { invoices, jobs };
+}
+
+// ── auditoria das limpezas realizadas ────────────────────────────────────────
+
+export interface PurgeAuditRow {
+  id: string;
+  createdAt: string;
+  userId: string | null;
+  allowed: boolean;
+  detail: string | null;
+}
+
+/** Histórico das limpezas (permitidas e negadas) registrado em `rpc_audit_log`. */
+export async function listPurgeAudit(storeId: string, limit = 200): Promise<PurgeAuditRow[]> {
+  const { data, error } = await supabase
+    .from("rpc_audit_log")
+    .select("id, created_at, user_id, allowed, detail")
+    .eq("store_id", storeId)
+    .eq("function_name", "purge_fiscal_errors")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    createdAt: r.created_at,
+    userId: r.user_id ?? null,
+    allowed: Boolean(r.allowed),
+    detail: r.detail ?? null,
+  }));
+}

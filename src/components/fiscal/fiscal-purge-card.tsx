@@ -7,19 +7,21 @@
  * permanentemente vermelho e perde a capacidade de ver o erro que importa.
  *
  * Restrições deliberadas:
- *  - só gerentes/administradores veem o botão (e a RLS confirma no banco);
+ *  - só gerentes/administradores veem os controles (e a RLS confirma no banco);
  *  - nota AUTORIZADA ou CANCELADA em produção nunca é apagada;
- *  - confirmação explícita, com contagem prévia do que será removido.
+ *  - confirmação explícita, com contagem prévia do que será removido;
+ *  - toda limpeza fica na trilha de auditoria e pode ser exportada em CSV.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eraser, Loader2, ShieldAlert, Trash2 } from "lucide-react";
+import { CalendarClock, Download, Eraser, ListChecks, Loader2, ShieldAlert, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -32,12 +34,37 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useStorePermissions } from "@/hooks/use-store-permissions";
-import { previewFiscalPurge, purgeFiscalErrors, type PurgeEnvironment } from "@/lib/fiscal-purge";
+import {
+  listPurgeAudit,
+  previewFiscalPurge,
+  purgeFiscalErrors,
+  type PurgeEnvironment,
+} from "@/lib/fiscal-purge";
+import {
+  getPurgeSchedule,
+  nextPurgeAt,
+  PURGE_FREQUENCY_LABEL,
+  runScheduledPurge,
+  setPurgeSchedule,
+  type PurgeFrequency,
+  type PurgeSchedule,
+} from "@/lib/fiscal-purge-schedule";
+import { buildAuditCsv, csvFilename, downloadCsv } from "@/lib/audit-csv";
+import { FiscalPurgeSelectDialog } from "@/components/fiscal/fiscal-purge-select-dialog";
 
 export interface FiscalPurgeCardProps {
   storeId: string;
   className?: string;
 }
+
+/** Verificação do agendamento: na abertura e a cada 15 minutos. */
+const SCHEDULE_TICK_MS = 15 * 60_000;
+
+const ENV_LABEL: Record<PurgeEnvironment, string> = {
+  homologacao: "homologação",
+  producao: "produção",
+  todos: "ambos os ambientes",
+};
 
 export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
   const qc = useQueryClient();
@@ -46,6 +73,30 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
   const [includeInvoices, setIncludeInvoices] = useState(true);
   const [includeQueue, setIncludeQueue] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [selectOpen, setSelectOpen] = useState(false);
+  const [schedule, setSchedule] = useState<PurgeSchedule>(() => getPurgeSchedule(storeId));
+
+  const canManage = permissions.canManageSettings || permissions.canAll;
+
+  useEffect(() => {
+    setSchedule(getPurgeSchedule(storeId));
+  }, [storeId]);
+
+  const invalidateAll = () => {
+    for (const key of [
+      "fiscal-purge-preview",
+      "fiscal-purge-audit",
+      "fiscal-purgeable",
+      "fiscal-queue",
+      "fiscal-errors",
+      "fiscal-rejected",
+      "fiscal-audit-log",
+      "invoices",
+      "numbering-audit",
+    ]) {
+      void qc.invalidateQueries({ queryKey: [key] });
+    }
+  };
 
   const preview = useQuery({
     queryKey: ["fiscal-purge-preview", storeId],
@@ -54,36 +105,97 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
     queryFn: () => previewFiscalPurge(storeId),
   });
 
+  const audit = useQuery({
+    queryKey: ["fiscal-purge-audit", storeId],
+    enabled: Boolean(storeId),
+    staleTime: 30_000,
+    queryFn: () => listPurgeAudit(storeId),
+  });
+
+  // Agendamento: roda só para quem tem permissão, para não gerar erro em loop
+  // no caixa comum, que veria a RLS recusar a cada verificação.
+  useEffect(() => {
+    if (!storeId || !canManage) return;
+    let alive = true;
+
+    const tick = async () => {
+      const outcome = await runScheduledPurge(storeId);
+      if (!alive) return;
+      setSchedule(outcome.schedule);
+      if (!outcome.ran) return;
+      if (outcome.error) {
+        toast.error("Limpeza fiscal automática falhou", { description: outcome.error });
+        return;
+      }
+      if (outcome.result && outcome.result.total > 0) {
+        toast.success("Limpeza fiscal automática concluída", {
+          description: `${outcome.result.invoicesDeleted} nota(s) e ${outcome.result.queueDeleted} item(ns) de fila removidos.`,
+        });
+        invalidateAll();
+      }
+    };
+
+    void tick();
+    const timer = window.setInterval(() => void tick(), SCHEDULE_TICK_MS);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, canManage, schedule.enabled, schedule.frequency, schedule.environment]);
+
   const purge = useMutation({
-    mutationFn: () =>
-      purgeFiscalErrors(storeId, { environment, includeInvoices, includeQueue }),
+    mutationFn: () => purgeFiscalErrors(storeId, { environment, includeInvoices, includeQueue }),
     onSuccess: (r) => {
       if (r.total === 0) {
         toast.info("Nada elegível para remoção com os filtros atuais.");
       } else {
-        toast.success(
-          `${r.invoicesDeleted} nota(s) e ${r.queueDeleted} item(ns) de fila removidos.`,
-        );
+        toast.success(`${r.invoicesDeleted} nota(s) e ${r.queueDeleted} item(ns) de fila removidos.`);
       }
-      for (const key of [
-        "fiscal-purge-preview",
-        "fiscal-queue",
-        "fiscal-errors",
-        "fiscal-rejected",
-        "fiscal-audit-log",
-        "invoices",
-        "numbering-audit",
-      ]) {
-        void qc.invalidateQueries({ queryKey: [key] });
-      }
+      invalidateAll();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao limpar registros fiscais"),
     onSettled: () => setConfirmOpen(false),
   });
 
-  const canManage = permissions.canManageSettings || permissions.canAll;
-  const p = preview.data;
+  const runNow = useMutation({
+    mutationFn: () => runScheduledPurge(storeId, { force: true }),
+    onSuccess: (outcome) => {
+      setSchedule(outcome.schedule);
+      if (outcome.error) toast.error(outcome.error);
+      else
+        toast.success(
+          `Limpeza executada: ${outcome.result?.invoicesDeleted ?? 0} nota(s) e ${outcome.result?.queueDeleted ?? 0} item(ns).`,
+        );
+      invalidateAll();
+    },
+  });
 
+  const patchSchedule = (patch: Partial<PurgeSchedule>) => setSchedule(setPurgeSchedule(storeId, patch));
+
+  /** Exporta o histórico de limpezas no mesmo formato dos demais CSVs (pt-BR). */
+  const exportAudit = () => {
+    const rows = audit.data ?? [];
+    if (rows.length === 0) {
+      toast.info("Nenhuma limpeza registrada para exportar.");
+      return;
+    }
+    const csv = buildAuditCsv(
+      rows.map((r) => ({
+        function_name: "purge_fiscal_errors",
+        allowed: r.allowed,
+        user_id: r.userId,
+        store_id: storeId,
+        detail: r.detail,
+        created_at: r.createdAt,
+      })),
+      () => "Limpeza de registros fiscais",
+    );
+    downloadCsv(csvFilename("auditoria-limpeza-fiscal"), csv);
+    toast.success(`${rows.length} registro(s) exportado(s).`);
+  };
+
+  const p = preview.data;
   const eligible = (() => {
     if (!p) return 0;
     let n = 0;
@@ -94,6 +206,8 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
     if (includeQueue) n += p.failedJobs + p.stuckJobs;
     return n;
   })();
+
+  const next = nextPurgeAt(schedule);
 
   return (
     <Card className={className}>
@@ -108,7 +222,7 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         <div className="grid gap-2 sm:grid-cols-5 text-xs">
           <Stat label="Homologação" value={p?.homologacaoInvoices} />
           <Stat label="Rascunho (produção)" value={p?.producaoDraftInvoices} />
@@ -149,20 +263,92 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
             <Label htmlFor="purge-queue" className="text-xs font-normal">Fila fiscal (falha/travada)</Label>
           </div>
 
-          <Button
-            variant="destructive"
-            size="sm"
-            className="ml-auto"
-            disabled={!canManage || purge.isPending || (!includeInvoices && !includeQueue)}
-            onClick={() => setConfirmOpen(true)}
-          >
-            {purge.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4 mr-1.5" />
-            )}
-            Limpar {eligible > 0 ? `(${eligible})` : ""}
-          </Button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={exportAudit} disabled={audit.isLoading}>
+              <Download className="mr-1.5 h-4 w-4" /> Auditoria CSV
+              {audit.data?.length ? <Badge variant="outline" className="ml-1.5 font-mono">{audit.data.length}</Badge> : null}
+            </Button>
+            <Button variant="outline" size="sm" disabled={!canManage} onClick={() => setSelectOpen(true)}>
+              <ListChecks className="mr-1.5 h-4 w-4" /> Selecionar itens
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={!canManage || purge.isPending || (!includeInvoices && !includeQueue)}
+              onClick={() => setConfirmOpen(true)}
+            >
+              {purge.isPending ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1.5 h-4 w-4" />
+              )}
+              Limpar {eligible > 0 ? `(${eligible})` : ""}
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Agendamento ────────────────────────────────────────────────── */}
+        <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <CalendarClock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-medium">Limpeza automática</span>
+            <Switch
+              checked={schedule.enabled}
+              disabled={!canManage}
+              onCheckedChange={(v) => patchSchedule({ enabled: v })}
+              aria-label="Ativar limpeza automática"
+            />
+            <Select
+              value={schedule.frequency}
+              disabled={!canManage}
+              onValueChange={(v) => patchSchedule({ frequency: v as PurgeFrequency })}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(PURGE_FREQUENCY_LABEL) as PurgeFrequency[]).map((f) => (
+                  <SelectItem key={f} value={f}>{PURGE_FREQUENCY_LABEL[f]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={schedule.environment}
+              disabled={!canManage}
+              onValueChange={(v) => patchSchedule({ environment: v as PurgeEnvironment })}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="homologacao">Somente homologação</SelectItem>
+                <SelectItem value="producao">Somente produção</SelectItem>
+                <SelectItem value="todos">Ambos os ambientes</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              disabled={!canManage || runNow.isPending}
+              onClick={() => runNow.mutate()}
+            >
+              {runNow.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              Executar agora
+            </Button>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            {schedule.enabled
+              ? `Próxima verificação: ${next ? new Date(next).toLocaleString("pt-BR") : "—"} · alvo: ${ENV_LABEL[schedule.environment]}.`
+              : "Desligada. Quando ativa, este caixa verifica a cada 15 minutos e limpa automaticamente o ambiente escolhido."}
+            {schedule.lastRunAt
+              ? ` Última execução: ${new Date(schedule.lastRunAt).toLocaleString("pt-BR")}${schedule.lastResult ? ` — ${schedule.lastResult}` : ""}.`
+              : ""}
+          </p>
+          {schedule.lastError && (
+            <p className="text-[11px] text-destructive">Última falha: {schedule.lastError}</p>
+          )}
         </div>
 
         {!canManage && (
@@ -173,14 +359,20 @@ export function FiscalPurgeCard({ storeId, className }: FiscalPurgeCardProps) {
         )}
       </CardContent>
 
+      <FiscalPurgeSelectDialog
+        storeId={storeId}
+        environment={environment}
+        open={selectOpen}
+        onOpenChange={setSelectOpen}
+      />
+
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Apagar registros fiscais?</AlertDialogTitle>
             <AlertDialogDescription>
-              Serão removidos até <strong>{eligible}</strong> registro(s) em{" "}
-              {environment === "todos" ? "ambos os ambientes" : environment === "producao" ? "produção" : "homologação"}.
-              Notas autorizadas ou canceladas em produção permanecem intactas. Esta ação não pode ser desfeita e será
+              Serão removidos até <strong>{eligible}</strong> registro(s) em {ENV_LABEL[environment]}. Notas
+              autorizadas ou canceladas em produção permanecem intactas. Esta ação não pode ser desfeita e será
               registrada na auditoria com seu usuário.
             </AlertDialogDescription>
           </AlertDialogHeader>
