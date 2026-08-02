@@ -186,10 +186,11 @@ function getEndpoints(uf, environment) {
 async function emitNFCe(sale) {
   if (!NodeDfe) {
     throw new Error(
-      "Motor NFC-e indisponível: instale a dependência node-dfe rodando " +
-      "`npm install node-dfe qrcode node-forge` na pasta do agente e reinicie."
+      `Motor NFC-e indisponível: ${engineError || "node-dfe não carregado"}. ` +
+        `Abra "Servidor fiscal" no PDV e clique em "Instalar motor fiscal" (destino: ${ENGINE_DIR}).`,
     );
   }
+
 
   const cfg = loadFiscalConfig();
   if (!cfg) throw new Error("Configuração fiscal local ausente. Configure em POST /nfce/config.");
