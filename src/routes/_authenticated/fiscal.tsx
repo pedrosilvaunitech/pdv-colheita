@@ -288,6 +288,7 @@ function FiscalPage() {
             <AgentEngineCard />
             <PendingFiscalCard storeId={storeId!} />
             <FiscalPurgeCard storeId={storeId!} />
+            <FiscalRetentionCard storeId={storeId!} />
 
             <div className="border border-border rounded-md bg-card p-5">
               <h3 className="text-sm font-semibold mb-3">Notas recentes</h3>
