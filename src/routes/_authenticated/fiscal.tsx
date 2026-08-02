@@ -286,6 +286,8 @@ function FiscalPage() {
             <DirectEngineCard storeId={storeId!} />
             <AgentEngineCard />
             <PendingFiscalCard storeId={storeId!} />
+            <FiscalPurgeCard storeId={storeId!} />
+
             <div className="border border-border rounded-md bg-card p-5">
               <h3 className="text-sm font-semibold mb-3">Notas recentes</h3>
               {invoices?.length === 0 ? (
