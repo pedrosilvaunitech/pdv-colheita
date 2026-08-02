@@ -26,6 +26,11 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Star, Trash2, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  productSupplierLinkSchema,
+  linkPatchSchema,
+  firstIssue,
+} from "@/lib/supplier-validation";
 
 export interface ProductSupplierLink {
   id: string;
