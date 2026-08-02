@@ -65,31 +65,45 @@ function useLinkMutations(storeId: string) {
 
   const add = useMutation({
     mutationFn: async (input: { product_id: string; supplier_id: string; unit_cost?: number }) => {
-      const { error } = await supabase.from("product_suppliers").insert({
-        store_id: storeId,
+      // Valida antes de gravar: o banco só garante a unicidade do par.
+      const link = productSupplierLinkSchema.parse({
         product_id: input.product_id,
         supplier_id: input.supplier_id,
-        unit_cost: input.unit_cost ?? 0,
+        supplier_sku: null,
+        unit_cost: Number(input.unit_cost ?? 0),
+        min_order_qty: 0,
+        lead_time_days: 0,
+      });
+      const { error } = await supabase.from("product_suppliers").insert({
+        store_id: storeId,
+        product_id: link.product_id,
+        supplier_id: link.supplier_id,
+        unit_cost: link.unit_cost,
       });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => { toast.success("Vínculo criado"); invalidate(); },
-    onError: (e: Error) =>
-      toast.error(e.message.includes("duplicate") ? "Esse vínculo já existe" : e.message),
+    onError: (e: unknown) => {
+      const message = firstIssue(e);
+      toast.error(message.includes("duplicate") ? "Esse vínculo já existe" : message);
+    },
   });
 
   const update = useMutation({
     mutationFn: async (input: { id: string; patch: LinkPatch }) => {
+      // Revalida apenas os campos numéricos tocados na edição inline.
+      const patch = linkPatchSchema.parse(input.patch);
       const { error } = await supabase
         .from("product_suppliers")
-        .update(input.patch)
+        .update(patch)
         .eq("id", input.id)
         .eq("store_id", storeId);
       if (error) throw new Error(error.message);
     },
     onSuccess: invalidate,
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(firstIssue(e)),
   });
+
 
   const setPreferred = useMutation({
     mutationFn: async (link: { id: string; product_id: string }) => {
