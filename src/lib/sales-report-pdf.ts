@@ -354,21 +354,26 @@ export function buildSalesReportPdf(report: SalesReport, store: PdfStoreInfo = {
   }
 
   if (report.matrix.length > 1 && report.periods.length > 1) {
-    sectionTitle("Caixa × período", "cruzamento do faturamento");
-    const periods = report.periods.slice(0, 8);
+    // Com muitas colunas não cabe "R$ 1.234,56" em cada célula: omitimos o
+    // símbolo (avisado no subtítulo) e usamos 7 períodos para manter legível.
+    sectionTitle("Caixa × período", "cruzamento do faturamento — valores em R$");
+    const periods = report.periods.slice(0, 7);
+    const compact = (v: number) =>
+      v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     table(
       [
-        { header: "Caixa", width: 2.4 },
-        ...periods.map((p) => ({ header: p.label, width: 1.2, align: "right" as const })),
+        { header: "Caixa", width: 2.6 },
+        ...periods.map((p) => ({ header: p.label, width: 1.3, align: "right" as const })),
         { header: "Total", width: 1.6, align: "right" as const },
       ],
       report.matrix.map((m) => [
         m.register,
-        ...periods.map((p) => brl(m.byPeriod[p.key] ?? 0)),
-        brl(m.total),
+        ...periods.map((p) => compact(m.byPeriod[p.key] ?? 0)),
+        compact(m.total),
       ]),
     );
   }
+
 
   drawFooter(doc.getNumberOfPages());
   return doc.output("blob");
