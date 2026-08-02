@@ -20,6 +20,8 @@ import { NfceNumberingCard } from "@/components/fiscal/nfce-numbering-card";
 import { DirectEngineCard } from "@/components/fiscal/direct-engine-card";
 import { AgentEngineCard } from "@/components/fiscal/agent-engine-card";
 import { SefazHealthBanner } from "@/components/fiscal/sefaz-health-banner";
+import { FiscalPurgeCard } from "@/components/fiscal/fiscal-purge-card";
+
 import { validateIE, SEFAZ_LINKS, lookupCnpj, suggestCRT } from "@/lib/cnpj-lookup";
 import { getNfceEngineStatus, syncFiscalConfigToAgent, testSefazViaAgent, type NfceEngineStatus } from "@/lib/nfce-agent";
 import type { StoreRow } from "@/lib/current-store";
