@@ -69,7 +69,7 @@ function useLinkMutations(storeId: string) {
   });
 
   const update = useMutation({
-    mutationFn: async (input: { id: string; patch: Record<string, unknown> }) => {
+    mutationFn: async (input: { id: string; patch: LinkPatch }) => {
       const { error } = await supabase
         .from("product_suppliers")
         .update(input.patch)
