@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentStore } from "@/lib/current-store";
@@ -8,12 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, TrendingDown, PackageX, PackageCheck, Search, Download, Star, Phone, Mail, CreditCard } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertTriangle, TrendingDown, PackageX, PackageCheck, Search, Download, Star, Phone, Mail, CreditCard, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  buildPurchaseOrderPdf,
+  purchaseOrderFileName,
+  type PurchaseOrderBlock,
+} from "@/lib/purchase-order-pdf";
 
 export const Route = createFileRoute("/_authenticated/reposicao")({
   component: ReposicaoPage,
 });
+
 
 type Row = {
   product_id: string;
