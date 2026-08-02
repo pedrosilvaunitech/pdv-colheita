@@ -17,6 +17,14 @@ import {
   purchaseOrderFileName,
   type PurchaseOrderBlock,
 } from "@/lib/purchase-order-pdf";
+import {
+  forecastAll,
+  formatDate,
+  formatDaysToOrder,
+  URGENCY_META,
+  type ForecastResult,
+} from "@/lib/replenishment-forecast";
+import { ReplenishmentAiCard } from "@/components/reposicao/replenishment-ai-card";
 
 export const Route = createFileRoute("/_authenticated/reposicao")({
   component: ReposicaoPage,
@@ -167,6 +175,36 @@ function ReposicaoPage() {
   });
 
 
+  /**
+   * Vendas dos últimos 7 dias por produto. A view `v_reorder` só traz 30 dias;
+   * a semana recente é o que revela mudança de demanda (promoção, sazonal).
+   * Consulta somente leitura — nada é gravado.
+   */
+  const { data: sold7dMap } = useQuery({
+    queryKey: ["reorder-sold-7d", storeId],
+    enabled: Boolean(storeId),
+    queryFn: async () => {
+      const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      const { data, error } = await supabase
+        .from("sale_items")
+        .select("product_id,quantity,sales!inner(status,finalized_at)")
+        .eq("store_id", storeId!)
+        .gte("created_at", since);
+      if (error) throw new Error(error.message);
+
+      const map = new Map<string, number>();
+      for (const row of (data ?? []) as unknown as {
+        product_id: string;
+        quantity: number | null;
+        sales: { status: string | null } | null;
+      }[]) {
+        if (row.sales?.status !== "finalizada") continue;
+        map.set(row.product_id, (map.get(row.product_id) ?? 0) + Number(row.quantity ?? 0));
+      }
+      return map;
+    },
+  });
+
   const filtered = useMemo(() => {
     if (!rows) return [];
     return rows.filter((r) => {
@@ -181,6 +219,38 @@ function ReposicaoPage() {
     });
   }, [rows, search, statusFilter]);
 
+  /**
+   * Projeção determinística por produto: dias até a ruptura e prazo-limite para
+   * emitir o pedido (já descontando o prazo de entrega do fornecedor).
+   */
+  const forecasts = useMemo(() => {
+    return forecastAll(
+      (rows ?? []).map((r) => {
+        const link = supplierMap?.get(r.product_id)?.[0];
+        return {
+          productId: r.product_id,
+          name: r.name,
+          unit: r.unit,
+          currentStock: Number(r.current_stock ?? 0),
+          minStock: Number(r.min_stock ?? 0),
+          sold30d: Number(r.sold_30d ?? 0),
+          sold7d: sold7dMap?.get(r.product_id) ?? 0,
+          leadTimeDays: Number(link?.leadTimeDays || r.lead_time_days || 0),
+          suggestedQty: Number(r.suggested_qty ?? 0),
+          supplierName: link?.name ?? null,
+          unitCost: Number(link?.unitCost ?? 0),
+        };
+      }),
+    );
+  }, [rows, supplierMap, sold7dMap]);
+
+  /** Índice por produto para pintar as colunas de prazo na tabela. */
+  const forecastById = useMemo(() => {
+    const map = new Map<string, ForecastResult>();
+    for (const f of forecasts) map.set(f.productId, f);
+    return map;
+  }, [forecasts]);
+
   const counts = useMemo(() => {
     const c = { ruptura: 0, critico: 0, atencao: 0, ok: 0, suggested_total: 0 };
     for (const r of rows ?? []) {
@@ -189,6 +259,7 @@ function ReposicaoPage() {
     }
     return c;
   }, [rows]);
+
 
   const exportCsv = () => {
     const header = ["Produto", "EAN", "SKU", "Estoque", "Vendas 30d", "Média/dia", "Dias cobertura", "Status", "Sugestão compra", "Fornecedor", "Contato", "Pagamento"];
@@ -362,6 +433,8 @@ function ReposicaoPage() {
           <KpiCard label="Sugestão total (unid.)" value={Math.ceil(counts.suggested_total)} tone="primary" />
         </div>
 
+        <ReplenishmentAiCard forecasts={forecasts} storeName={store?.name ?? null} />
+
         <div className="border border-border rounded-md bg-card overflow-hidden">
           <Table>
             <TableHeader>
@@ -373,24 +446,28 @@ function ReposicaoPage() {
                 <TableHead className="w-24 text-right">Mín.</TableHead>
                 <TableHead className="w-24 text-right">Vendas 30d</TableHead>
                 <TableHead className="w-24 text-right">Média/dia</TableHead>
-                <TableHead className="w-24 text-right">Cobertura</TableHead>
+                <TableHead className="w-24 text-right">Dura até</TableHead>
+                <TableHead className="w-32">Pedir até</TableHead>
                 <TableHead className="w-28 text-right">Sugestão</TableHead>
                 <TableHead className="w-64">Fornecedor para contato</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
-                <TableRow><TableCell colSpan={10} className="text-center py-10 text-muted-foreground text-sm">Calculando previsão…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="text-center py-10 text-muted-foreground text-sm">Calculando previsão…</TableCell></TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={10} className="p-0">
+                <TableRow><TableCell colSpan={11} className="p-0">
                   <EmptyState title="Nada a repor" description="Todos os produtos ativos estão dentro do estoque desejado." />
                 </TableCell></TableRow>
               )}
               {filtered.map((r) => {
                 const meta = STATUS_META[r.status ?? "ok"] ?? STATUS_META.ok;
                 const Icon = meta.icon;
-                const suggest = Math.max(0, Math.ceil(Number(r.suggested_qty ?? 0)));
+                const forecast = forecastById.get(r.product_id);
+                const suggest = forecast
+                  ? forecast.recommendedQty
+                  : Math.max(0, Math.ceil(Number(r.suggested_qty ?? 0)));
                 return (
                   <TableRow key={r.product_id}>
                     <TableCell>
@@ -403,8 +480,28 @@ function ReposicaoPage() {
                     <TableCell className="text-right font-mono">{Number(r.current_stock ?? 0).toFixed(3)}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">{Number(r.min_stock ?? 0).toFixed(0)}</TableCell>
                     <TableCell className="text-right font-mono">{Number(r.sold_30d ?? 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-mono">{Number(r.avg_daily_sales ?? 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-mono">{r.days_of_stock == null ? "—" : `${r.days_of_stock}d`}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {(forecast?.avgDailyWeighted ?? Number(r.avg_daily_sales ?? 0)).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {forecast?.daysUntilStockout == null
+                        ? "—"
+                        : `${Math.floor(forecast.daysUntilStockout)}d · ${formatDate(forecast.stockoutDate)}`}
+                    </TableCell>
+                    <TableCell>
+                      {forecast && forecast.daysToOrder != null ? (
+                        <div className="flex flex-col gap-1">
+                          <Badge variant="outline" className={URGENCY_META[forecast.urgency].className}>
+                            {URGENCY_META[forecast.urgency].label}
+                          </Badge>
+                          <span className="text-xs font-mono text-muted-foreground">
+                            {formatDate(forecast.orderByDate)} · {formatDaysToOrder(forecast)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">sem histórico</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-mono font-semibold">{suggest > 0 ? `${suggest} ${r.unit}` : "—"}</TableCell>
                     <TableCell>
                       <SupplierContactCell links={supplierMap?.get(r.product_id) ?? []} />
@@ -412,6 +509,7 @@ function ReposicaoPage() {
                   </TableRow>
                 );
               })}
+
             </TableBody>
           </Table>
         </div>
